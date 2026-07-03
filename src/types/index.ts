@@ -58,6 +58,14 @@ export interface SavedSessionGroup {
   expanded: boolean
 }
 
+export interface FileEntry {
+  name: string
+  is_dir: boolean
+  size: number
+  modified: string
+  permissions: string
+}
+
 export interface SessionStoreData {
   groups: SavedSessionGroup[]
   sessions: SavedSession[]

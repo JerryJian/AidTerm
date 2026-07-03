@@ -1,6 +1,7 @@
 use tauri::{Manager, State};
 use crate::session::SessionManager;
 use crate::session_store;
+use crate::sftp;
 
 #[tauri::command]
 pub async fn spawn_terminal(
@@ -83,4 +84,101 @@ pub async fn save_session_store(
 ) -> Result<(), String> {
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     session_store::save(dir, &data)
+}
+
+#[tauri::command]
+pub fn sftp_connect(
+    manager: State<'_, sftp::SftpManager>,
+    host: String,
+    port: u16,
+    username: String,
+    password: String,
+    private_key_path: Option<String>,
+) -> Result<String, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let conn = sftp::SftpConnection::connect(host, port, username, password, private_key_path)?;
+    let mut connections = manager.connections.lock().map_err(|e| e.to_string())?;
+    connections.insert(id.clone(), conn);
+    Ok(id)
+}
+
+#[tauri::command]
+pub fn sftp_disconnect(
+    manager: State<'_, sftp::SftpManager>,
+    conn_id: String,
+) -> Result<(), String> {
+    let mut connections = manager.connections.lock().map_err(|e| e.to_string())?;
+    if let Some(mut conn) = connections.remove(&conn_id) {
+        conn.kill();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn sftp_list_dir(
+    manager: State<'_, sftp::SftpManager>,
+    conn_id: String,
+    path: String,
+) -> Result<Vec<sftp::FileEntry>, String> {
+    let connections = manager.connections.lock().map_err(|e| e.to_string())?;
+    let conn = connections.get(&conn_id).ok_or("SFTP connection not found")?;
+    conn.list_dir(&path)
+}
+
+#[tauri::command]
+pub fn sftp_download(
+    manager: State<'_, sftp::SftpManager>,
+    conn_id: String,
+    remote: String,
+    local: String,
+) -> Result<(), String> {
+    let connections = manager.connections.lock().map_err(|e| e.to_string())?;
+    let conn = connections.get(&conn_id).ok_or("SFTP connection not found")?;
+    conn.download(&remote, &local)
+}
+
+#[tauri::command]
+pub fn sftp_upload(
+    manager: State<'_, sftp::SftpManager>,
+    conn_id: String,
+    local: String,
+    remote: String,
+) -> Result<(), String> {
+    let connections = manager.connections.lock().map_err(|e| e.to_string())?;
+    let conn = connections.get(&conn_id).ok_or("SFTP connection not found")?;
+    conn.upload(&local, &remote)
+}
+
+#[tauri::command]
+pub fn sftp_remove(
+    manager: State<'_, sftp::SftpManager>,
+    conn_id: String,
+    path: String,
+) -> Result<(), String> {
+    let connections = manager.connections.lock().map_err(|e| e.to_string())?;
+    let conn = connections.get(&conn_id).ok_or("SFTP connection not found")?;
+    conn.remove(&path)
+}
+
+#[tauri::command]
+pub fn sftp_rename(
+    manager: State<'_, sftp::SftpManager>,
+    conn_id: String,
+    old_path: String,
+    new_path: String,
+) -> Result<(), String> {
+    let connections = manager.connections.lock().map_err(|e| e.to_string())?;
+    let conn = connections.get(&conn_id).ok_or("SFTP connection not found")?;
+    conn.rename(&old_path, &new_path)
+}
+
+#[tauri::command]
+pub fn sftp_mkdir(
+    manager: State<'_, sftp::SftpManager>,
+    conn_id: String,
+    path: String,
+) -> Result<(), String> {
+    let connections = manager.connections.lock().map_err(|e| e.to_string())?;
+    let conn = connections.get(&conn_id).ok_or("SFTP connection not found")?;
+    conn.mkdir(&path)
 }

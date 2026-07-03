@@ -12,7 +12,7 @@
 - [x] **Telnet** — 基础 Telnet 连接
 - [ ] **Serial (串口)** — 波特率、数据位、停止位、奇偶校验配置
 - [ ] **本地 Shell** — Windows (`cmd`, `powershell`)、Linux/macOS (`bash`, `zsh`)
-- [ ] **SFTP** — 远程文件浏览、上传、下载、删除、重命名
+- [x] **SFTP** — 远程文件浏览、上传、下载、删除、重命名
 - [ ] **SCP** — 快速文件传输
 - [ ] **Zmodem** — 通过终端进行文件传输
 
@@ -99,7 +99,7 @@
 ### Phase 4: 文件传输
 | # | 任务 | 说明 |
 |---|------|------|
-| 4.1 | SFTP 面板 | Rust `ssh2` 的 sftp 子系统，Vue 文件管理器 UI |
+| 4.1 | SFTP 面板 | Rust `ssh2` 的 sftp 子系统，Vue 文件管理器 UI ✅ |
 | 4.2 | 拖拽上传/下载 | 从系统拖入自动上传 |
 | 4.3 | Zmodem 集成 | Rust 端 `lrzsz` 协议实现或调用系统 `rz/sz` |
 
