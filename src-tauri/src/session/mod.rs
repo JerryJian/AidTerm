@@ -39,12 +39,13 @@ impl SessionManager {
         port: u16,
         username: String,
         password: String,
+        private_key_path: Option<String>,
         rows: u16,
         cols: u16,
         app_handle: AppHandle,
     ) -> Result<(), String> {
         let session = ssh::SshConnection::connect(
-            id.clone(), host, port, username, password, rows, cols, app_handle,
+            id.clone(), host, port, username, password, private_key_path, rows, cols, app_handle,
         )?;
         let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
         sessions.insert(id, Session::Ssh(session));

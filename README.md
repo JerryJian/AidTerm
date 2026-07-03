@@ -1,7 +1,24 @@
-# Tauri + Vue + TypeScript
+# TndTerm
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+A cross-platform terminal emulator built with Tauri 2.x + Vue 3 (TypeScript).
 
-## Recommended IDE Setup
+## Development
 
-- [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+```bash
+npm run tauri dev
+```
+
+## Proxy / Mirror 配置（公司网络恢复用）
+
+```ini
+# ~\.cargo\config.toml
+[http]
+proxy = "http://192.168.8.200:7897"
+```
+
+```ini
+# ~\.npmrc
+proxy=http://192.168.8.200:7897
+https-proxy=http://192.168.8.200:7897
+registry=https://registry.npmmirror.com
+```

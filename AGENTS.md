@@ -8,7 +8,7 @@
 ## WindTerm 功能清单
 
 ### 1. 会话协议支持
-- [ ] **SSH2** — 密码、密钥、键盘交互认证；端口转发（本地/远程/动态）
+- [x] **SSH2** — 密码、密钥认证；端口转发（本地/远程/动态）
 - [ ] **Telnet** — 基础 Telnet 连接
 - [ ] **Serial (串口)** — 波特率、数据位、停止位、奇偶校验配置
 - [ ] **本地 Shell** — Windows (`cmd`, `powershell`)、Linux/macOS (`bash`, `zsh`)
@@ -82,8 +82,8 @@
 ### Phase 2: 会话协议
 | # | 任务 | 说明 |
 |---|------|------|
-| 2.1 | SSH2 连接 | Rust 端 `ssh2` / `thrussh` crate，实现连接、认证、pty |
-| 2.2 | SSH 密钥认证 | 加载 `~/.ssh/id_rsa` / `id_ed25519`，passphrase 弹窗 |
+| 2.1 | SSH2 连接 | Rust 端 `ssh-rs` crate，密码认证 + PTY shell |
+| 2.2 | SSH 密钥认证 | 加载 `~/.ssh/id_rsa` / `id_ed25519`（未加密），Tauri 文件选择器 |
 | 2.3 | Telnet 连接 | Rust 端或纯 JS `telnet-client` |
 | 2.4 | Serial 连接 | Rust 端 `serialport` crate |
 | 2.5 | 连接复用 + 重连 | 断线自动重试（可配置） |
@@ -149,7 +149,7 @@
 | 终端渲染 | xterm.js + addons |
 | 样式 | UnoCSS / Tailwind CSS |
 | 后端语言 | Rust |
-| SSH | `ssh2` crate (libssh2 绑定) |
+| SSH | `ssh-rs` crate (纯 Rust) |
 | Serial | `serialport` crate |
 | PTY | `portable-pty` / `smithay-terminal-tools` |
 | 密钥 | `rsa`, `ed25519-dalek`, `ssh-key` |

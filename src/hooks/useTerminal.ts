@@ -24,6 +24,7 @@ export function useTerminal() {
     port: number,
     username: string,
     password: string,
+    privateKeyPath?: string,
     rows = 24,
     cols = 80,
   ) {
@@ -33,6 +34,7 @@ export function useTerminal() {
         port,
         username,
         password,
+        privateKeyPath: privateKeyPath ?? null,
         rows,
         cols,
       })

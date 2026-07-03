@@ -7,6 +7,7 @@ use session::SessionManager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(SessionManager::new())
         .invoke_handler(tauri::generate_handler![
             commands::spawn_terminal,

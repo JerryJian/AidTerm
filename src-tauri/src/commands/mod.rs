@@ -21,11 +21,12 @@ pub async fn ssh_connect(
     port: u16,
     username: String,
     password: String,
+    private_key_path: Option<String>,
     rows: u16,
     cols: u16,
 ) -> Result<String, String> {
     let id = uuid::Uuid::new_v4().to_string();
-    manager.connect_ssh(id.clone(), host, port, username, password, rows, cols, app)?;
+    manager.connect_ssh(id.clone(), host, port, username, password, private_key_path, rows, cols, app)?;
     Ok(id)
 }
 

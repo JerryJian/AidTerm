@@ -19,6 +19,7 @@ impl SshConnection {
         port: u16,
         username: String,
         password: String,
+        private_key_path: Option<String>,
         rows: u16,
         cols: u16,
         app_handle: AppHandle,
@@ -30,7 +31,7 @@ impl SshConnection {
 
         let handle = std::thread::spawn(move || {
             let result = Self::run_session(
-                &addr, &username, &password, rows, cols,
+                &addr, &username, &password, private_key_path, rows, cols,
                 write_rx, kill_rx, &app_handle, &id,
             );
             if let Err(e) = result {
@@ -47,6 +48,7 @@ impl SshConnection {
         addr: &str,
         username: &str,
         password: &str,
+        private_key_path: Option<String>,
         rows: u16,
         cols: u16,
         write_rx: Receiver<String>,
@@ -54,11 +56,17 @@ impl SshConnection {
         app_handle: &AppHandle,
         session_id: &str,
     ) -> Result<(), String> {
-        let mut session = ssh::create_session()
+        let mut builder = ssh::create_session()
             .username(username)
-            .password(password)
-            .timeout(Some(Duration::from_secs(10)))
-            .connect(addr)
+            .timeout(Some(Duration::from_secs(10)));
+
+        if let Some(ref key_path) = private_key_path {
+            builder = builder.private_key_path(key_path);
+        }
+
+        builder = builder.password(password);
+
+        let mut session = builder.connect(addr)
             .map_err(|e| format!("SSH connect failed: {}", e))?
             .run_local();
 

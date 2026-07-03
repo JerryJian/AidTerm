@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { open } from '@tauri-apps/plugin-dialog'
 import type { SshConnectionInfo } from '../../types'
 
 const emit = defineEmits<{
@@ -11,6 +12,17 @@ const host = ref('')
 const port = ref(22)
 const username = ref('')
 const password = ref('')
+const privateKeyPath = ref('')
+
+async function pickKey() {
+  const selected = await open({
+    multiple: false,
+    filters: [{ name: 'SSH Keys', extensions: ['pem', 'key', 'id_rsa', 'id_ed25519', '*'] }],
+  })
+  if (selected) {
+    privateKeyPath.value = selected
+  }
+}
 
 function onSubmit() {
   if (!host.value || !username.value) return
@@ -19,6 +31,7 @@ function onSubmit() {
     port: port.value,
     username: username.value,
     password: password.value,
+    privateKeyPath: privateKeyPath.value || undefined,
   })
 }
 
@@ -50,6 +63,13 @@ function onBackdropClick(e: MouseEvent) {
         <label class="field">
           <span class="field-label">Password</span>
           <input v-model="password" type="password" class="input" placeholder="password" />
+        </label>
+        <label class="field">
+          <span class="field-label">Private Key (optional)</span>
+          <div class="key-row">
+            <input v-model="privateKeyPath" type="text" class="input key-input" placeholder="~/.ssh/id_rsa" readonly />
+            <button type="button" class="btn btn-browse" @click="pickKey">Browse</button>
+          </div>
         </label>
         <div class="dialog-actions">
           <button type="button" class="btn btn-cancel" @click="emit('close')">Cancel</button>
@@ -168,5 +188,30 @@ function onBackdropClick(e: MouseEvent) {
 
 .btn-connect:hover {
   background: #74c7ec;
+}
+
+.key-row {
+  display: flex;
+  gap: 6px;
+}
+
+.key-input {
+  flex: 1;
+  cursor: default;
+}
+
+.btn-browse {
+  padding: 8px 12px;
+  border: 1px solid #45475a;
+  border-radius: 4px;
+  background: #313244;
+  color: #cdd6f4;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-browse:hover {
+  background: #45475a;
 }
 </style>

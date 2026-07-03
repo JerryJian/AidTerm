@@ -130,6 +130,7 @@ async function initTerminal() {
         props.sshInfo.port,
         props.sshInfo.username,
         props.sshInfo.password,
+        props.sshInfo.privateKeyPath,
       )
     : await createSession()
 

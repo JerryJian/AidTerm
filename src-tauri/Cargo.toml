@@ -21,3 +21,4 @@ portable-pty = "0.8"
 uuid = { version = "1", features = ["v4"] }
 ssh-rs = "0.3"
 tokio = { version = "1", features = ["io-util", "sync"] }
+tauri-plugin-dialog = "2.7.1"

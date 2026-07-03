@@ -3,6 +3,7 @@ export interface SshConnectionInfo {
   port: number
   username: string
   password: string
+  privateKeyPath?: string
 }
 
 export interface TerminalSession {
