@@ -1,18 +1,35 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { open } from '@tauri-apps/plugin-dialog'
 import type { SshConnectionInfo } from '../../types'
+
+const props = withDefaults(defineProps<{
+  initialHost?: string
+  initialPort?: number
+  initialUsername?: string
+}>(), {
+  initialPort: 22,
+})
 
 const emit = defineEmits<{
   connect: [info: SshConnectionInfo]
   close: []
 }>()
 
-const host = ref('')
-const port = ref(22)
-const username = ref('')
+const host = ref(props.initialHost || '')
+const port = ref(props.initialPort || 22)
+const username = ref(props.initialUsername || '')
 const password = ref('')
 const privateKeyPath = ref('')
+
+const firstInput = ref<HTMLInputElement>()
+
+onMounted(() => {
+  if (host.value) {
+    password.value = ''
+  }
+  firstInput.value?.focus()
+})
 
 async function pickKey() {
   const selected = await open({
@@ -50,7 +67,7 @@ function onBackdropClick(e: MouseEvent) {
       <form class="dialog-body" @submit.prevent="onSubmit">
         <label class="field">
           <span class="field-label">Host</span>
-          <input v-model="host" type="text" class="input" placeholder="192.168.1.1" required />
+          <input ref="firstInput" v-model="host" type="text" class="input" placeholder="192.168.1.1" required />
         </label>
         <label class="field">
           <span class="field-label">Port</span>

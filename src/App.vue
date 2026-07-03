@@ -5,9 +5,12 @@ import type { SshConnectionInfo } from './types'
 import TabBar from './components/terminal/TabBar.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
 import SshDialog from './components/session/SshDialog.vue'
+import QuickConnectBar from './components/session/QuickConnectBar.vue'
 
 const store = useTerminalStore()
 const sshDialogVisible = ref(false)
+const quickConnectVisible = ref(false)
+const sshDialogPrefill = ref<{ host: string; port: number; username: string }>()
 
 if (store.tabs.length === 0) {
   store.addTab('local')
@@ -17,11 +20,23 @@ function onSshConnect(info: SshConnectionInfo) {
   sshDialogVisible.value = false
   store.addTab('ssh', info)
 }
+
+function onQuickSsh(host: string, port: number, username: string) {
+  sshDialogPrefill.value = { host, port, username }
+  sshDialogVisible.value = true
+}
 </script>
 
 <template>
   <div class="app">
-    <TabBar @ssh-click="sshDialogVisible = true" />
+    <TabBar
+      @ssh-click="quickConnectVisible = !quickConnectVisible"
+    />
+    <QuickConnectBar
+      :visible="quickConnectVisible"
+      @ssh-connect="onQuickSsh"
+      @close="quickConnectVisible = false"
+    />
     <div class="terminal-area">
       <TerminalPane
         v-if="store.activeTab"
@@ -32,6 +47,9 @@ function onSshConnect(info: SshConnectionInfo) {
   </div>
   <SshDialog
     v-if="sshDialogVisible"
+    :initial-host="sshDialogPrefill?.host"
+    :initial-port="sshDialogPrefill?.port"
+    :initial-username="sshDialogPrefill?.username"
     @connect="onSshConnect"
     @close="sshDialogVisible = false"
   />
