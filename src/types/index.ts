@@ -123,6 +123,16 @@ export interface Snippet {
   sort_order: number
 }
 
+export interface Trigger {
+  id: string
+  name: string
+  pattern: string
+  response: string
+  enabled: boolean
+  cooldown_ms: number
+  last_fired: number
+}
+
 export interface ThemeConfig {
   name: string
   background: string

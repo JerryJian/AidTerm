@@ -15,6 +15,8 @@ import SftpPanel from './components/sftp/SftpPanel.vue'
 import TunnelPanel from './components/tunnel/TunnelPanel.vue'
 import ProxyPanel from './components/proxy/ProxyPanel.vue'
 import SnippetPanel from './components/snippet/SnippetPanel.vue'
+import TriggerPanel from './components/trigger/TriggerPanel.vue'
+import { useTriggerWatcher } from './hooks/useTriggerWatcher'
 
 const store = useTerminalStore()
 const sessionStore = useSessionStore()
@@ -25,7 +27,10 @@ const sftpPanelVisible = ref(false)
 const tunnelPanelVisible = ref(false)
 const proxyPanelVisible = ref(false)
 const snippetPanelVisible = ref(false)
+const triggerPanelVisible = ref(false)
 const sshDialogPrefill = ref<{ host: string; port: number; username: string }>()
+
+useTriggerWatcher()
 
 if (store.tabs.length === 0) {
   store.addTab('local')
@@ -100,6 +105,7 @@ onUnmounted(() => {
       @tunnel-click="tunnelPanelVisible = !tunnelPanelVisible"
       @proxy-click="proxyPanelVisible = !proxyPanelVisible"
       @snippet-click="snippetPanelVisible = !snippetPanelVisible"
+      @trigger-click="triggerPanelVisible = !triggerPanelVisible"
     />
     <QuickConnectBar
       :visible="quickConnectVisible"
@@ -121,6 +127,10 @@ onUnmounted(() => {
           @newSsh="sshDialogVisible = true"
         />
       </div>
+      <TriggerPanel
+        v-if="triggerPanelVisible"
+        @close="triggerPanelVisible = false"
+      />
       <SnippetPanel
         v-if="snippetPanelVisible"
         @close="snippetPanelVisible = false"
