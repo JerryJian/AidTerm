@@ -34,6 +34,8 @@ enum SftpCmd {
     Remove { path: String, resp: Resp<()> },
     Rename { old: String, new: String, resp: Resp<()> },
     Mkdir { path: String, resp: Resp<()> },
+    ReadFile { remote: String, resp: Resp<String> },
+    WriteFile { remote: String, content: String, resp: Resp<()> },
 }
 
 pub struct SftpConnection {
@@ -124,6 +126,20 @@ impl SftpConnection {
                         let result =
                             Self::exec_cmd(&mut session, &format!("mkdir -p {}", shell_escape(&path)))
                                 .map(|_| ());
+                        let _ = resp.send(result);
+                    }
+                    SftpCmd::ReadFile { remote, resp } => {
+                        let result = Self::exec_cmd(&mut session, &format!("cat {}", shell_escape(&remote)));
+                        let _ = resp.send(result);
+                    }
+                    SftpCmd::WriteFile { remote, content, resp } => {
+                        let result = (|| {
+                            let tmp = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+                            std::fs::write(&tmp, &content).map_err(|e| format!("Temp write: {}", e))?;
+                            let r = Self::scp_upload(&mut session, tmp.to_str().unwrap_or("/tmp/tndterm"), &remote);
+                            let _ = std::fs::remove_file(&tmp);
+                            r
+                        })();
                         let _ = resp.send(result);
                     }
                 },
@@ -246,6 +262,22 @@ impl SftpConnection {
         let (tx, rx) = mpsc::channel();
         self.cmd_tx
             .send(SftpCmd::Mkdir { path: path.to_string(), resp: tx })
+            .map_err(|e| format!("Send error: {}", e))?;
+        rx.recv().map_err(|e| format!("Receive error: {}", e))?
+    }
+
+    pub fn read_file(&self, remote: &str) -> Result<String, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd_tx
+            .send(SftpCmd::ReadFile { remote: remote.to_string(), resp: tx })
+            .map_err(|e| format!("Send error: {}", e))?;
+        rx.recv().map_err(|e| format!("Receive error: {}", e))?
+    }
+
+    pub fn write_file(&self, remote: &str, content: &str) -> Result<(), String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd_tx
+            .send(SftpCmd::WriteFile { remote: remote.to_string(), content: content.to_string(), resp: tx })
             .map_err(|e| format!("Send error: {}", e))?;
         rx.recv().map_err(|e| format!("Receive error: {}", e))?
     }

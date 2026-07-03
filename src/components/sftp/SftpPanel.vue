@@ -9,6 +9,7 @@ const store = useSftpStore()
 
 const emit = defineEmits<{
   close: []
+  editFile: [remotePath: string, connId: string]
 }>()
 
 const host = ref('')
@@ -99,9 +100,11 @@ function goUp() {
 }
 
 function onEntryDblClick(entry: FileEntry) {
+  const path = store.currentPath.replace(/\/?$/, '/') + entry.name
   if (entry.is_dir) {
-    const path = store.currentPath.replace(/\/?$/, '/') + entry.name
     navigateTo(path)
+  } else {
+    emit('editFile', path, store.connId ?? '')
   }
 }
 
@@ -243,6 +246,7 @@ function fileIcon(entry: FileEntry): string {
           <span class="col-size">{{ entry.is_dir ? '—' : formatSize(entry.size) }}</span>
           <span class="col-modified">{{ entry.modified }}</span>
           <span class="col-actions">
+            <button v-if="!entry.is_dir" class="action-btn" title="Edit" @click.stop="onEntryDblClick(entry)">✎</button>
             <button class="action-btn" title="Download" @click.stop="doDownload(entry)">⬇</button>
             <button class="action-btn" title="Rename" @click.stop="startRename(entry)">✏</button>
             <button class="action-btn danger" title="Delete" @click.stop="doDelete(entry)">🗑</button>

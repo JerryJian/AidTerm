@@ -214,6 +214,29 @@ pub fn zmodem_respond(
 }
 
 #[tauri::command]
+pub fn sftp_read_file(
+    manager: State<'_, sftp::SftpManager>,
+    conn_id: String,
+    remote: String,
+) -> Result<String, String> {
+    let connections = manager.connections.lock().map_err(|e| e.to_string())?;
+    let conn = connections.get(&conn_id).ok_or("SFTP connection not found")?;
+    conn.read_file(&remote)
+}
+
+#[tauri::command]
+pub fn sftp_write_file(
+    manager: State<'_, sftp::SftpManager>,
+    conn_id: String,
+    remote: String,
+    content: String,
+) -> Result<(), String> {
+    let connections = manager.connections.lock().map_err(|e| e.to_string())?;
+    let conn = connections.get(&conn_id).ok_or("SFTP connection not found")?;
+    conn.write_file(&remote, &content)
+}
+
+#[tauri::command]
 pub fn tunnel_create(
     manager: State<'_, tunnel::TunnelManager>,
     req: tunnel::TunnelCreateRequest,

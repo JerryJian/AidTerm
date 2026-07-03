@@ -87,8 +87,21 @@ export const useSftpStore = defineStore('sftp', () => {
     await listDir(currentPath.value)
   }
 
+  async function readFile(remote: string): Promise<string> {
+    if (!connId.value) return ''
+    error.value = ''
+    return await invoke<string>('sftp_read_file', { connId: connId.value, remote })
+  }
+
+  async function writeFile(remote: string, content: string) {
+    if (!connId.value) return
+    error.value = ''
+    await invoke('sftp_write_file', { connId: connId.value, remote, content })
+  }
+
   return {
     connId, connected, currentPath, entries, loading, error,
     connect, disconnect, listDir, download, upload, remove, renameItem, mkdir,
+    readFile, writeFile,
   }
 })

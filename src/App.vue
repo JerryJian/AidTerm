@@ -16,6 +16,7 @@ import TunnelPanel from './components/tunnel/TunnelPanel.vue'
 import ProxyPanel from './components/proxy/ProxyPanel.vue'
 import SnippetPanel from './components/snippet/SnippetPanel.vue'
 import TriggerPanel from './components/trigger/TriggerPanel.vue'
+import FileEditor from './components/editor/FileEditor.vue'
 import { useTriggerWatcher } from './hooks/useTriggerWatcher'
 
 const store = useTerminalStore()
@@ -29,6 +30,7 @@ const proxyPanelVisible = ref(false)
 const snippetPanelVisible = ref(false)
 const triggerPanelVisible = ref(false)
 const sshDialogPrefill = ref<{ host: string; port: number; username: string }>()
+const editorFile = ref<{ connId: string; remotePath: string } | null>(null)
 
 useTriggerWatcher()
 
@@ -50,6 +52,10 @@ function onQuickTelnet(host: string, port: number) {
   quickConnectVisible.value = false
   const info: TelnetConnectionInfo = { host, port }
   store.addTab('telnet', undefined, info)
+}
+
+function onEditFile(remotePath: string, connId: string) {
+  editorFile.value = { connId, remotePath }
 }
 
 function onConnectSession(session: SavedSession) {
@@ -120,8 +126,14 @@ onUnmounted(() => {
         @close="sessionPanelVisible = false"
       />
       <div class="terminal-area">
+        <FileEditor
+          v-if="editorFile"
+          :conn-id="editorFile.connId"
+          :remote-path="editorFile.remotePath"
+          @close="editorFile = null"
+        />
         <TerminalPane
-          v-if="store.activeTab"
+          v-else-if="store.activeTab"
           :key="store.activeTab.id"
           :tab="store.activeTab"
           @newSsh="sshDialogVisible = true"
@@ -145,6 +157,7 @@ onUnmounted(() => {
       />
       <SftpPanel
         v-if="sftpPanelVisible"
+        @edit-file="onEditFile"
         @close="sftpPanelVisible = false"
       />
     </div>

@@ -36,6 +36,8 @@ pub fn run() {
             commands::sftp_remove,
             commands::sftp_rename,
             commands::sftp_mkdir,
+            commands::sftp_read_file,
+            commands::sftp_write_file,
             commands::zmodem_respond,
             commands::tunnel_create,
             commands::tunnel_list,

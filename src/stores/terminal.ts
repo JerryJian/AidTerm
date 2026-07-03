@@ -10,6 +10,8 @@ function generateId(): string {
 export const useTerminalStore = defineStore('terminal', () => {
   const tabs = ref<TerminalTab[]>([])
   const activeTabId = ref<string | null>(null)
+  const batchMode = ref(false)
+  const batchTabIds = ref<Set<string>>(new Set())
 
   const activeTab = computed(() => {
     if (!activeTabId.value) return null
@@ -79,15 +81,40 @@ export const useTerminalStore = defineStore('terminal', () => {
     }
   }
 
+  function toggleBatch() {
+    batchMode.value = !batchMode.value
+    if (!batchMode.value) {
+      batchTabIds.value = new Set()
+    }
+  }
+
+  function setBatchTabId(tabId: string, selected: boolean) {
+    const s = new Set(batchTabIds.value)
+    if (selected) s.add(tabId)
+    else s.delete(tabId)
+    batchTabIds.value = s
+  }
+
+  function getBatchSessionIds(): string[] {
+    return tabs.value
+      .filter(t => batchTabIds.value.has(t.id) && t.session?.id)
+      .map(t => t.session!.id)
+  }
+
   return {
     tabs,
     activeTabId,
     activeTab,
+    batchMode,
+    batchTabIds,
     addTab,
     closeTab,
     setActiveTab,
     updateTabTitle,
     updateSessionStatus,
     updateSessionId,
+    toggleBatch,
+    setBatchTabId,
+    getBatchSessionIds,
   }
 })
