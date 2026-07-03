@@ -116,6 +116,13 @@ export interface TunnelInfo {
   status: TunnelStatus
 }
 
+export interface Snippet {
+  id: string
+  name: string
+  command: string
+  sort_order: number
+}
+
 export interface ThemeConfig {
   name: string
   background: string

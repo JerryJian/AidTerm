@@ -146,6 +146,7 @@ async function initTerminal() {
       : await createSession()
 
   if (id) {
+    store.updateSessionId(store.activeTabId ?? '', id)
     const unsub = await onOutput((data: string) => {
       terminal?.write(data)
     })

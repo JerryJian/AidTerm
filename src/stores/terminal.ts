@@ -72,6 +72,13 @@ export const useTerminalStore = defineStore('terminal', () => {
     }
   }
 
+  function updateSessionId(tabId: string, sessionId: string) {
+    const tab = tabs.value.find(t => t.id === tabId)
+    if (tab?.session) {
+      tab.session.id = sessionId
+    }
+  }
+
   return {
     tabs,
     activeTabId,
@@ -81,5 +88,6 @@ export const useTerminalStore = defineStore('terminal', () => {
     setActiveTab,
     updateTabTitle,
     updateSessionStatus,
+    updateSessionId,
   }
 })
