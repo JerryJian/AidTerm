@@ -1,5 +1,6 @@
-use tauri::State;
+use tauri::{Manager, State};
 use crate::session::SessionManager;
+use crate::session_store;
 
 #[tauri::command]
 pub async fn spawn_terminal(
@@ -67,4 +68,19 @@ pub async fn kill_terminal(
     session_id: String,
 ) -> Result<(), String> {
     manager.kill(&session_id)
+}
+
+#[tauri::command]
+pub async fn load_session_store(app: tauri::AppHandle) -> Result<session_store::SessionStoreData, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    session_store::load(dir)
+}
+
+#[tauri::command]
+pub async fn save_session_store(
+    app: tauri::AppHandle,
+    data: session_store::SessionStoreData,
+) -> Result<(), String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    session_store::save(dir, &data)
 }

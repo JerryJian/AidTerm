@@ -39,6 +39,30 @@ export interface TerminalResizePayload {
   cols: number
 }
 
+export interface SavedSession {
+  id: string
+  name: string
+  session_type: 'ssh' | 'telnet' | 'serial' | 'local'
+  group_id: string | null
+  host: string | null
+  port: number | null
+  username: string | null
+  private_key_path: string | null
+  last_connected: string | null
+  created_at: string
+}
+
+export interface SavedSessionGroup {
+  id: string
+  name: string
+  expanded: boolean
+}
+
+export interface SessionStoreData {
+  groups: SavedSessionGroup[]
+  sessions: SavedSession[]
+}
+
 export interface ThemeConfig {
   name: string
   background: string

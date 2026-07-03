@@ -5,6 +5,7 @@ const store = useTerminalStore()
 
 const emit = defineEmits<{
   sshClick: []
+  sessionsClick: []
 }>()
 
 function onKeydown(e: KeyboardEvent) {
@@ -50,7 +51,8 @@ defineExpose({ onKeydown })
       <button class="tab-close" @click.stop="store.closeTab(tab.id)">✕</button>
     </div>
     <button class="tab-add" @click="store.addTab()" title="New Tab (Ctrl+T)">+</button>
-    <button class="tab-ssh" @click="emit('sshClick')" title="SSH Connection">SSH</button>
+    <button class="tab-btn" @click="emit('sessionsClick')" title="Saved Sessions">📁</button>
+    <button class="tab-btn tab-ssh" @click="emit('sshClick')" title="SSH Connection">SSH</button>
   </div>
 </template>
 
@@ -135,7 +137,7 @@ defineExpose({ onKeydown })
 }
 
 .tab-add,
-.tab-ssh {
+.tab-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -158,11 +160,20 @@ defineExpose({ onKeydown })
   color: #cdd6f4;
 }
 
+.tab-btn {
+  padding: 4px 8px;
+  font-size: 13px;
+  margin-left: 2px;
+}
+
+.tab-btn:hover {
+  background: #313244;
+  color: #cdd6f4;
+}
+
 .tab-ssh {
-  padding: 4px 10px;
   font-size: 11px;
   font-weight: 600;
-  margin-left: 2px;
   border: 1px solid #45475a;
   background: #1e1e2e;
   color: #89b4fa;

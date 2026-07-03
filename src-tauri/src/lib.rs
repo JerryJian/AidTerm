@@ -1,5 +1,6 @@
 mod commands;
 mod session;
+mod session_store;
 
 use session::SessionManager;
 
@@ -16,6 +17,8 @@ pub fn run() {
             commands::write_terminal,
             commands::resize_terminal,
             commands::kill_terminal,
+            commands::load_session_store,
+            commands::save_session_store,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
