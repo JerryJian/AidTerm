@@ -2,6 +2,7 @@ use tauri::{Manager, State};
 use crate::session::SessionManager;
 use crate::session_store;
 use crate::sftp;
+use crate::tunnel;
 use crate::zmodem;
 
 #[tauri::command]
@@ -193,4 +194,27 @@ pub fn zmodem_respond(
     let mut responses = state.responses.lock().map_err(|e| e.to_string())?;
     responses.insert(session_id, save_path);
     Ok(())
+}
+
+#[tauri::command]
+pub fn tunnel_create(
+    manager: State<'_, tunnel::TunnelManager>,
+    req: tunnel::TunnelCreateRequest,
+) -> Result<tunnel::TunnelInfo, String> {
+    manager.create(req)
+}
+
+#[tauri::command]
+pub fn tunnel_list(
+    manager: State<'_, tunnel::TunnelManager>,
+) -> Result<Vec<tunnel::TunnelInfo>, String> {
+    Ok(manager.list())
+}
+
+#[tauri::command]
+pub fn tunnel_remove(
+    manager: State<'_, tunnel::TunnelManager>,
+    id: String,
+) -> Result<(), String> {
+    manager.remove(&id)
 }

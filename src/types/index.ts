@@ -71,6 +71,36 @@ export interface SessionStoreData {
   sessions: SavedSession[]
 }
 
+export type TunnelType = 'Local' | 'Remote' | 'Dynamic'
+
+export type TunnelStatus = 'Starting' | 'Running' | 'Stopped' | { Error: string }
+
+export interface TunnelCreateRequest {
+  host: string
+  port: number
+  username: string
+  password: string | null
+  private_key_path: string | null
+  tunnel_type: TunnelType
+  bind_addr: string
+  bind_port: number
+  target_host: string | null
+  target_port: number | null
+}
+
+export interface TunnelInfo {
+  id: string
+  tunnel_type: TunnelType
+  bind_addr: string
+  bind_port: number
+  target_host: string | null
+  target_port: number | null
+  host: string
+  port: number
+  username: string
+  status: TunnelStatus
+}
+
 export interface ThemeConfig {
   name: string
   background: string
