@@ -42,6 +42,7 @@
 ### 5. 安全与密钥
 - [ ] **密钥管理** — 生成 RSA/ED25519 密钥对，导入/导出私钥
 - [ ] **Pageant/ssh-agent 转发**
+- [ ] **X11 转发**
 - [ ] **known_hosts 管理**
 
 ### 6. 高级
@@ -50,8 +51,30 @@
 - [ ] **宏 / 触发器 (Macro/Triggers)** — 接收到特定字符串时自动发送命令
 - [ ] **录制与回放** — 会话录制为文本或 ANSI 日志
 - [ ] **一键快捷命令 (Snippets)** — 带参数变量的命令面板
+- [ ] **批量输入** — 同时向多个终端发送命令（electerm 特色）
+- [ ] **远程文件编辑** — 双击远程文件，内置编辑器直接修改（electerm 特色）
 
-### 7. 开发者 / 集成
+### 7. AI 智能助手（electerm 特色）
+- [ ] **AI 命令建议** — 集成 DeepSeek / OpenAI API，根据自然语言生成命令
+- [ ] **脚本生成** — 用自然语言描述需求，AI 生成 shell 脚本
+- [ ] **终端内容解释** — 选中终端输出，AI 解释含义
+- [ ] **AI 智能创建书签** — 自然语言描述连接目标，AI 辅助填写参数
+- [ ] **MCP 协议支持** — Model Context Protocol，供外部 AI 工具集成
+
+### 8. 云同步与协作
+- [ ] **GitHub Gist 同步** — 书签/主题/快捷命令同步到 GitHub Secret Gist
+- [ ] **WebDAV 同步** — 自建服务端同步
+- [ ] **electerm 云兼容** — 可选对接 electerm 云服务
+
+### 9. 特色体验
+- [ ] **全局快捷键（Guake 模式）** — Ctrl+2 切换窗口显隐，类 Guake 下拉终端
+- [ ] **终端背景图** — 支持自定义背景图片
+- [ ] **Deep Link** — ssh://user@host 协议链接直接打开连接
+- [ ] **命令行传参** — electerm --ssh user@host 直接启动连接
+- [ ] **Trzsz 文件传输** — tmux 兼容的 Zmodem 替代方案
+- [ ] **MCP Widget** — 供 AI 助手和外部工具集成的组件
+
+### 10. 开发者 / 集成
 - [ ] **插件系统** — 社区扩展（远景）
 - [ ] **REST API / CLI 控制** — 外部控制终端（远景）
 
@@ -110,31 +133,59 @@
 | 5.2 | 代理配置 | HTTP/SOCKS5 代理设置，Jump Host 链式跳转 |
 | 5.3 | 快捷命令 (Snippets) | 命令列表 + 变量替换，支持快捷键发送 |
 | 5.4 | 触发器 (Triggers) | 匹配终端输出 → 自动响应 / 告警 |
+| 5.5 | 批量输入 | 同时向多个终端发送命令（electerm 特色） |
+| 5.6 | 远程文件编辑 | 双击远程文件，内置编辑器直接修改（electerm 特色） |
 
 ### Phase 6: UI 完善
 | # | 任务 | 说明 |
 |---|------|------|
-| 6.1 | i18n 多语言 | `vue-i18n`，中文 + 英文 |
-| 6.2 | 快捷键系统 | 全局快捷键注册 + 配置 UI |
+| 6.1 | i18n 多语言 | `vue-i18n`，中文 + 英文（14+ 语言目标） |
+| 6.2 | 全局快捷键（Guake 模式） | Ctrl+2 切换窗口显隐 + 终端内快捷键自定义 |
 | 6.3 | 锁屏 | 本地密码加密存储，锁屏界面 |
-| 6.4 | 窗口透明度 | Tauri `window.setTransparent()` |
+| 6.4 | 窗口透明度 + 背景图 | Tauri `setTransparent()` + 自定义背景图片 |
 | 6.5 | 全屏模式 | Tauri 全屏 API |
 | 6.6 | 系统托盘 | Tauri tray plugin，后台运行 |
+| 6.7 | Deep Link 协议 | ssh://user@host 协议链接直接打开连接 |
+| 6.8 | 命令行传参 | electerm --ssh user@host 直接启动连接 |
 
-### Phase 7: 安全与密钥
+### Phase 7: AI 智能助手
 | # | 任务 | 说明 |
 |---|------|------|
-| 7.1 | 密钥生成 | Rust `rsa` / `ed25519-dalek` 生成密钥对 |
-| 7.2 | ssh-agent 转发 | 对接系统 ssh-agent / Pageant |
-| 7.3 | known_hosts 管理 | 导入 `known_hosts`，指纹验证弹窗 |
+| 7.1 | AI 命令建议 | 集成 DeepSeek / OpenAI API，自然语言 → 命令 |
+| 7.2 | AI 脚本生成 | 自然语言描述需求，AI 生成 shell 脚本 |
+| 7.3 | 终端内容解释 | 选中终端输出，AI 解释含义 |
+| 7.4 | AI 书签 | 自然语言描述连接目标，AI 辅助填写参数 |
+| 7.5 | MCP 协议支持 | Model Context Protocol，供外部 AI 工具集成 |
+| 7.6 | MCP Widget | UI 组件，供 AI 助手和外部工具集成 |
 
-### Phase 8: 测试与发布
+### Phase 8: 安全与密钥
 | # | 任务 | 说明 |
 |---|------|------|
-| 8.1 | 单元测试 | Rust `#[cfg(test)]` + Vue `vitest` |
-| 8.2 | E2E 测试 | Tauri `webdriver` + Playwright |
-| 8.3 | CI/CD | GitHub Actions 构建 Windows / macOS / Linux 安装包 |
-| 8.4 | 安装包 | NSIS (Windows) / DMG (macOS) / AppImage (Linux) |
+| 8.1 | 密钥生成 | Rust `rsa` / `ed25519-dalek` 生成密钥对 |
+| 8.2 | ssh-agent 转发 | 对接系统 ssh-agent / Pageant |
+| 8.3 | X11 转发 | SSH X11 转发支持 |
+| 8.4 | known_hosts 管理 | 导入 `known_hosts`，指纹验证弹窗 |
+
+### Phase 9: 云同步与协作
+| # | 任务 | 说明 |
+|---|------|------|
+| 9.1 | GitHub Gist 同步 | 书签/主题/快捷命令同步到 GitHub Secret Gist |
+| 9.2 | WebDAV 同步 | 自建服务端同步 |
+| 9.3 | electerm 云兼容 | 可选对接 electerm 云服务 |
+
+### Phase 10: 文件传输增强
+| # | 任务 | 说明 |
+|---|------|------|
+| 10.1 | Trzsz 支持 | tmux 兼容的 Zmodem 替代方案（trz/tsz） |
+| 10.2 | SCP 快速传输 | 基于 SCP 的快速文件传输 |
+
+### Phase 11: 测试与发布
+| # | 任务 | 说明 |
+|---|------|------|
+| 11.1 | 单元测试 | Rust `#[cfg(test)]` + Vue `vitest` |
+| 11.2 | E2E 测试 | Tauri `webdriver` + Playwright |
+| 11.3 | CI/CD | GitHub Actions 构建 Windows / macOS / Linux 安装包 |
+| 11.4 | 安装包 | NSIS (Windows) / DMG (macOS) / AppImage (Linux) |
 
 ---
 
