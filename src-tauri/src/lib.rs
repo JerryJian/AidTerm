@@ -2,6 +2,7 @@ mod commands;
 mod session;
 mod session_store;
 mod sftp;
+mod zmodem;
 
 use session::SessionManager;
 
@@ -12,6 +13,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(SessionManager::new())
         .manage(sftp::SftpManager::new())
+        .manage(zmodem::ZmodemState::new())
         .invoke_handler(tauri::generate_handler![
             commands::spawn_terminal,
             commands::ssh_connect,
@@ -29,6 +31,7 @@ pub fn run() {
             commands::sftp_remove,
             commands::sftp_rename,
             commands::sftp_mkdir,
+            commands::zmodem_respond,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

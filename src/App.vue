@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useTerminalStore } from './stores/terminal'
 import { useSessionStore } from './stores/sessionStore'
 import type { SshConnectionInfo, TelnetConnectionInfo, SavedSession } from './types'
+import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
+import { save } from '@tauri-apps/plugin-dialog'
 import TabBar from './components/terminal/TabBar.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
 import SshDialog from './components/session/SshDialog.vue'
@@ -56,6 +59,30 @@ function onConnectSession(session: SavedSession) {
     sessionStore.updateLastConnected(session.id)
   }
 }
+
+const zmodemUnlisten: Array<() => void> = []
+
+onMounted(async () => {
+  const un1 = await listen<{ session_id: string }>('zmodem-start', async (event) => {
+    const path = await save({ title: 'Save Zmodem file' })
+    await invoke('zmodem_respond', {
+      sessionId: event.payload.session_id,
+      savePath: path,
+    })
+  })
+  zmodemUnlisten.push(un1)
+
+  const un2 = await listen<{ session_id: string; error?: string }>('zmodem-end', (event) => {
+    if (event.payload.error) {
+      console.error('Zmodem error:', event.payload.error)
+    }
+  })
+  zmodemUnlisten.push(un2)
+})
+
+onUnmounted(() => {
+  zmodemUnlisten.forEach(fn => fn())
+})
 </script>
 
 <template>

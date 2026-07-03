@@ -2,6 +2,7 @@ use tauri::{Manager, State};
 use crate::session::SessionManager;
 use crate::session_store;
 use crate::sftp;
+use crate::zmodem;
 
 #[tauri::command]
 pub async fn spawn_terminal(
@@ -181,4 +182,15 @@ pub fn sftp_mkdir(
     let connections = manager.connections.lock().map_err(|e| e.to_string())?;
     let conn = connections.get(&conn_id).ok_or("SFTP connection not found")?;
     conn.mkdir(&path)
+}
+
+#[tauri::command]
+pub fn zmodem_respond(
+    state: State<'_, zmodem::ZmodemState>,
+    session_id: String,
+    save_path: Option<String>,
+) -> Result<(), String> {
+    let mut responses = state.responses.lock().map_err(|e| e.to_string())?;
+    responses.insert(session_id, save_path);
+    Ok(())
 }

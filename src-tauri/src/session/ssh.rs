@@ -4,7 +4,8 @@ use std::time::Duration;
 use ssh_rs::ssh;
 use ssh_rs::SshErrorKind;
 use ssh_rs::TerminalSize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+use crate::zmodem;
 
 pub struct SshConnection {
     pub write_tx: Sender<String>,
@@ -90,6 +91,89 @@ impl SshConnection {
                     if data.is_empty() {
                         break;
                     }
+
+                    // Zmodem detection
+                    if zmodem::detect_init(&data) {
+                        let _ = app_handle.emit("zmodem-start", serde_json::json!({
+                            "session_id": session_id,
+                        }));
+
+                        let mut buf: Vec<u8> = data.to_vec();
+
+                        // Wait for frontend response (poll)
+                        let action = loop {
+                            if kill_rx.try_recv().is_ok() {
+                                return Ok(());
+                            }
+                            if let Some(state) = app_handle.try_state::<zmodem::ZmodemState>() {
+                                if let Ok(responses) = state.responses.lock() {
+                                    if let Some(response) = responses.get(session_id) {
+                                        if let Some(path) = response {
+                                            break Some(path.clone());
+                                        }
+                                    }
+                                }
+                            }
+                            while let Ok(w) = write_rx.try_recv() {
+                                shell.write(w.as_bytes()).map_err(|e| format!("SSH write error: {}", e))?;
+                            }
+                            match shell.read() {
+                                Ok(more) if !more.is_empty() => buf.extend_from_slice(&more),
+                                Ok(_) => {}
+                                Err(e) if matches!(e.kind(), SshErrorKind::Timeout) => {}
+                                Err(e) => return Err(e.to_string()),
+                            }
+                            std::thread::sleep(Duration::from_millis(100));
+                        };
+
+                        if let Some(ref path) = action {
+                            // Capture remaining Zmodem data with idle timeout
+                            let mut idle = 0u32;
+                            loop {
+                                if kill_rx.try_recv().is_ok() {
+                                    return Ok(());
+                                }
+                                while let Ok(w) = write_rx.try_recv() {
+                                    let _ = shell.write(w.as_bytes());
+                                }
+                                match shell.read() {
+                                    Ok(more) if !more.is_empty() => {
+                                        buf.extend_from_slice(&more);
+                                        idle = 0;
+                                    }
+                                    Ok(_) | Err(_) => {
+                                        idle += 1;
+                                        if idle > 50 {
+                                            break;
+                                        }
+                                        std::thread::sleep(Duration::from_millis(100));
+                                    }
+                                }
+                            }
+
+                            if let Err(e) = zmodem::save_to_file(path, &buf) {
+                                let _ = app_handle.emit("zmodem-end", serde_json::json!({
+                                    "session_id": session_id, "error": e,
+                                }));
+                            } else {
+                                let _ = app_handle.emit("zmodem-end", serde_json::json!({
+                                    "session_id": session_id,
+                                }));
+                            }
+                        } else {
+                            let _ = app_handle.emit("zmodem-end", serde_json::json!({
+                                "session_id": session_id,
+                            }));
+                        }
+
+                        // Clean up response entry
+                        if let Some(state) = app_handle.try_state::<zmodem::ZmodemState>() {
+                            let _ = state.responses.lock().map(|mut m| m.remove(session_id));
+                        }
+
+                        continue;
+                    }
+
                     let _ = app_handle.emit("terminal-output", serde_json::json!({
                         "session_id": session_id, "data": String::from_utf8_lossy(&data),
                     }));
