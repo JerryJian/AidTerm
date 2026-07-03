@@ -6,6 +6,11 @@ export interface SshConnectionInfo {
   privateKeyPath?: string
 }
 
+export interface TelnetConnectionInfo {
+  host: string
+  port: number
+}
+
 export interface TerminalSession {
   id: string
   title: string
@@ -18,6 +23,7 @@ export interface TerminalTab {
   title: string
   session: TerminalSession | null
   sshInfo?: SshConnectionInfo
+  telnetInfo?: TelnetConnectionInfo
   splitDirection?: 'horizontal' | 'vertical'
   children?: TerminalTab[]
 }

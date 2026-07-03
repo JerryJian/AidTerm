@@ -9,7 +9,7 @@
 
 ### 1. 会话协议支持
 - [x] **SSH2** — 密码、密钥认证；端口转发（本地/远程/动态）
-- [ ] **Telnet** — 基础 Telnet 连接
+- [x] **Telnet** — 基础 Telnet 连接
 - [ ] **Serial (串口)** — 波特率、数据位、停止位、奇偶校验配置
 - [ ] **本地 Shell** — Windows (`cmd`, `powershell`)、Linux/macOS (`bash`, `zsh`)
 - [ ] **SFTP** — 远程文件浏览、上传、下载、删除、重命名
@@ -87,7 +87,7 @@
 | 2.3 | Telnet 连接 | Rust 端或纯 JS `telnet-client` |
 | 2.4 | Serial 连接 | Rust 端 `serialport` crate |
 | 2.5 | 连接复用 + 重连 | 断线自动重试（可配置） |
-| 2.6 | 快速连接栏 | 输入 `ssh user@host` 直接解析并连接 |
+| 2.6 | 快速连接栏 | 输入 `ssh user@host` 直接解析并打开 SSH 连接对话框 |
 
 ### Phase 3: 会话管理
 | # | 任务 | 说明 |

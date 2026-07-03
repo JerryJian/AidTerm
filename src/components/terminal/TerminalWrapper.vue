@@ -5,10 +5,11 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
 import { useTerminal } from '../../hooks/useTerminal'
-import type { SshConnectionInfo } from '../../types'
+import type { SshConnectionInfo, TelnetConnectionInfo } from '../../types'
 
 const props = defineProps<{
   sshInfo?: SshConnectionInfo
+  telnetInfo?: TelnetConnectionInfo
 }>()
 
 const emit = defineEmits<{
@@ -27,7 +28,7 @@ let resizeObserver: ResizeObserver | null = null
 let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 let lastSize = { w: 0, h: 0 }
 
-const { createSession, sshConnect, writeInput, resize, onOutput } = useTerminal()
+const { createSession, sshConnect, telnetConnect, writeInput, resize, onOutput } = useTerminal()
 
 function handleTerminalData(data: string) {
   writeInput(data)
@@ -132,7 +133,9 @@ async function initTerminal() {
         props.sshInfo.password,
         props.sshInfo.privateKeyPath,
       )
-    : await createSession()
+    : props.telnetInfo
+      ? await telnetConnect(props.telnetInfo.host, props.telnetInfo.port)
+      : await createSession()
 
   if (id) {
     const unsub = await onOutput((data: string) => {

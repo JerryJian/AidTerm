@@ -14,6 +14,18 @@ pub async fn spawn_terminal(
 }
 
 #[tauri::command]
+pub async fn telnet_connect(
+    app: tauri::AppHandle,
+    manager: State<'_, SessionManager>,
+    host: String,
+    port: u16,
+) -> Result<String, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    manager.connect_telnet(id.clone(), host, port, app)?;
+    Ok(id)
+}
+
+#[tauri::command]
 pub async fn ssh_connect(
     app: tauri::AppHandle,
     manager: State<'_, SessionManager>,

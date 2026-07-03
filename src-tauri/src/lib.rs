@@ -12,6 +12,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::spawn_terminal,
             commands::ssh_connect,
+            commands::telnet_connect,
             commands::write_terminal,
             commands::resize_terminal,
             commands::kill_terminal,

@@ -7,6 +7,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   sshConnect: [host: string, port: number, username: string]
+  telnetConnect: [host: string, port: number]
   close: []
 }>()
 
@@ -26,6 +27,26 @@ function parseAndSubmit() {
   let str = raw
   if (str.startsWith('ssh ')) {
     str = str.slice(4).trim()
+  }
+
+  if (str.startsWith('telnet ')) {
+    str = str.slice(7).trim()
+    const parts = str.split(/\s+/)
+    const addr = parts[0]
+    const colonIdx = addr.lastIndexOf(':')
+    let host: string
+    let port: number
+    if (colonIdx > 0) {
+      host = addr.slice(0, colonIdx)
+      port = parseInt(addr.slice(colonIdx + 1)) || 23
+    } else {
+      host = addr
+      port = 23
+    }
+    input.value = ''
+    emit('close')
+    emit('telnetConnect', host, port)
+    return
   }
 
   const regex = /^(?:(\w[\w.-]*)@)?([\w.-]+)(?::(\d+))?$/
@@ -60,7 +81,7 @@ function onKeydown(e: KeyboardEvent) {
       ref="inputRef"
       v-model="input"
       class="qc-input"
-      placeholder="ssh user@host[:port]"
+      placeholder="ssh user@host[:port] | telnet host[:port]"
       @keydown.enter="parseAndSubmit"
       @keydown="onKeydown"
       @blur="emit('close')"

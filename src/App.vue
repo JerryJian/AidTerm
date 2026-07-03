@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useTerminalStore } from './stores/terminal'
-import type { SshConnectionInfo } from './types'
+import type { SshConnectionInfo, TelnetConnectionInfo } from './types'
 import TabBar from './components/terminal/TabBar.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
 import SshDialog from './components/session/SshDialog.vue'
@@ -25,6 +25,12 @@ function onQuickSsh(host: string, port: number, username: string) {
   sshDialogPrefill.value = { host, port, username }
   sshDialogVisible.value = true
 }
+
+function onQuickTelnet(host: string, port: number) {
+  quickConnectVisible.value = false
+  const info: TelnetConnectionInfo = { host, port }
+  store.addTab('telnet', undefined, info)
+}
 </script>
 
 <template>
@@ -35,6 +41,7 @@ function onQuickSsh(host: string, port: number, username: string) {
     <QuickConnectBar
       :visible="quickConnectVisible"
       @ssh-connect="onQuickSsh"
+      @telnet-connect="onQuickTelnet"
       @close="quickConnectVisible = false"
     />
     <div class="terminal-area">

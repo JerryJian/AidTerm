@@ -4282,6 +4282,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "telnet"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe470bf03e694eccaac03d81297cbc22e681f60d3af29d4b69369f014895bf06"
+
+[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4420,6 +4426,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
+ "telnet",
  "tokio",
  "uuid",
 ]

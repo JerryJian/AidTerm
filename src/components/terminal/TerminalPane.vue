@@ -9,7 +9,7 @@ defineProps<{
 
 <template>
   <div class="terminal-pane">
-    <TerminalWrapper :ssh-info="tab.sshInfo" />
+    <TerminalWrapper :ssh-info="tab.sshInfo" :telnet-info="tab.telnetInfo" />
   </div>
 </template>
 

@@ -1,5 +1,6 @@
 pub(crate) mod local;
 pub(crate) mod ssh;
+pub(crate) mod telnet;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -8,6 +9,7 @@ use tauri::AppHandle;
 pub(crate) enum Session {
     Local(local::LocalSession),
     Ssh(ssh::SshConnection),
+    Telnet(telnet::TelnetConnection),
 }
 
 pub(crate) struct SessionManager {
@@ -29,6 +31,19 @@ impl SessionManager {
         let session = local::LocalSession::spawn(id.clone(), rows, cols, app_handle)?;
         let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
         sessions.insert(id, Session::Local(session));
+        Ok(())
+    }
+
+    pub fn connect_telnet(
+        &self,
+        id: String,
+        host: String,
+        port: u16,
+        app_handle: AppHandle,
+    ) -> Result<(), String> {
+        let session = telnet::TelnetConnection::connect(id.clone(), host, port, app_handle)?;
+        let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+        sessions.insert(id, Session::Telnet(session));
         Ok(())
     }
 
@@ -58,6 +73,7 @@ impl SessionManager {
         match session {
             Session::Local(s) => s.write(data),
             Session::Ssh(s) => s.write(data),
+            Session::Telnet(s) => s.write(data),
         }
     }
 
@@ -72,6 +88,7 @@ impl SessionManager {
             match session {
                 Session::Local(s) => s.kill(),
                 Session::Ssh(mut s) => s.kill(),
+                Session::Telnet(mut s) => s.kill(),
             }
         }
         Ok(())

@@ -19,6 +19,18 @@ export function useTerminal() {
     }
   }
 
+  async function telnetConnect(host: string, port: number) {
+    try {
+      const id = await invoke<string>('telnet_connect', { host, port })
+      sessionId.value = id
+      isConnected.value = true
+      return id
+    } catch (e) {
+      console.error('Failed to connect Telnet:', e)
+      return null
+    }
+  }
+
   async function sshConnect(
     host: string,
     port: number,
@@ -99,6 +111,7 @@ export function useTerminal() {
     isConnected,
     createSession,
     sshConnect,
+    telnetConnect,
     writeInput,
     resize,
     killSession,
