@@ -4,7 +4,9 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
+import { invoke } from '@tauri-apps/api/core'
 import { useTerminal } from '../../hooks/useTerminal'
+import { useTerminalStore } from '../../stores/terminal'
 import type { SshConnectionInfo, TelnetConnectionInfo } from '../../types'
 
 const props = defineProps<{
@@ -14,12 +16,17 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   titleChange: [title: string]
+  newSsh: []
 }>()
 
 const terminalRef = ref<HTMLDivElement>()
 const searchAddon = ref<SearchAddon>()
 const searchVisible = ref(false)
 const searchQuery = ref('')
+const ctxMenu = ref<{ x: number; y: number }>({ x: 0, y: 0 })
+const ctxVisible = ref(false)
+
+const store = useTerminalStore()
 
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
@@ -184,11 +191,135 @@ function closeSearch() {
   terminal?.focus()
 }
 
+function onTerminalKeydown(e: KeyboardEvent) {
+  if (e.ctrlKey && e.key === 'c' && !e.altKey && !e.metaKey) {
+    if (terminal?.hasSelection()) {
+      e.preventDefault()
+      e.stopPropagation()
+      copyText(terminal.getSelection())
+    }
+    return
+  }
+  if (e.ctrlKey && e.key === 'v' && !e.altKey && !e.metaKey) {
+    e.preventDefault()
+    e.stopPropagation()
+    pasteOrSend()
+    return
+  }
+}
+
+function showContextMenu(e: MouseEvent) {
+  e.preventDefault()
+  ctxMenu.value = { x: e.clientX, y: e.clientY }
+  ctxVisible.value = true
+}
+
+function closeContextMenu() {
+  ctxVisible.value = false
+}
+
+async function copyText(text: string) {
+  try {
+    await invoke('plugin:clipboard-manager|write_text', { text })
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    ta.style.pointerEvents = 'none'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+}
+
+async function readClipboard(): Promise<string> {
+  try {
+    return await invoke('plugin:clipboard-manager|read_text')
+  } catch {
+    try {
+      return await navigator.clipboard.readText()
+    } catch {
+      return ''
+    }
+  }
+}
+
+async function pasteOrSend() {
+  const text = await readClipboard()
+  if (text) {
+    writeInput(text)
+  } else {
+    writeInput('\x16')
+  }
+}
+
+function doCopy() {
+  const text = terminal?.getSelection()
+  closeContextMenu()
+  if (text) copyText(text)
+}
+
+async function doPaste() {
+  closeContextMenu()
+  const text = await readClipboard()
+  if (text) writeInput(text)
+}
+
+function doSelectAll() {
+  closeContextMenu()
+  terminal?.selectAll()
+}
+
+function doClear() {
+  closeContextMenu()
+  terminal?.clear()
+}
+
+function doToggleSearch() {
+  closeContextMenu()
+  if (searchVisible.value) {
+    closeSearch()
+  } else {
+    focusSearch()
+  }
+}
+
+function doNewTab() {
+  closeContextMenu()
+  store.addTab('local')
+}
+
+function doNewSsh() {
+  closeContextMenu()
+  emit('newSsh')
+}
+
+function doCloseTab() {
+  closeContextMenu()
+  store.closeTab(store.activeTabId ?? '')
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && ctxVisible.value) {
+    closeContextMenu()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', onKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeydown)
+})
+
 defineExpose({ focusSearch, doFit })
 </script>
 
 <template>
-  <div class="terminal-container">
+  <div class="terminal-container" @contextmenu="showContextMenu" @keydown.capture="onTerminalKeydown">
     <div class="search-bar" v-if="searchVisible">
       <input
         v-model="searchQuery"
@@ -203,6 +334,24 @@ defineExpose({ focusSearch, doFit })
       <button class="search-btn" @click="closeSearch">✕</button>
     </div>
     <div ref="terminalRef" class="terminal-xterm" />
+
+    <!-- Context menu -->
+    <teleport to="body">
+      <div v-if="ctxVisible" class="ctx-backdrop" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu" />
+      <div v-if="ctxVisible" class="ctx-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
+        <div class="ctx-item" @click="doCopy">复制</div>
+        <div class="ctx-item" @click="doPaste">粘贴</div>
+        <div class="ctx-item" @click="doSelectAll">全选</div>
+        <div class="ctx-sep" />
+        <div class="ctx-item" @click="doToggleSearch">搜索</div>
+        <div class="ctx-item" @click="doClear">清除终端</div>
+        <div class="ctx-sep" />
+        <div class="ctx-item" @click="doNewTab">新建标签</div>
+        <div class="ctx-item" @click="doNewSsh">新建 SSH 连接...</div>
+        <div class="ctx-sep" />
+        <div class="ctx-item ctx-danger" @click="doCloseTab">关闭标签</div>
+      </div>
+    </teleport>
   </div>
 </template>
 
@@ -259,5 +408,44 @@ defineExpose({ focusSearch, doFit })
 
 .search-btn:hover {
   background: #45475a;
+}
+
+.ctx-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}
+
+.ctx-menu {
+  position: fixed;
+  z-index: 1000;
+  background: #181825;
+  border: 1px solid #313244;
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 160px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+
+.ctx-item {
+  padding: 6px 16px;
+  font-size: 12px;
+  color: #cdd6f4;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ctx-item:hover {
+  background: #313244;
+}
+
+.ctx-danger:hover {
+  color: #f38ba8;
+}
+
+.ctx-sep {
+  height: 1px;
+  margin: 4px 8px;
+  background: #313244;
 }
 </style>

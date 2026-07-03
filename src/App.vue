@@ -109,6 +109,7 @@ onUnmounted(() => {
           v-if="store.activeTab"
           :key="store.activeTab.id"
           :tab="store.activeTab"
+          @newSsh="sshDialogVisible = true"
         />
       </div>
       <SftpPanel

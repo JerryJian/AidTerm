@@ -5,11 +5,15 @@ import type { TerminalTab } from '../../types'
 defineProps<{
   tab: TerminalTab
 }>()
+
+const emit = defineEmits<{
+  newSsh: []
+}>()
 </script>
 
 <template>
   <div class="terminal-pane">
-    <TerminalWrapper :ssh-info="tab.sshInfo" :telnet-info="tab.telnetInfo" />
+    <TerminalWrapper :ssh-info="tab.sshInfo" :telnet-info="tab.telnetInfo" @newSsh="emit('newSsh')" />
   </div>
 </template>
 

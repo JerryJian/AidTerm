@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSftpStore } from '../../stores/sftpStore'
 import { open, save } from '@tauri-apps/plugin-dialog'
+import { listen } from '@tauri-apps/api/event'
 import type { FileEntry } from '../../types'
 
 const store = useSftpStore()
@@ -20,6 +21,39 @@ const newDirName = ref('')
 const showNewDir = ref(false)
 const renameTarget = ref<FileEntry | null>(null)
 const renameValue = ref('')
+const dragOver = ref(false)
+const unlistens: Array<() => void> = []
+
+const sortedEntries = computed(() => {
+  const sorted = [...store.entries]
+  sorted.sort((a, b) => {
+    if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+  })
+  return sorted
+})
+
+onMounted(async () => {
+  const un = await listen<{ type: string; paths?: string[] }>('tauri://drag-drop', (event) => {
+    if (event.payload.type === 'over' || event.payload.type === 'enter') {
+      dragOver.value = true
+    } else {
+      dragOver.value = false
+    }
+    if (event.payload.type === 'drop' && event.payload.paths) {
+      for (const path of event.payload.paths) {
+        const name = path.split('\\').pop()?.split('/').pop() || 'file'
+        const remotePath = store.currentPath.replace(/\/?$/, '/') + name
+        store.upload(path, remotePath)
+      }
+    }
+  })
+  unlistens.push(un)
+})
+
+onUnmounted(() => {
+  unlistens.forEach(fn => fn())
+})
 
 function formatSize(size: number): string {
   if (size < 1024) return `${size}`
@@ -175,7 +209,11 @@ function fileIcon(entry: FileEntry): string {
       <div v-if="store.loading" class="loading">Loading...</div>
 
       <!-- File list -->
-      <div v-else class="file-list">
+      <div
+        v-else
+        class="file-list"
+        :class="{ 'drag-over': dragOver }"
+      >
         <div class="file-header">
           <span class="col-name">Name</span>
           <span class="col-size">Size</span>
@@ -191,7 +229,7 @@ function fileIcon(entry: FileEntry): string {
         </div>
 
         <div
-          v-for="entry in store.entries"
+          v-for="entry in sortedEntries"
           :key="entry.name"
           class="file-row"
           :class="{ selected: selectedFile === entry.name }"
@@ -211,7 +249,7 @@ function fileIcon(entry: FileEntry): string {
           </span>
         </div>
 
-        <div v-if="store.entries.length === 0" class="empty">Empty directory</div>
+        <div v-if="sortedEntries.length === 0" class="empty">Empty directory</div>
       </div>
     </div>
   </div>
@@ -525,5 +563,11 @@ function fileIcon(entry: FileEntry): string {
   text-align: center;
   color: #585b70;
   font-style: italic;
+}
+
+.drag-over {
+  background: rgba(137, 180, 250, 0.08);
+  outline: 2px dashed #89b4fa;
+  outline-offset: -2px;
 }
 </style>
