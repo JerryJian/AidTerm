@@ -7,17 +7,40 @@ export function useTerminal() {
   const sessionId = ref<string | null>(null)
   const isConnected = ref(false)
 
-  async function createSession() {
+  async function createSession(rows = 24, cols = 80) {
     try {
-      const id = await invoke<string>('spawn_terminal', {
-        rows: 24,
-        cols: 80,
-      })
+      const id = await invoke<string>('spawn_terminal', { rows, cols })
       sessionId.value = id
       isConnected.value = true
       return id
     } catch (e) {
       console.error('Failed to create terminal session:', e)
+      return null
+    }
+  }
+
+  async function sshConnect(
+    host: string,
+    port: number,
+    username: string,
+    password: string,
+    rows = 24,
+    cols = 80,
+  ) {
+    try {
+      const id = await invoke<string>('ssh_connect', {
+        host,
+        port,
+        username,
+        password,
+        rows,
+        cols,
+      })
+      sessionId.value = id
+      isConnected.value = true
+      return id
+    } catch (e) {
+      console.error('Failed to connect SSH:', e)
       return null
     }
   }
@@ -73,6 +96,7 @@ export function useTerminal() {
     sessionId,
     isConnected,
     createSession,
+    sshConnect,
     writeInput,
     resize,
     killSession,

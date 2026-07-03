@@ -1,7 +1,7 @@
 mod commands;
-mod local;
+mod session;
 
-use local::SessionManager;
+use session::SessionManager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -10,6 +10,7 @@ pub fn run() {
         .manage(SessionManager::new())
         .invoke_handler(tauri::generate_handler![
             commands::spawn_terminal,
+            commands::ssh_connect,
             commands::write_terminal,
             commands::resize_terminal,
             commands::kill_terminal,

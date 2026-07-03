@@ -1,18 +1,27 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useTerminalStore } from './stores/terminal'
+import type { SshConnectionInfo } from './types'
 import TabBar from './components/terminal/TabBar.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
+import SshDialog from './components/session/SshDialog.vue'
 
 const store = useTerminalStore()
+const sshDialogVisible = ref(false)
 
 if (store.tabs.length === 0) {
   store.addTab('local')
+}
+
+function onSshConnect(info: SshConnectionInfo) {
+  sshDialogVisible.value = false
+  store.addTab('ssh', info)
 }
 </script>
 
 <template>
   <div class="app">
-    <TabBar />
+    <TabBar @ssh-click="sshDialogVisible = true" />
     <div class="terminal-area">
       <TerminalPane
         v-if="store.activeTab"
@@ -21,6 +30,11 @@ if (store.tabs.length === 0) {
       />
     </div>
   </div>
+  <SshDialog
+    v-if="sshDialogVisible"
+    @connect="onSshConnect"
+    @close="sshDialogVisible = false"
+  />
 </template>
 
 <style>

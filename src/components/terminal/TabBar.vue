@@ -3,6 +3,10 @@ import { useTerminalStore } from '../../stores/terminal'
 
 const store = useTerminalStore()
 
+const emit = defineEmits<{
+  sshClick: []
+}>()
+
 function onKeydown(e: KeyboardEvent) {
   if (e.ctrlKey && e.key === 't') {
     e.preventDefault()
@@ -46,6 +50,7 @@ defineExpose({ onKeydown })
       <button class="tab-close" @click.stop="store.closeTab(tab.id)">✕</button>
     </div>
     <button class="tab-add" @click="store.addTab()" title="New Tab (Ctrl+T)">+</button>
+    <button class="tab-ssh" @click="emit('sshClick')" title="SSH Connection">SSH</button>
   </div>
 </template>
 
@@ -129,23 +134,42 @@ defineExpose({ onKeydown })
   color: #f38ba8;
 }
 
-.tab-add {
+.tab-add,
+.tab-ssh {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
   border: none;
   background: none;
   color: #a6adc8;
   cursor: pointer;
+  border-radius: 4px;
+}
+
+.tab-add {
+  width: 28px;
+  height: 28px;
   font-size: 16px;
   margin-left: 4px;
-  border-radius: 4px;
 }
 
 .tab-add:hover {
   background: #313244;
   color: #cdd6f4;
+}
+
+.tab-ssh {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 2px;
+  border: 1px solid #45475a;
+  background: #1e1e2e;
+  color: #89b4fa;
+}
+
+.tab-ssh:hover {
+  background: #313244;
+  color: #74c7ec;
 }
 </style>

@@ -1,5 +1,5 @@
 use tauri::State;
-use crate::local::SessionManager;
+use crate::session::SessionManager;
 
 #[tauri::command]
 pub async fn spawn_terminal(
@@ -10,6 +10,22 @@ pub async fn spawn_terminal(
 ) -> Result<String, String> {
     let id = uuid::Uuid::new_v4().to_string();
     manager.spawn_local(id.clone(), rows, cols, app)?;
+    Ok(id)
+}
+
+#[tauri::command]
+pub async fn ssh_connect(
+    app: tauri::AppHandle,
+    manager: State<'_, SessionManager>,
+    host: String,
+    port: u16,
+    username: String,
+    password: String,
+    rows: u16,
+    cols: u16,
+) -> Result<String, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    manager.connect_ssh(id.clone(), host, port, username, password, rows, cols, app)?;
     Ok(id)
 }
 

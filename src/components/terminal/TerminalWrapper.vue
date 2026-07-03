@@ -5,6 +5,11 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
 import { useTerminal } from '../../hooks/useTerminal'
+import type { SshConnectionInfo } from '../../types'
+
+const props = defineProps<{
+  sshInfo?: SshConnectionInfo
+}>()
 
 const emit = defineEmits<{
   titleChange: [title: string]
@@ -22,7 +27,7 @@ let resizeObserver: ResizeObserver | null = null
 let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 let lastSize = { w: 0, h: 0 }
 
-const { createSession, writeInput, resize, onOutput } = useTerminal()
+const { createSession, sshConnect, writeInput, resize, onOutput } = useTerminal()
 
 function handleTerminalData(data: string) {
   writeInput(data)
@@ -112,7 +117,6 @@ async function initTerminal() {
 
   scheduleFit(10)
 
-  // Fallback after window & layout are fully settled
   fallbackTimer = setTimeout(() => doFit(), 300)
 
   resizeObserver = new ResizeObserver(() => {
@@ -120,7 +124,15 @@ async function initTerminal() {
   })
   resizeObserver.observe(terminalRef.value)
 
-  const id = await createSession()
+  const id = props.sshInfo
+    ? await sshConnect(
+        props.sshInfo.host,
+        props.sshInfo.port,
+        props.sshInfo.username,
+        props.sshInfo.password,
+      )
+    : await createSession()
+
   if (id) {
     const unsub = await onOutput((data: string) => {
       terminal?.write(data)

@@ -1,3 +1,10 @@
+export interface SshConnectionInfo {
+  host: string
+  port: number
+  username: string
+  password: string
+}
+
 export interface TerminalSession {
   id: string
   title: string
@@ -9,6 +16,7 @@ export interface TerminalTab {
   id: string
   title: string
   session: TerminalSession | null
+  sshInfo?: SshConnectionInfo
   splitDirection?: 'horizontal' | 'vertical'
   children?: TerminalTab[]
 }
