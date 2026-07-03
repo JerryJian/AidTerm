@@ -15,6 +15,8 @@ const emit = defineEmits<{
   triggerClick: []
   settingsClick: []
   lockClick: []
+  keyClick: []
+  knownHostsClick: []
 }>()
 
 const batchInput = ref('')
@@ -93,6 +95,8 @@ defineExpose({ onKeydown })
     <button class="tab-btn" @click="emit('snippetClick')" title="Quick Commands">⚡</button>
     <button class="tab-btn" @click="emit('triggerClick')" title="Triggers">🔫</button>
     <button class="tab-btn" @click="emit('sftpClick')" title="SFTP">📂</button>
+    <button class="tab-btn" @click="emit('keyClick')" title="Key Management">🔑</button>
+    <button class="tab-btn" @click="emit('knownHostsClick')" title="Known Hosts">🖂</button>
     <button class="tab-btn" @click="emit('settingsClick')" title="Settings">⚙</button>
     <button class="tab-btn" @click="emit('lockClick')" title="Lock">🔒</button>
     <button class="tab-btn tab-ssh" @click="emit('sshClick')" title="SSH Connection">SSH</button>

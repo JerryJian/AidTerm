@@ -59,10 +59,13 @@ impl SessionManager {
         proxy: Option<proxy::ProxyConfig>,
         rows: u16,
         cols: u16,
+        agent_forwarding: bool,
+        x11_forwarding: bool,
         app_handle: AppHandle,
     ) -> Result<(), String> {
         let session = ssh::SshConnection::connect(
-            id.clone(), host, port, username, password, private_key_path, proxy, rows, cols, app_handle,
+            id.clone(), host, port, username, password, private_key_path, proxy, rows, cols,
+            agent_forwarding, x11_forwarding, app_handle,
         )?;
         let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
         sessions.insert(id, Session::Ssh(session));

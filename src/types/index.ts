@@ -5,6 +5,8 @@ export interface SshConnectionInfo {
   password: string
   privateKeyPath?: string
   proxyId?: string
+  agentForwarding?: boolean
+  x11Forwarding?: boolean
 }
 
 export type ProxyType = 'Http' | 'Socks5' | 'JumpHost'
@@ -131,6 +133,18 @@ export interface Trigger {
   enabled: boolean
   cooldown_ms: number
   last_fired: number
+}
+
+export interface KeyInfo {
+  id: string
+  name: string
+  key_type: string
+  bits: number
+  public_key: string
+  fingerprint: string
+  private_key_path: string
+  public_key_path: string
+  created_at: string
 }
 
 export interface ThemeConfig {

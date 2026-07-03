@@ -1,4 +1,6 @@
 mod commands;
+mod keychain;
+mod known_hosts;
 mod proxy;
 mod session;
 mod session_store;
@@ -6,6 +8,8 @@ mod sftp;
 mod tunnel;
 mod zmodem;
 
+use keychain::KeychainManager;
+use known_hosts::KnownHostsManager;
 use session::SessionManager;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
@@ -20,6 +24,14 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
+            // Keychain manager with app data dir
+            let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+            app.manage(KeychainManager::new(app_data));
+
+            // Known hosts manager (reads ~/.ssh/known_hosts)
+            let home_dir = app.path().home_dir().map_err(|e| e.to_string())?;
+            app.manage(KnownHostsManager::new(home_dir));
+
             // System tray
             let show_item = MenuItemBuilder::with_id("show", "Show/Hide").build(app)?;
             let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
@@ -103,6 +115,14 @@ pub fn run() {
             commands::proxy_save,
             commands::proxy_delete,
             commands::get_cli_args,
+            commands::key_list,
+            commands::key_generate_rsa,
+            commands::key_generate_ed25519,
+            commands::key_delete,
+            commands::key_import,
+            commands::known_hosts_list,
+            commands::known_hosts_add,
+            commands::known_hosts_remove,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

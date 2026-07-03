@@ -22,6 +22,8 @@ import TriggerPanel from './components/trigger/TriggerPanel.vue'
 import FileEditor from './components/editor/FileEditor.vue'
 import SettingsPanel from './components/settings/SettingsPanel.vue'
 import LockScreen from './components/lock/LockScreen.vue'
+import KeyManagerPanel from './components/keychain/KeyManagerPanel.vue'
+import KnownHostsPanel from './components/keychain/KnownHostsPanel.vue'
 import { useTriggerWatcher } from './hooks/useTriggerWatcher'
 
 const store = useTerminalStore()
@@ -38,6 +40,8 @@ const proxyPanelVisible = ref(false)
 const snippetPanelVisible = ref(false)
 const triggerPanelVisible = ref(false)
 const settingsPanelVisible = ref(false)
+const keyPanelVisible = ref(false)
+const knownHostsPanelVisible = ref(false)
 const sshDialogPrefill = ref<{ host: string; port: number; username: string }>()
 const editorFile = ref<{ connId: string; remotePath: string } | null>(null)
 
@@ -247,6 +251,8 @@ onUnmounted(() => {
       @snippet-click="snippetPanelVisible = !snippetPanelVisible"
       @trigger-click="triggerPanelVisible = !triggerPanelVisible"
       @settings-click="settingsPanelVisible = !settingsPanelVisible"
+      @key-click="keyPanelVisible = !keyPanelVisible"
+      @known-hosts-click="knownHostsPanelVisible = !knownHostsPanelVisible"
       @lock-click="lockApp"
     />
     <QuickConnectBar
@@ -290,6 +296,14 @@ onUnmounted(() => {
       <TunnelPanel
         v-if="tunnelPanelVisible"
         @close="tunnelPanelVisible = false"
+      />
+      <KeyManagerPanel
+        v-if="keyPanelVisible"
+        @close="keyPanelVisible = false"
+      />
+      <KnownHostsPanel
+        v-if="knownHostsPanelVisible"
+        @close="knownHostsPanelVisible = false"
       />
       <SettingsPanel
         v-if="settingsPanelVisible"

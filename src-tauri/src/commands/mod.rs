@@ -1,4 +1,6 @@
 use tauri::{Manager, State};
+use crate::keychain;
+use crate::known_hosts;
 use crate::proxy;
 use crate::session::SessionManager;
 use crate::session_store;
@@ -53,12 +55,17 @@ pub async fn ssh_connect(
     proxy_id: Option<String>,
     rows: u16,
     cols: u16,
+    agent_forwarding: Option<bool>,
+    x11_forwarding: Option<bool>,
 ) -> Result<String, String> {
     let proxy = proxy_id.and_then(|id| proxy_manager.get(&id));
     let id = uuid::Uuid::new_v4().to_string();
     manager.connect_ssh(
         id.clone(), host, port, username, password, private_key_path,
-        proxy, rows, cols, app,
+        proxy, rows, cols,
+        agent_forwarding.unwrap_or(false),
+        x11_forwarding.unwrap_or(false),
+        app,
     )?;
     Ok(id)
 }
@@ -287,4 +294,73 @@ pub fn proxy_delete(
 #[tauri::command]
 pub fn get_cli_args() -> Vec<String> {
     std::env::args().skip(1).collect()
+}
+
+#[tauri::command]
+pub fn key_list(
+    manager: State<'_, keychain::KeychainManager>,
+) -> Result<Vec<keychain::KeyInfo>, String> {
+    manager.list()
+}
+
+#[tauri::command]
+pub fn key_generate_rsa(
+    manager: State<'_, keychain::KeychainManager>,
+    name: String,
+    bits: u32,
+    passphrase: Option<String>,
+) -> Result<keychain::KeyInfo, String> {
+    manager.generate_rsa(name, bits, passphrase)
+}
+
+#[tauri::command]
+pub fn key_generate_ed25519(
+    manager: State<'_, keychain::KeychainManager>,
+    name: String,
+    passphrase: Option<String>,
+) -> Result<keychain::KeyInfo, String> {
+    manager.generate_ed25519(name, passphrase)
+}
+
+#[tauri::command]
+pub fn key_delete(
+    manager: State<'_, keychain::KeychainManager>,
+    id: String,
+) -> Result<(), String> {
+    manager.delete(&id)
+}
+
+#[tauri::command]
+pub fn key_import(
+    manager: State<'_, keychain::KeychainManager>,
+    name: String,
+    private_key_path: String,
+) -> Result<keychain::KeyInfo, String> {
+    manager.import(name, private_key_path)
+}
+
+#[tauri::command]
+pub fn known_hosts_list(
+    manager: State<'_, known_hosts::KnownHostsManager>,
+) -> Result<Vec<known_hosts::KnownHostEntry>, String> {
+    manager.list()
+}
+
+#[tauri::command]
+pub fn known_hosts_add(
+    manager: State<'_, known_hosts::KnownHostsManager>,
+    host: String,
+    key_type: String,
+    key: String,
+) -> Result<(), String> {
+    manager.add(&host, &key_type, &key)
+}
+
+#[tauri::command]
+pub fn known_hosts_remove(
+    manager: State<'_, known_hosts::KnownHostsManager>,
+    host: String,
+    key_type: String,
+) -> Result<(), String> {
+    manager.remove(&host, &key_type)
 }

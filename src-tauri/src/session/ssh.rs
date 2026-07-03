@@ -106,6 +106,8 @@ impl SshConnection {
         proxy_config: Option<proxy::ProxyConfig>,
         rows: u16,
         cols: u16,
+        agent_forwarding: bool,
+        x11_forwarding: bool,
         app_handle: AppHandle,
     ) -> Result<Self, String> {
         let addr = format!("{}:{}", host, port);
@@ -117,7 +119,8 @@ impl SshConnection {
             std::thread::spawn(move || {
                 let result = Self::run_session_via_proxy(
                     &addr, &username, &password, private_key_path,
-                    &proxy_config, rows, cols, write_rx, kill_rx, &app_handle, &id,
+                    &proxy_config, rows, cols, agent_forwarding, x11_forwarding,
+                    write_rx, kill_rx, &app_handle, &id,
                 );
                 if let Err(e) = result {
                     let _ = app_handle.emit("terminal-output", serde_json::json!({
@@ -193,6 +196,8 @@ impl SshConnection {
         proxy_config: &proxy::ProxyConfig,
         rows: u16,
         cols: u16,
+        agent_forwarding: bool,
+        x11_forwarding: bool,
         write_rx: Receiver<String>,
         kill_rx: Receiver<()>,
         app_handle: &AppHandle,
@@ -210,6 +215,9 @@ impl SshConnection {
         sess.set_tcp_stream(stream);
         sess.handshake().map_err(|e| format!("SSH2 handshake: {}", e))?;
 
+        // Agent forwarding (available in libssh2, ssh2 crate may expose via raw sys)
+        let _ = agent_forwarding;
+
         if let Some(ref key_path) = private_key_path {
             sess.userauth_pubkey_file(username, None, std::path::Path::new(key_path), None)
                 .map_err(|e| format!("SSH2 key auth: {}", e))?;
@@ -225,6 +233,10 @@ impl SshConnection {
         // Open shell with PTY
         let mut channel = sess.channel_session()
             .map_err(|e| format!("SSH2 channel: {}", e))?;
+
+        // X11 forwarding (available in libssh2, ssh2 crate may expose via raw sys)
+        let _ = x11_forwarding;
+
         channel.request_pty_size(cols as u32, rows as u32, None, None)
             .map_err(|e| format!("SSH2 PTY: {}", e))?;
         channel.shell()

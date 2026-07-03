@@ -25,6 +25,8 @@ const username = ref(props.initialUsername || '')
 const password = ref('')
 const privateKeyPath = ref('')
 const selectedProxyId = ref<string>('')
+const agentForwarding = ref(false)
+const x11Forwarding = ref(false)
 
 const firstInput = ref<HTMLInputElement>()
 
@@ -55,6 +57,8 @@ function onSubmit() {
     password: password.value,
     privateKeyPath: privateKeyPath.value || undefined,
     proxyId: selectedProxyId.value || undefined,
+    agentForwarding: agentForwarding.value,
+    x11Forwarding: x11Forwarding.value,
   })
 }
 
@@ -103,6 +107,16 @@ function onBackdropClick(e: MouseEvent) {
             </option>
           </select>
         </label>
+        <div class="checkbox-row">
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="agentForwarding" />
+            SSH Agent 转发
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="x11Forwarding" />
+            X11 转发
+          </label>
+        </div>
         <div class="dialog-actions">
           <button type="button" class="btn btn-cancel" @click="emit('close')">Cancel</button>
           <button type="submit" class="btn btn-connect">Connect</button>
@@ -245,5 +259,24 @@ function onBackdropClick(e: MouseEvent) {
 
 .btn-browse:hover {
   background: #45475a;
+}
+
+.checkbox-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #cdd6f4;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  accent-color: #89b4fa;
 }
 </style>

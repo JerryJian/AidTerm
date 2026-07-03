@@ -38,6 +38,8 @@ export function useTerminal() {
     password: string,
     privateKeyPath?: string,
     proxyId?: string,
+    agentForwarding?: boolean,
+    x11Forwarding?: boolean,
     rows = 24,
     cols = 80,
   ) {
@@ -49,6 +51,8 @@ export function useTerminal() {
         password,
         privateKeyPath: privateKeyPath ?? null,
         proxyId: proxyId ?? null,
+        agentForwarding: agentForwarding ?? false,
+        x11Forwarding: x11Forwarding ?? false,
         rows,
         cols,
       })
