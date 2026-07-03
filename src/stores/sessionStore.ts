@@ -71,6 +71,7 @@ export const useSessionStore = defineStore('sessions', () => {
       port: config.port ?? null,
       username: config.username ?? null,
       private_key_path: config.privateKeyPath ?? null,
+      proxy_id: null,
       last_connected: null,
       created_at: new Date().toISOString(),
     }

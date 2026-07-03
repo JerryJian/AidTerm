@@ -13,6 +13,7 @@ import QuickConnectBar from './components/session/QuickConnectBar.vue'
 import SessionPanel from './components/session/SessionPanel.vue'
 import SftpPanel from './components/sftp/SftpPanel.vue'
 import TunnelPanel from './components/tunnel/TunnelPanel.vue'
+import ProxyPanel from './components/proxy/ProxyPanel.vue'
 
 const store = useTerminalStore()
 const sessionStore = useSessionStore()
@@ -21,6 +22,7 @@ const quickConnectVisible = ref(false)
 const sessionPanelVisible = ref(false)
 const sftpPanelVisible = ref(false)
 const tunnelPanelVisible = ref(false)
+const proxyPanelVisible = ref(false)
 const sshDialogPrefill = ref<{ host: string; port: number; username: string }>()
 
 if (store.tabs.length === 0) {
@@ -94,6 +96,7 @@ onUnmounted(() => {
       @sessions-click="sessionPanelVisible = !sessionPanelVisible"
       @sftp-click="sftpPanelVisible = !sftpPanelVisible"
       @tunnel-click="tunnelPanelVisible = !tunnelPanelVisible"
+      @proxy-click="proxyPanelVisible = !proxyPanelVisible"
     />
     <QuickConnectBar
       :visible="quickConnectVisible"
@@ -115,6 +118,10 @@ onUnmounted(() => {
           @newSsh="sshDialogVisible = true"
         />
       </div>
+      <ProxyPanel
+        v-if="proxyPanelVisible"
+        @close="proxyPanelVisible = false"
+      />
       <TunnelPanel
         v-if="tunnelPanelVisible"
         @close="tunnelPanelVisible = false"

@@ -37,6 +37,7 @@ export function useTerminal() {
     username: string,
     password: string,
     privateKeyPath?: string,
+    proxyId?: string,
     rows = 24,
     cols = 80,
   ) {
@@ -47,6 +48,7 @@ export function useTerminal() {
         username,
         password,
         privateKeyPath: privateKeyPath ?? null,
+        proxyId: proxyId ?? null,
         rows,
         cols,
       })

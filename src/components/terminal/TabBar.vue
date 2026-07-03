@@ -8,6 +8,7 @@ const emit = defineEmits<{
   sessionsClick: []
   sftpClick: []
   tunnelClick: []
+  proxyClick: []
 }>()
 
 function onKeydown(e: KeyboardEvent) {
@@ -54,6 +55,7 @@ defineExpose({ onKeydown })
     </div>
     <button class="tab-add" @click="store.addTab()" title="New Tab (Ctrl+T)">+</button>
     <button class="tab-btn" @click="emit('tunnelClick')" title="Port Forwarding">🔌</button>
+    <button class="tab-btn" @click="emit('proxyClick')" title="Proxy Settings">🌐</button>
     <button class="tab-btn" @click="emit('sftpClick')" title="SFTP">📂</button>
     <button class="tab-btn" @click="emit('sessionsClick')" title="Saved Sessions">📋</button>
     <button class="tab-btn tab-ssh" @click="emit('sshClick')" title="SSH Connection">SSH</button>

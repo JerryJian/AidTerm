@@ -4,6 +4,20 @@ export interface SshConnectionInfo {
   username: string
   password: string
   privateKeyPath?: string
+  proxyId?: string
+}
+
+export type ProxyType = 'Http' | 'Socks5' | 'JumpHost'
+
+export interface ProxyConfig {
+  id: string
+  name: string
+  proxy_type: ProxyType
+  host: string
+  port: number
+  username: string | null
+  password: string | null
+  private_key_path: string | null
 }
 
 export interface TelnetConnectionInfo {
@@ -48,6 +62,7 @@ export interface SavedSession {
   port: number | null
   username: string | null
   private_key_path: string | null
+  proxy_id: string | null
   last_connected: string | null
   created_at: string
 }

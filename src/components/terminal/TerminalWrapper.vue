@@ -139,6 +139,7 @@ async function initTerminal() {
         props.sshInfo.username,
         props.sshInfo.password,
         props.sshInfo.privateKeyPath,
+        props.sshInfo.proxyId,
       )
     : props.telnetInfo
       ? await telnetConnect(props.telnetInfo.host, props.telnetInfo.port)

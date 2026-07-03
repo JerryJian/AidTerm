@@ -1,9 +1,20 @@
 use tauri::{Manager, State};
+use crate::proxy;
 use crate::session::SessionManager;
 use crate::session_store;
 use crate::sftp;
 use crate::tunnel;
 use crate::zmodem;
+
+#[derive(serde::Deserialize)]
+pub struct ProxyParam {
+    pub proxy_type: String,
+    pub host: String,
+    pub port: u16,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub private_key_path: Option<String>,
+}
 
 #[tauri::command]
 pub async fn spawn_terminal(
@@ -33,16 +44,22 @@ pub async fn telnet_connect(
 pub async fn ssh_connect(
     app: tauri::AppHandle,
     manager: State<'_, SessionManager>,
+    proxy_manager: State<'_, proxy::ProxyManager>,
     host: String,
     port: u16,
     username: String,
     password: String,
     private_key_path: Option<String>,
+    proxy_id: Option<String>,
     rows: u16,
     cols: u16,
 ) -> Result<String, String> {
+    let proxy = proxy_id.and_then(|id| proxy_manager.get(&id));
     let id = uuid::Uuid::new_v4().to_string();
-    manager.connect_ssh(id.clone(), host, port, username, password, private_key_path, rows, cols, app)?;
+    manager.connect_ssh(
+        id.clone(), host, port, username, password, private_key_path,
+        proxy, rows, cols, app,
+    )?;
     Ok(id)
 }
 
@@ -217,4 +234,29 @@ pub fn tunnel_remove(
     id: String,
 ) -> Result<(), String> {
     manager.remove(&id)
+}
+
+#[tauri::command]
+pub fn proxy_list(
+    manager: State<'_, proxy::ProxyManager>,
+) -> Result<Vec<proxy::ProxyConfig>, String> {
+    Ok(manager.list())
+}
+
+#[tauri::command]
+pub fn proxy_save(
+    manager: State<'_, proxy::ProxyManager>,
+    config: proxy::ProxyConfig,
+) -> Result<(), String> {
+    manager.save(config);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn proxy_delete(
+    manager: State<'_, proxy::ProxyManager>,
+    id: String,
+) -> Result<(), String> {
+    manager.delete(&id);
+    Ok(())
 }

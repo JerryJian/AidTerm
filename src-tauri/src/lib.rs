@@ -1,4 +1,5 @@
 mod commands;
+mod proxy;
 mod session;
 mod session_store;
 mod sftp;
@@ -17,6 +18,7 @@ pub fn run() {
         .manage(sftp::SftpManager::new())
         .manage(zmodem::ZmodemState::new())
         .manage(tunnel::TunnelManager::new())
+        .manage(proxy::ProxyManager::new())
         .invoke_handler(tauri::generate_handler![
             commands::spawn_terminal,
             commands::ssh_connect,
@@ -38,6 +40,9 @@ pub fn run() {
             commands::tunnel_create,
             commands::tunnel_list,
             commands::tunnel_remove,
+            commands::proxy_list,
+            commands::proxy_save,
+            commands::proxy_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

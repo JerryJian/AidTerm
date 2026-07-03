@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { open } from '@tauri-apps/plugin-dialog'
+import { useProxyStore } from '../../stores/proxyStore'
 import type { SshConnectionInfo } from '../../types'
 
 const props = withDefaults(defineProps<{
@@ -16,19 +17,23 @@ const emit = defineEmits<{
   close: []
 }>()
 
+const proxyStore = useProxyStore()
+
 const host = ref(props.initialHost || '')
 const port = ref(props.initialPort || 22)
 const username = ref(props.initialUsername || '')
 const password = ref('')
 const privateKeyPath = ref('')
+const selectedProxyId = ref<string>('')
 
 const firstInput = ref<HTMLInputElement>()
 
-onMounted(() => {
+onMounted(async () => {
   if (host.value) {
     password.value = ''
   }
   firstInput.value?.focus()
+  await proxyStore.refresh()
 })
 
 async function pickKey() {
@@ -49,6 +54,7 @@ function onSubmit() {
     username: username.value,
     password: password.value,
     privateKeyPath: privateKeyPath.value || undefined,
+    proxyId: selectedProxyId.value || undefined,
   })
 }
 
@@ -87,6 +93,15 @@ function onBackdropClick(e: MouseEvent) {
             <input v-model="privateKeyPath" type="text" class="input key-input" placeholder="~/.ssh/id_rsa" readonly />
             <button type="button" class="btn btn-browse" @click="pickKey">Browse</button>
           </div>
+        </label>
+        <label class="field">
+          <span class="field-label">代理 (可选)</span>
+          <select v-model="selectedProxyId" class="input">
+            <option value="">无代理</option>
+            <option v-for="p in proxyStore.proxies.value" :key="p.id" :value="p.id">
+              {{ p.name }} ({{ p.proxy_type === 'Http' ? 'HTTP' : p.proxy_type === 'Socks5' ? 'SOCKS5' : 'Jump' }})
+            </option>
+          </select>
         </label>
         <div class="dialog-actions">
           <button type="button" class="btn btn-cancel" @click="emit('close')">Cancel</button>
