@@ -13,6 +13,8 @@ const emit = defineEmits<{
   proxyClick: []
   snippetClick: []
   triggerClick: []
+  settingsClick: []
+  lockClick: []
 }>()
 
 const batchInput = ref('')
@@ -91,6 +93,8 @@ defineExpose({ onKeydown })
     <button class="tab-btn" @click="emit('snippetClick')" title="Quick Commands">⚡</button>
     <button class="tab-btn" @click="emit('triggerClick')" title="Triggers">🔫</button>
     <button class="tab-btn" @click="emit('sftpClick')" title="SFTP">📂</button>
+    <button class="tab-btn" @click="emit('settingsClick')" title="Settings">⚙</button>
+    <button class="tab-btn" @click="emit('lockClick')" title="Lock">🔒</button>
     <button class="tab-btn tab-ssh" @click="emit('sshClick')" title="SSH Connection">SSH</button>
   </div>
   <!-- Batch input bar -->

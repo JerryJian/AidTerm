@@ -7,6 +7,9 @@ mod tunnel;
 mod zmodem;
 
 use session::SessionManager;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -14,6 +17,60 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_deep_link::init())
+        .setup(|app| {
+            // System tray
+            let show_item = MenuItemBuilder::with_id("show", "Show/Hide").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+            let tray_menu = MenuBuilder::new(app)
+                .item(&show_item)
+                .item(&quit_item)
+                .build()?;
+
+            TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&tray_menu)
+                .on_menu_event(|app, event| {
+                    match event.id.as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                if window.is_visible().unwrap_or(false) {
+                                    let _ = window.hide();
+                                } else {
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                }
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            if window.is_visible().unwrap_or(false) {
+                                let _ = window.hide();
+                            } else {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    }
+                })
+                .build(app)?;
+
+            Ok(())
+        })
         .manage(SessionManager::new())
         .manage(sftp::SftpManager::new())
         .manage(zmodem::ZmodemState::new())
@@ -45,6 +102,7 @@ pub fn run() {
             commands::proxy_list,
             commands::proxy_save,
             commands::proxy_delete,
+            commands::get_cli_args,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

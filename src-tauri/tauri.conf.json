@@ -16,7 +16,9 @@
         "width": 1000,
         "height": 700,
         "minWidth": 600,
-        "minHeight": 400
+        "minHeight": 400,
+        "transparent": true,
+        "decorations": true
       }
     ],
     "security": {
@@ -33,5 +35,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["ssh"]
+      }
+    }
   }
 }
