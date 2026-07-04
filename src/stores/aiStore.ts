@@ -118,9 +118,9 @@ export const useAiStore = defineStore('ai', () => {
 
     // Questions or requests in English → natural language
     const nlPatterns = [
-      /^(what|how|why|when|where|who|which|can|could|would|should|do|does|is|are|show|tell|list|find|explain|help|check|fix|install|create|setup|configure)/i,
+      /^(what|how|why|when|where|who|which|can|could|would|should|do|does|is|are|show|tell|list|find|explain|help|check|fix|install|create|setup|configure|describe|summarize|analyze|compare|generate|write|make|run|start|stop|restart|update|upgrade|remove|delete|add|search|grep|count|sort|filter|convert|download|upload|backup|restore|monitor|watch|follow|tail|head|less|more)/i,
       /[?？]$/,
-      /^(please|pls|can you|could you|would you|i want|i need|i'd like)/i,
+      /^(please|pls|can you|could you|would you|i want|i need|i'd like|i'm trying|how do|how to|what is|what are|show me|tell me)/i,
     ]
 
     if (nlPatterns.some(p => p.test(trimmed))) {

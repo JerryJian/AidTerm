@@ -44,7 +44,14 @@ const aiConv = useAiConversation(() => terminal)
 const { createSession, sshConnect, telnetConnect, writeInput, resize, onOutput } = useTerminal()
 
 function handleTerminalData(data: string) {
-  if (aiConv.interceptInput(data)) return
+  const consumed = aiConv.interceptInput(data)
+  if (consumed) {
+    if (aiConv.justActivated.value) {
+      writeInput('\x03')
+      aiConv.justActivated.value = false
+    }
+    return
+  }
   writeInput(data)
 }
 

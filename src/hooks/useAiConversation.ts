@@ -9,6 +9,7 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
   const pendingToolId = ref('')
   const pendingAiMsg = ref('')
   const aiActive = ref(false)
+  const justActivated = ref(false)
   const inputBuffer = ref('')
   const messages = ref<AiMessage[]>([])
 
@@ -36,6 +37,7 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
 
   function startConversation(userInput: string) {
     aiActive.value = true
+    justActivated.value = true
     messages.value = [
       {
         role: 'system',
@@ -163,6 +165,7 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
 
   function endConversation() {
     aiActive.value = false
+    justActivated.value = false
     inputBuffer.value = ''
     ai.pendingToolCall = null
   }
@@ -193,7 +196,7 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
         // Backspace
         inputBuffer.value = inputBuffer.value.slice(0, -1)
         return true
-      } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
+      } else if (data.charCodeAt(0) >= 32) {
         inputBuffer.value += data
         return true
       }
@@ -217,7 +220,7 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
     } else if (data === '\x7f') {
       inputBuffer.value = inputBuffer.value.slice(0, -1)
       return false
-    } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
+    } else if (data.charCodeAt(0) >= 32) {
       inputBuffer.value += data
       return false
     }
@@ -237,6 +240,7 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
     pendingCommand,
     pendingAiMsg,
     aiActive,
+    justActivated,
     interceptInput,
     onConfirmCommand,
     onCancelCommand,
