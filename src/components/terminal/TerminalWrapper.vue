@@ -93,14 +93,14 @@ function parseOsRelease(text: string): string | null {
 
 async function detectSystemInfo(sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo): Promise<SystemInfo | null> {
   const cmd = 'uname -a'
-  const uname = await executeInTerminal(cmd, undefined, true).catch(() => '')
+  const uname = await captureOutput(cmd)
   if (!uname) return null
   const parsed = parseUname(uname)
   if (!parsed) return null
 
   let osLabel = parsed.os || 'remote'
   if (sshInfo) {
-    const osRelease = await executeInTerminal('cat /etc/os-release', undefined, true).catch(() => '')
+    const osRelease = await captureOutput('cat /etc/os-release')
     const prettyName = osRelease ? parseOsRelease(osRelease) : null
     if (prettyName) osLabel = prettyName
   }
@@ -112,6 +112,46 @@ async function detectSystemInfo(sshInfo?: SshConnectionInfo, telnetInfo?: Telnet
     kernel: parsed.kernel || 'remote',
     shell: 'remote',
   }
+}
+
+/** Like executeInTerminal but does NOT suppress permanent output listener */
+async function captureOutput(cmd: string): Promise<string> {
+  return new Promise(async (resolve) => {
+    let output = ''
+    const unsub = (await onOutput((data: string) => {
+      output += data
+    })) ?? (() => {})
+
+    writeInput(cmd + '\r')
+
+    let prevLen = 0
+    let stableCount = 0
+    const t0 = Date.now()
+    const check = () => {
+      if (output.length !== prevLen) {
+        prevLen = output.length
+        stableCount = 0
+      } else {
+        stableCount++
+      }
+      if (stableCount >= 5 || Date.now() - t0 > 30000) {
+        unsub()
+        const raw = stripAnsi(output)
+        const lines = raw.split(/\r?\n/)
+        let startIdx = -1
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].trim() === cmd) { startIdx = i; break }
+        }
+        const result = startIdx >= 0
+          ? lines.slice(startIdx + 1).filter(l => l.trim()).slice(0, -1).join('\n')
+          : lines.filter(l => l.trim()).slice(0, -1).join('\n')
+        resolve(result.trim())
+        return
+      }
+      setTimeout(check, 300)
+    }
+    setTimeout(check, 800)
+  })
 }
 
 async function executeInTerminal(cmd: string, prompt?: string, silent?: boolean): Promise<string> {
@@ -310,7 +350,6 @@ async function initTerminal() {
           store.updateSystemInfo(tabId, info)
           store.updateTabTitle(tabId, `${info.os} | ${info.hostname}`)
         }
-        writeInput('\r')
       }
     }
   }
