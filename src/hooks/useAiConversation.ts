@@ -9,7 +9,6 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
   const pendingToolId = ref('')
   const pendingAiMsg = ref('')
   const aiActive = ref(false)
-  const justActivated = ref(false)
   const inputBuffer = ref('')
   const messages = ref<AiMessage[]>([])
 
@@ -37,7 +36,6 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
 
   function startConversation(userInput: string) {
     aiActive.value = true
-    justActivated.value = true
     messages.value = [
       {
         role: 'system',
@@ -165,7 +163,6 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
 
   function endConversation() {
     aiActive.value = false
-    justActivated.value = false
     inputBuffer.value = ''
     ai.pendingToolCall = null
   }
@@ -174,8 +171,6 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
    * Intercept terminal input. Returns true if input was consumed by AI.
    */
   function interceptInput(data: string): boolean {
-    if (!ai.enabled) return false
-
     if (aiActive.value) {
       // In AI mode, buffer input. Enter sends it to AI chat.
       if (data === '\r' || data === '\n') {
@@ -184,6 +179,7 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
         if (line === '/exit') {
           writeAI('AI 模式已退出')
           endConversation()
+          getTerminal()?.write('\r\n\x1b[90m提示: 按 Ctrl+C 可清除终端中残留的输入\x1b[0m\r\n')
           return true
         }
         if (line) {
@@ -210,6 +206,10 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
 
       // Check if it's a natural language request
       if (line && ai.isNaturalLanguage(line)) {
+        if (!ai.enabled) {
+          getTerminal()?.write(`\r\n\x1b[33m⚠ 请在设置 → AI 中配置 API Key 后使用 AI 助手\x1b[0m\r\n`)
+          return true
+        }
         // Don't send to terminal, start AI conversation
         startConversation(line)
         return true
@@ -240,7 +240,6 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
     pendingCommand,
     pendingAiMsg,
     aiActive,
-    justActivated,
     interceptInput,
     onConfirmCommand,
     onCancelCommand,
