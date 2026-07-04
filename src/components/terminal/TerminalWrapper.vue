@@ -310,6 +310,7 @@ async function initTerminal() {
           store.updateSystemInfo(tabId, info)
           store.updateTabTitle(tabId, `${info.os} | ${info.hostname}`)
         }
+        writeInput('\r')
       }
     }
   }
