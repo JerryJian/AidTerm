@@ -345,6 +345,7 @@ export function useAiConversation(
       inputBuffer.value = ''
 
       if (!line.trim()) {
+        if (busy.value) return true
         return false
       }
 
@@ -360,7 +361,7 @@ export function useAiConversation(
       }
 
       eraseLine(line, t)
-      writeToBackend?.(line + '\r\n')
+      writeToBackend?.(line + '\r')
       return true
     }
 

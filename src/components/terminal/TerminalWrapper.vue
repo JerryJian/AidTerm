@@ -52,7 +52,7 @@ async function executeInTerminal(cmd: string): Promise<string> {
       output += data
     })) ?? (() => {})
 
-    writeInput(cmd + '\r\n')
+    writeInput(cmd + '\r')
 
     let prevLen = 0
     let stableCount = 0
