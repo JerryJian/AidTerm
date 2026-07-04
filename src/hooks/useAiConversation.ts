@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import type { Terminal } from '@xterm/xterm'
 import { invoke } from '@tauri-apps/api/core'
 import { useAiStore, type AiMessage } from '../stores/aiStore'
+import { useTerminalStore } from '../stores/terminal'
 
 const MAX_HISTORY = 10
 
@@ -149,7 +150,32 @@ export function useAiConversation(
   async function startConversation(userInput: string) {
     cancelled.value = false
     busy.value = true
-    const systemInfo = await invoke<SystemInfo>('get_system_info')
+
+    const termStore = useTerminalStore()
+    const tab = termStore.activeTab
+    const sessionType = tab?.session?.type
+
+    let systemInfo: SystemInfo
+    if (sessionType === 'ssh' && tab?.sshInfo) {
+      systemInfo = {
+        os: `Linux (SSH → ${tab.sshInfo.host})`,
+        arch: 'remote',
+        hostname: tab.sshInfo.host,
+        kernel: 'remote',
+        shell: 'remote',
+      }
+    } else if (sessionType === 'telnet' && tab?.telnetInfo) {
+      systemInfo = {
+        os: 'remote (Telnet)',
+        arch: 'remote',
+        hostname: tab.telnetInfo.host,
+        kernel: 'remote',
+        shell: 'remote',
+      }
+    } else {
+      systemInfo = await invoke<SystemInfo>('get_system_info')
+    }
+
     const systemPrompt = buildSystemPrompt(systemInfo, commandHistory.value)
     messages.value = [
       { role: 'system', content: systemPrompt },
