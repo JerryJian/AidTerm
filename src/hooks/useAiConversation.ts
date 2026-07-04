@@ -30,10 +30,6 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
     }
   }
 
-  function writeDivider() {
-    getTerminal()?.write('\r\n\x1b[35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m\r\n')
-  }
-
   function startConversation(userInput: string) {
     aiActive.value = true
     messages.value = [
@@ -84,12 +80,6 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
         })
 
         showConfirm.value = true
-      } else {
-        if (!response.tool_calls || response.tool_calls.length === 0) {
-          writeDivider()
-          writeAI('还有需要帮助的吗？')
-          endConversation()
-        }
       }
     } catch (e: any) {
       writeAI(`错误: ${e}`)
@@ -132,10 +122,6 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
         pendingToolId.value = tc.id
         pendingAiMsg.value = response.text || ''
         showConfirm.value = true
-      } else {
-        writeDivider()
-        writeAI('还有需要帮助的吗？')
-        endConversation()
       }
     } catch (e: any) {
       writeAI(`执行错误: ${e}`)
@@ -149,8 +135,6 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
     pendingToolId.value = ''
 
     writeAI('已取消命令执行')
-    writeDivider()
-    writeAI('还有需要帮助的吗？')
     endConversation()
   }
 
