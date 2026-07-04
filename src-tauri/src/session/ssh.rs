@@ -162,7 +162,7 @@ impl SshConnection {
     ) -> Result<(), String> {
         let mut builder = ssh::create_session()
             .username(username)
-            .timeout(Some(Duration::from_secs(10)));
+            .timeout(Some(Duration::from_secs(30)));
 
         if let Some(ref key_path) = private_key_path {
             builder = builder.private_key_path(key_path);
@@ -185,7 +185,18 @@ impl SshConnection {
             shell_ref.borrow_mut().write(data).map_err(|e| format!("SSH write error: {}", e))
         };
         let mut read_shell = || -> Result<Vec<u8>, String> {
-            shell_ref.borrow_mut().read().map_err(|e| e.to_string())
+            match shell_ref.borrow_mut().read() {
+                Ok(data) => Ok(data),
+                Err(e) => {
+                    let msg = e.to_string();
+                    if msg.contains("Timeout") {
+                        // Timeout is expected – no data available yet
+                        Ok(Vec::new())
+                    } else {
+                        Err(msg)
+                    }
+                }
+            }
         };
         let mut do_resize = |r: u16, c: u16| -> Result<(), String> {
             // ssh-rs 0.3 does not expose a public resize API on LocalShell/ChannelShell.
