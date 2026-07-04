@@ -77,7 +77,7 @@ async function executeInTerminal(cmd: string, prompt?: string, silent?: boolean)
       output += data
     })) ?? (() => {})
 
-    if (!silent) terminal?.write(`\r\n${p}${cmd}\r\n`)
+    if (!silent) terminal?.write(`${cmd}\r\n`)
     writeInput(cmd + '\r')
 
     let prevLen = 0

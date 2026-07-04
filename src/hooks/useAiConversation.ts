@@ -121,7 +121,7 @@ export function useAiConversation(
   }
 
   function writeCommand(cmd: string) {
-    getTerminal()?.write(`\r\n\x1b[33m$ ${sanitizeForTerminal(cmd)}\x1b[0m`)
+    getTerminal()?.write(`\x1b[33m${sanitizeForTerminal(cmd)}\x1b[0m\r\n`)
   }
 
   function writeOutput(out: string) {
@@ -203,6 +203,8 @@ export function useAiConversation(
       let result: string
 
       if (executeInTerminal) {
+        writeToBackend?.('\r')
+        await new Promise(r => setTimeout(r, 50))
         result = await executeInTerminal(cmd, savedPrompt.value)
         if (cancelled.value) return
 
@@ -286,6 +288,7 @@ export function useAiConversation(
     if (pendingConfirm.value) {
       pendingConfirm.value = null
     }
+    writeToBackend?.('\r')
   }
 
   /** Submit a complete line from the input bar (deprecated, kept for compat) */
