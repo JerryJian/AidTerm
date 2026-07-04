@@ -3,16 +3,9 @@ import type { Terminal } from '@xterm/xterm'
 import { invoke } from '@tauri-apps/api/core'
 import { useAiStore, type AiMessage } from '../stores/aiStore'
 import { useTerminalStore } from '../stores/terminal'
+import type { SystemInfo } from '../types'
 
 const MAX_HISTORY = 10
-
-interface SystemInfo {
-  os: string
-  arch: string
-  hostname: string
-  kernel: string
-  shell: string
-}
 
 interface CommandRecord {
   command: string
@@ -101,7 +94,7 @@ function buildSystemPrompt(systemInfo: SystemInfo, history: CommandRecord[]): st
 export function useAiConversation(
   getTerminal: () => Terminal | null,
   writeToBackend?: (data: string) => void,
-  executeInTerminal?: (cmd: string, prompt?: string) => Promise<string>,
+  executeInTerminal?: (cmd: string, prompt?: string, silent?: boolean) => Promise<string>,
 ) {
   const ai = useAiStore()
   const showConfirm = ref(false)
@@ -153,28 +146,8 @@ export function useAiConversation(
 
     const termStore = useTerminalStore()
     const tab = termStore.activeTab
-    const sessionType = tab?.session?.type
 
-    let systemInfo: SystemInfo
-    if (sessionType === 'ssh' && tab?.sshInfo) {
-      systemInfo = {
-        os: `Linux (SSH → ${tab.sshInfo.host})`,
-        arch: 'remote',
-        hostname: tab.sshInfo.host,
-        kernel: 'remote',
-        shell: 'remote',
-      }
-    } else if (sessionType === 'telnet' && tab?.telnetInfo) {
-      systemInfo = {
-        os: 'remote (Telnet)',
-        arch: 'remote',
-        hostname: tab.telnetInfo.host,
-        kernel: 'remote',
-        shell: 'remote',
-      }
-    } else {
-      systemInfo = await invoke<SystemInfo>('get_system_info')
-    }
+    const systemInfo = tab?.systemInfo ?? await invoke<SystemInfo>('get_system_info')
 
     const systemPrompt = buildSystemPrompt(systemInfo, commandHistory.value)
     messages.value = [

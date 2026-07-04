@@ -34,6 +34,14 @@ export interface TerminalSession {
   status: 'connecting' | 'connected' | 'disconnected'
 }
 
+export interface SystemInfo {
+  os: string
+  arch: string
+  hostname: string
+  kernel: string
+  shell: string
+}
+
 export interface TerminalTab {
   id: string
   title: string
@@ -42,6 +50,7 @@ export interface TerminalTab {
   telnetInfo?: TelnetConnectionInfo
   splitDirection?: 'horizontal' | 'vertical'
   children?: TerminalTab[]
+  systemInfo?: SystemInfo
 }
 
 export interface TerminalOutputPayload {

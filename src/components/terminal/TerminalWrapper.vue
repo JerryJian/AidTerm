@@ -8,7 +8,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { useTerminal } from '../../hooks/useTerminal'
 import { useTerminalStore } from '../../stores/terminal'
 import { useAiConversation } from '../../hooks/useAiConversation'
-import type { SshConnectionInfo, TelnetConnectionInfo } from '../../types'
+import type { SshConnectionInfo, TelnetConnectionInfo, SystemInfo } from '../../types'
 import AiConfirmOverlay from '../ai/AiConfirmOverlay.vue'
 import { useAiStore } from '../../stores/aiStore'
 
@@ -67,7 +67,54 @@ function stripTrailingPrompt(output: string, prompt: string): string {
   return output
 }
 
-async function executeInTerminal(cmd: string, prompt?: string): Promise<string> {
+function parseUname(text: string): Partial<SystemInfo> | null {
+  const parts = text.trim().split(/\s+/)
+  if (parts.length < 3) return null
+  return {
+    os: parts[0],
+    hostname: parts[1],
+    kernel: parts[2],
+    arch: parts[parts.length - 2] || 'unknown',
+    shell: 'remote',
+  }
+}
+
+function parseOsRelease(text: string): string | null {
+  for (const line of text.split('\n')) {
+    const m = line.match(/^PRETTY_NAME=["']?(.+?)["']?$/)
+    if (m) return m[1]
+  }
+  for (const line of text.split('\n')) {
+    const m = line.match(/^NAME=["']?(.+?)["']?$/)
+    if (m) return m[1]
+  }
+  return null
+}
+
+async function detectSystemInfo(sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo): Promise<SystemInfo | null> {
+  const cmd = 'uname -a'
+  const uname = await executeInTerminal(cmd, undefined, true).catch(() => '')
+  if (!uname) return null
+  const parsed = parseUname(uname)
+  if (!parsed) return null
+
+  let osLabel = parsed.os || 'remote'
+  if (sshInfo) {
+    const osRelease = await executeInTerminal('cat /etc/os-release', undefined, true).catch(() => '')
+    const prettyName = osRelease ? parseOsRelease(osRelease) : null
+    if (prettyName) osLabel = prettyName
+  }
+
+  return {
+    os: osLabel,
+    arch: parsed.arch || 'remote',
+    hostname: (sshInfo?.host || telnetInfo?.host || parsed.hostname || 'remote')!,
+    kernel: parsed.kernel || 'remote',
+    shell: 'remote',
+  }
+}
+
+async function executeInTerminal(cmd: string, prompt?: string, silent?: boolean): Promise<string> {
   const p = prompt || '$ '
   return new Promise(async (resolve) => {
     suppressOutput.value = true
@@ -77,7 +124,7 @@ async function executeInTerminal(cmd: string, prompt?: string): Promise<string> 
       output += data
     })) ?? (() => {})
 
-    terminal?.write(`\r\n${p}${cmd}\r\n`)
+    if (!silent) terminal?.write(`\r\n${p}${cmd}\r\n`)
     writeInput(cmd + '\r')
 
     let prevLen = 0
@@ -93,6 +140,21 @@ async function executeInTerminal(cmd: string, prompt?: string): Promise<string> 
       }
       if (stableCount >= 5 || Date.now() - t0 > 30000) {
         unsub()
+
+        if (silent) {
+          suppressOutput.value = false
+          const raw = stripAnsi(output)
+          const lines = raw.split(/\r?\n/)
+          let startIdx = -1
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim() === cmd) { startIdx = i; break }
+          }
+          const result = startIdx >= 0
+            ? lines.slice(startIdx + 1).filter(l => l.trim()).slice(0, -1).join('\n')
+            : lines.filter(l => l.trim()).slice(0, -1).join('\n')
+          resolve(result.trim())
+          return
+        }
 
         let display = stripLeadingEcho(output, cmd)
         display = stripTrailingPrompt(display, p)
@@ -238,6 +300,18 @@ async function initTerminal() {
       if (!suppressOutput.value) terminal?.write(data)
     })
     if (unsub) unlisten = unsub
+
+    if (props.sshInfo || props.telnetInfo) {
+      const tabId = store.activeTabId
+      if (tabId) {
+        await new Promise(r => setTimeout(r, 500))
+        const info = await detectSystemInfo(props.sshInfo, props.telnetInfo)
+        if (info) {
+          store.updateSystemInfo(tabId, info)
+          store.updateTabTitle(tabId, `${info.os} | ${info.hostname}`)
+        }
+      }
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { TerminalTab, TerminalSession, SshConnectionInfo, TelnetConnectionInfo } from '../types'
+import type { TerminalTab, TerminalSession, SshConnectionInfo, TelnetConnectionInfo, SystemInfo } from '../types'
 
 let nextId = 1
 function generateId(): string {
@@ -81,6 +81,13 @@ export const useTerminalStore = defineStore('terminal', () => {
     }
   }
 
+  function updateSystemInfo(tabId: string, info: SystemInfo) {
+    const tab = tabs.value.find(t => t.id === tabId)
+    if (tab) {
+      tab.systemInfo = info
+    }
+  }
+
   function toggleBatch() {
     batchMode.value = !batchMode.value
     if (!batchMode.value) {
@@ -113,6 +120,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     updateTabTitle,
     updateSessionStatus,
     updateSessionId,
+    updateSystemInfo,
     toggleBatch,
     setBatchTabId,
     getBatchSessionIds,
