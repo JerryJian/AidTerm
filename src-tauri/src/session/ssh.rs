@@ -11,6 +11,7 @@ use crate::zmodem;
 
 pub struct SshConnection {
     pub write_tx: Sender<String>,
+    resize_tx: Sender<(u16, u16)>,
     kill_tx: Option<Sender<()>>,
     handle: Option<JoinHandle<()>>,
 }
@@ -113,6 +114,7 @@ impl SshConnection {
         let addr = format!("{}:{}", host, port);
 
         let (write_tx, write_rx): (Sender<String>, _) = mpsc::channel();
+        let (resize_tx, resize_rx): (Sender<(u16, u16)>, _) = mpsc::channel();
         let (kill_tx, kill_rx): (Sender<()>, _) = mpsc::channel();
 
         let handle = if let Some(proxy_config) = proxy_config {
@@ -120,7 +122,7 @@ impl SshConnection {
                 let result = Self::run_session_via_proxy(
                     &addr, &username, &password, private_key_path,
                     &proxy_config, rows, cols, agent_forwarding, x11_forwarding,
-                    write_rx, kill_rx, &app_handle, &id,
+                    write_rx, resize_rx, kill_rx, &app_handle, &id,
                 );
                 if let Err(e) = result {
                     let _ = app_handle.emit("terminal-output", serde_json::json!({
@@ -132,7 +134,7 @@ impl SshConnection {
             std::thread::spawn(move || {
                 let result = Self::run_session(
                     &addr, &username, &password, private_key_path, rows, cols,
-                    write_rx, kill_rx, &app_handle, &id,
+                    write_rx, resize_rx, kill_rx, &app_handle, &id,
                 );
                 if let Err(e) = result {
                     let _ = app_handle.emit("terminal-output", serde_json::json!({
@@ -142,7 +144,7 @@ impl SshConnection {
             })
         };
 
-        Ok(Self { write_tx, kill_tx: Some(kill_tx), handle: Some(handle) })
+        Ok(Self { write_tx, resize_tx, kill_tx: Some(kill_tx), handle: Some(handle) })
     }
 
     fn run_session(
@@ -153,6 +155,7 @@ impl SshConnection {
         rows: u16,
         cols: u16,
         write_rx: Receiver<String>,
+        resize_rx: Receiver<(u16, u16)>,
         kill_rx: Receiver<()>,
         app_handle: &AppHandle,
         session_id: &str,
@@ -184,8 +187,14 @@ impl SshConnection {
         let mut read_shell = || -> Result<Vec<u8>, String> {
             shell_ref.borrow_mut().read().map_err(|e| e.to_string())
         };
+        let mut do_resize = |r: u16, c: u16| -> Result<(), String> {
+            // ssh-rs 0.3 does not expose a public resize API on LocalShell/ChannelShell.
+            // Initial terminal dimensions are set at open_shell_terminal() call above.
+            let _ = (r, c);
+            Ok(())
+        };
 
-        Self::event_loop(&write_rx, &kill_rx, app_handle, session_id, &mut write_shell, &mut read_shell)
+        Self::event_loop(&write_rx, &resize_rx, &kill_rx, app_handle, session_id, &mut write_shell, &mut read_shell, &mut do_resize)
     }
 
     fn run_session_via_proxy(
@@ -199,6 +208,7 @@ impl SshConnection {
         agent_forwarding: bool,
         x11_forwarding: bool,
         write_rx: Receiver<String>,
+        resize_rx: Receiver<(u16, u16)>,
         kill_rx: Receiver<()>,
         app_handle: &AppHandle,
         session_id: &str,
@@ -261,8 +271,12 @@ impl SshConnection {
                 Err(e) => Err(e.to_string()),
             }
         };
+        let mut do_resize = |r: u16, c: u16| -> Result<(), String> {
+            channel_ref.borrow_mut().request_pty_size(c as u32, r as u32, None, None)
+                .map_err(|e| format!("SSH2 resize: {}", e))
+        };
 
-        let result = Self::event_loop(&write_rx, &kill_rx, app_handle, session_id, &mut write_channel, &mut read_channel);
+        let result = Self::event_loop(&write_rx, &resize_rx, &kill_rx, app_handle, session_id, &mut write_channel, &mut read_channel, &mut do_resize);
 
         let mut channel = channel_ref.into_inner();
         let _ = channel.close();
@@ -272,15 +286,21 @@ impl SshConnection {
 
     fn event_loop(
         write_rx: &Receiver<String>,
+        resize_rx: &Receiver<(u16, u16)>,
         kill_rx: &Receiver<()>,
         app_handle: &AppHandle,
         session_id: &str,
         write_shell: &mut impl FnMut(&[u8]) -> Result<(), String>,
         read_shell: &mut impl FnMut() -> Result<Vec<u8>, String>,
+        do_resize: &mut impl FnMut(u16, u16) -> Result<(), String>,
     ) -> Result<(), String> {
         loop {
             if kill_rx.try_recv().is_ok() {
                 break;
+            }
+
+            while let Ok((r, c)) = resize_rx.try_recv() {
+                do_resize(r, c)?;
             }
 
             while let Ok(data) = write_rx.try_recv() {
@@ -329,9 +349,8 @@ impl SshConnection {
         self.write_tx.send(data.to_string()).map_err(|e| e.to_string())
     }
 
-    #[allow(dead_code)]
-    pub fn resize(&mut self, _rows: u16, _cols: u16) -> Result<(), String> {
-        Ok(())
+    pub fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
+        self.resize_tx.send((rows, cols)).map_err(|e| e.to_string())
     }
 
     pub fn kill(&mut self) {

@@ -33,12 +33,6 @@ impl ProxyManager {
         Self { proxies: Mutex::new(Vec::new()) }
     }
 
-    pub fn load(&self, proxies: Vec<ProxyConfig>) {
-        if let Ok(mut p) = self.proxies.lock() {
-            *p = proxies;
-        }
-    }
-
     pub fn list(&self) -> Vec<ProxyConfig> {
         self.proxies.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }

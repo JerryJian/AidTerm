@@ -82,9 +82,14 @@ impl SessionManager {
         }
     }
 
-    #[allow(unused_variables)]
     pub fn resize(&self, id: &str, rows: u16, cols: u16) -> Result<(), String> {
-        Ok(())
+        let sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+        let session = sessions.get(id).ok_or("Session not found")?;
+        match session {
+            Session::Local(s) => s.resize(rows, cols),
+            Session::Ssh(s) => s.resize(rows, cols),
+            Session::Telnet(_) => Ok(()),
+        }
     }
 
     pub fn kill(&self, id: &str) -> Result<(), String> {

@@ -98,11 +98,4 @@ impl KnownHostsManager {
         Ok(())
     }
 
-    pub fn check_host(&self, host: &str, key_type: &str) -> bool {
-        let map_key = format!("{}|{}", host, key_type);
-        let entries = self.entries.lock().map_err(|_| ()).is_ok();
-        if !entries { return false; }
-        let entries = self.entries.lock().unwrap();
-        entries.contains_key(&map_key)
-    }
 }

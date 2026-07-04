@@ -9,16 +9,6 @@ use crate::sftp;
 use crate::tunnel;
 use crate::zmodem;
 
-#[derive(serde::Deserialize)]
-pub struct ProxyParam {
-    pub proxy_type: String,
-    pub host: String,
-    pub port: u16,
-    pub username: Option<String>,
-    pub password: Option<String>,
-    pub private_key_path: Option<String>,
-}
-
 #[tauri::command]
 pub async fn spawn_terminal(
     app: tauri::AppHandle,
@@ -290,6 +280,50 @@ pub fn proxy_delete(
 ) -> Result<(), String> {
     manager.delete(&id);
     Ok(())
+}
+
+#[derive(serde::Serialize)]
+pub struct SystemInfo {
+    pub os: String,
+    pub arch: String,
+    pub hostname: String,
+    pub kernel: String,
+    pub shell: String,
+}
+
+#[tauri::command]
+pub async fn get_system_info() -> SystemInfo {
+    let os = std::env::consts::OS.to_string();
+    let arch = std::env::consts::ARCH.to_string();
+    let hostname = std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .unwrap_or_else(|_| "unknown".to_string());
+
+    let kernel = if cfg!(target_os = "windows") {
+        std::process::Command::new("cmd")
+            .args(["/C", "ver"])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_else(|| "unknown".to_string())
+    } else {
+        std::process::Command::new("uname")
+            .arg("-a")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_else(|| "unknown".to_string())
+    };
+
+    let shell = std::env::var("SHELL")
+        .or_else(|_| std::env::var("ComSpec"))
+        .unwrap_or_else(|_| {
+            if cfg!(target_os = "windows") { "cmd.exe".into() } else { "sh".into() }
+        });
+
+    SystemInfo { os, arch, hostname, kernel, shell }
 }
 
 #[tauri::command]

@@ -130,6 +130,12 @@ async function initTerminal() {
 
   await nextTick()
 
+  doFit()
+
+  terminal.onResize(({ rows, cols }) => {
+    resize(rows, cols)
+  })
+
   scheduleFit(10)
 
   fallbackTimer = setTimeout(() => doFit(), 300)
@@ -138,6 +144,9 @@ async function initTerminal() {
     requestAnimationFrame(() => doFit())
   })
   resizeObserver.observe(terminalRef.value)
+
+  const rows = terminal.rows
+  const cols = terminal.cols
 
   const id = props.sshInfo
     ? await sshConnect(
@@ -149,10 +158,12 @@ async function initTerminal() {
         props.sshInfo.proxyId,
         props.sshInfo.agentForwarding,
         props.sshInfo.x11Forwarding,
+        rows,
+        cols,
       )
     : props.telnetInfo
       ? await telnetConnect(props.telnetInfo.host, props.telnetInfo.port)
-      : await createSession()
+      : await createSession(rows, cols)
 
   if (id) {
     store.updateSessionId(store.activeTabId ?? '', id)
@@ -161,10 +172,6 @@ async function initTerminal() {
     })
     if (unsub) unlisten = unsub
   }
-
-  terminal.onResize(({ rows, cols }) => {
-    resize(rows, cols)
-  })
 }
 
 onMounted(() => {
@@ -260,6 +267,7 @@ async function readClipboard(): Promise<string> {
 async function pasteOrSend() {
   const text = await readClipboard()
   if (text) {
+    aiConv.clearInputBuffer()
     writeInput(text)
   } else {
     writeInput('\x16')
