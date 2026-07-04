@@ -93,14 +93,14 @@ function parseOsRelease(text: string): string | null {
 
 async function detectSystemInfo(sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo): Promise<SystemInfo | null> {
   const cmd = 'uname -a'
-  const uname = await captureOutput(cmd)
+  const uname = await executeInTerminal(cmd, undefined, true).catch(() => '')
   if (!uname) return null
   const parsed = parseUname(uname)
   if (!parsed) return null
 
   let osLabel = parsed.os || 'remote'
   if (sshInfo) {
-    const osRelease = await captureOutput('cat /etc/os-release')
+    const osRelease = await executeInTerminal('cat /etc/os-release', undefined, true).catch(() => '')
     const prettyName = osRelease ? parseOsRelease(osRelease) : null
     if (prettyName) osLabel = prettyName
   }
@@ -114,43 +114,19 @@ async function detectSystemInfo(sshInfo?: SshConnectionInfo, telnetInfo?: Telnet
   }
 }
 
-/** Like executeInTerminal but does NOT suppress permanent output listener */
-async function captureOutput(cmd: string): Promise<string> {
+/** Wait until a shell prompt is detected in the output stream */
+async function waitForShellPrompt(): Promise<void> {
+  let buf = ''
   return new Promise(async (resolve) => {
-    let output = ''
     const unsub = (await onOutput((data: string) => {
-      output += data
-    })) ?? (() => {})
-
-    writeInput(cmd + '\r')
-
-    let prevLen = 0
-    let stableCount = 0
-    const t0 = Date.now()
-    const check = () => {
-      if (output.length !== prevLen) {
-        prevLen = output.length
-        stableCount = 0
-      } else {
-        stableCount++
-      }
-      if (stableCount >= 5 || Date.now() - t0 > 30000) {
+      buf += data
+      const last = buf.trim().split(/\r?\n/).pop()
+      if (last && /[$#>]\s*$/.test(last)) {
         unsub()
-        const raw = stripAnsi(output)
-        const lines = raw.split(/\r?\n/)
-        let startIdx = -1
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].trim() === cmd) { startIdx = i; break }
-        }
-        const result = startIdx >= 0
-          ? lines.slice(startIdx + 1).filter(l => l.trim()).slice(0, -1).join('\n')
-          : lines.filter(l => l.trim()).slice(0, -1).join('\n')
-        resolve(result.trim())
-        return
+        setTimeout(resolve, 200)
       }
-      setTimeout(check, 300)
-    }
-    setTimeout(check, 800)
+    })) ?? (() => {})
+    setTimeout(() => { unsub(); resolve() }, 8000)
   })
 }
 
@@ -192,6 +168,8 @@ async function executeInTerminal(cmd: string, prompt?: string, silent?: boolean)
           const result = startIdx >= 0
             ? lines.slice(startIdx + 1).filter(l => l.trim()).slice(0, -1).join('\n')
             : lines.filter(l => l.trim()).slice(0, -1).join('\n')
+          const last = raw.split(/\r?\n/).filter(l => l.trim()).pop()
+          if (last && /[$#>]/.test(last)) terminal?.write(`\r\n${last}`)
           resolve(result.trim())
           return
         }
@@ -344,7 +322,7 @@ async function initTerminal() {
     if (props.sshInfo || props.telnetInfo) {
       const tabId = store.activeTabId
       if (tabId) {
-        await new Promise(r => setTimeout(r, 500))
+        await waitForShellPrompt()
         const info = await detectSystemInfo(props.sshInfo, props.telnetInfo)
         if (info) {
           store.updateSystemInfo(tabId, info)
