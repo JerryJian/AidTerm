@@ -117,7 +117,8 @@ export function useAiConversation(
   let passthrough = false
 
   function writeAI(text: string, prefix = '[AI] ') {
-    getTerminal()?.write(`\r\n\x1b[36m${prefix}\x1b[0m${sanitizeForTerminal(text)}`)
+    const lines = sanitizeForTerminal(text).replace(/\n/g, '\r\n')
+    getTerminal()?.write(`\r\n\x1b[36m${prefix}\x1b[0m${lines}`)
   }
 
   function writeAITitle(text: string) {
