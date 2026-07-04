@@ -110,6 +110,8 @@ export function useAiConversation(
   const busy = ref(false)
   const inputBuffer = ref('')
   const messages = ref<AiMessage[]>([])
+  const cancelled = ref(false)
+  const pendingConfirm = ref<((value: boolean) => void) | null>(null)
   const commandHistory = ref<CommandRecord[]>([])
 
   let passthrough = false
@@ -132,7 +134,18 @@ export function useAiConversation(
     }
   }
 
+  const LONG_OUTPUT_THRESHOLD = 5000
+  const LONG_OUTPUT_TRUNCATE = 8000
+
+  function waitForUserConfirm(message: string): Promise<boolean> {
+    return new Promise(resolve => {
+      pendingConfirm.value = resolve
+      getTerminal()?.write(`\r\n\x1b[33m${message}\x1b[0m`)
+    })
+  }
+
   async function startConversation(userInput: string) {
+    cancelled.value = false
     busy.value = true
     const systemInfo = await invoke<SystemInfo>('get_system_info')
     const systemPrompt = buildSystemPrompt(systemInfo, commandHistory.value)
@@ -149,6 +162,7 @@ export function useAiConversation(
 
     try {
       const response = await ai.chat([...messages.value])
+      if (cancelled.value) return
 
       if (response.text) {
         writeAI(response.text)
@@ -192,6 +206,21 @@ export function useAiConversation(
       if (executeInTerminal) {
         t?.write(`\r\n`)
         result = await executeInTerminal(cmd)
+        if (cancelled.value) return
+
+        // Long output: ask user before sending to AI
+        if (result.length > LONG_OUTPUT_THRESHOLD) {
+          const shouldContinue = await waitForUserConfirm(
+            `[输出较长 (${result.length} 字符)，按 Enter 发送给 AI 分析，按 Ctrl+C 取消]`
+          )
+          if (!shouldContinue || cancelled.value) {
+            if (!cancelled.value) writeAI('已取消分析')
+            endConversation()
+            return
+          }
+          result = result.slice(0, LONG_OUTPUT_TRUNCATE) +
+            `\n\n...(输出过长，仅显示前 ${LONG_OUTPUT_TRUNCATE} 字符，共 ${result.length} 字符)`
+        }
       } else {
         writeAITitle('执行命令')
         writeCommand(cmd)
@@ -212,6 +241,7 @@ export function useAiConversation(
       })
 
       const response = await ai.continueWithResult(toolId, result || '(无输出)')
+      if (cancelled.value) return
 
       if (response.text) {
         writeAI(response.text)
@@ -236,6 +266,7 @@ export function useAiConversation(
 
   function onCancelCommand() {
     showConfirm.value = false
+    cancelled.value = true
     pendingCommand.value = ''
     pendingToolId.value = ''
 
@@ -253,6 +284,9 @@ export function useAiConversation(
     busy.value = false
     inputBuffer.value = ''
     ai.pendingToolCall = null
+    if (pendingConfirm.value) {
+      pendingConfirm.value = null
+    }
     setTimeout(() => writeToBackend?.('\x03'), 300)
   }
 
@@ -285,6 +319,26 @@ export function useAiConversation(
     const t = getTerminal()
     if (!t) return false
 
+    // === Waiting for user confirmation (long output) ===
+    if (pendingConfirm.value) {
+      if (data === '\r' || data === '\n') {
+        const resolve = pendingConfirm.value
+        pendingConfirm.value = null
+        resolve(true)
+        return true
+      }
+      if (data === '\x03') {
+        const resolve = pendingConfirm.value
+        pendingConfirm.value = null
+        // Send Ctrl+C to shell immediately so prompt resets right away
+        writeToBackend?.('\x03')
+        resolve(false)
+        return true
+      }
+      return true
+    }
+
+    // === Normal mode ===
     if (data === '\r' || data === '\n') {
       const line = inputBuffer.value
       inputBuffer.value = ''
@@ -329,6 +383,16 @@ export function useAiConversation(
       return true
     }
 
+    // Ctrl+C during AI conversation → cancel
+    if (data === '\x03' && busy.value) {
+      cancelled.value = true
+      t.write(`\r\n\x1b[35m━━━ AI 对话已取消 ━━━\x1b[0m`)
+      // Send Ctrl+C to shell immediately
+      writeToBackend?.('\x03')
+      endConversation()
+      return true
+    }
+
     // Capture printable text (IME may commit multiple chars at once)
     if (/^[\x20-\x7e\u00a0-\uffff]+$/.test(data)) {
       inputBuffer.value += data
@@ -362,6 +426,7 @@ export function useAiConversation(
     pendingCommand,
     pendingAiMsg,
     busy,
+    cancelled,
     interceptInput,
     onConfirmCommand,
     onCancelCommand,
