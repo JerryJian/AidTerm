@@ -327,6 +327,92 @@ pub async fn get_system_info() -> SystemInfo {
 }
 
 #[tauri::command]
+pub fn get_remote_system_info(
+    host: String,
+    port: u16,
+    username: String,
+    password: String,
+    private_key_path: Option<String>,
+) -> Result<SystemInfo, String> {
+    use std::time::Duration;
+    use ssh_rs::ssh;
+
+    let addr = format!("{}:{}", host, port);
+
+    let uname_output = (|| {
+        let mut builder = ssh::create_session()
+            .username(&username)
+            .timeout(Some(Duration::from_secs(10)));
+        if let Some(ref key_path) = private_key_path {
+            builder = builder.private_key_path(key_path);
+        }
+        builder = builder.password(&password);
+        let mut session = builder
+            .connect(&addr)
+            .map_err(|e| format!("SSH connect failed: {}", e))?
+            .run_local();
+
+        let exec = session
+            .open_exec()
+            .map_err(|e| format!("open_exec failed: {}", e))?;
+        let result = exec
+            .send_command("uname -a")
+            .map_err(|e| format!("uname failed: {}", e))?;
+        session.close();
+        String::from_utf8(result).map_err(|e| format!("UTF-8 error: {}", e))
+    })()?;
+
+    let parts: Vec<&str> = uname_output.split_whitespace().collect();
+    let os = parts.first().unwrap_or(&"remote").to_string();
+    let hostname = parts.get(1).unwrap_or(&"remote").to_string();
+    let kernel = parts.get(2).unwrap_or(&"remote").to_string();
+    let arch = parts.iter().nth_back(1).unwrap_or(&"remote").to_string();
+
+    let os_label = (|| {
+        let mut builder = ssh::create_session()
+            .username(&username)
+            .timeout(Some(Duration::from_secs(10)));
+        if let Some(ref key_path) = private_key_path {
+            builder = builder.private_key_path(key_path);
+        }
+        builder = builder.password(&password);
+        let mut session = builder
+            .connect(&addr)
+            .map_err(|e| format!("SSH connect failed: {}", e))?
+            .run_local();
+
+        let exec = session
+            .open_exec()
+            .map_err(|e| format!("open_exec failed: {}", e))?;
+        let result = exec
+            .send_command("cat /etc/os-release")
+            .map_err(|e| format!("os-release failed: {}", e))?;
+        session.close();
+        let out = String::from_utf8(result).map_err(|e| format!("UTF-8 error: {}", e))?;
+
+        for line in out.lines() {
+            if let Some(val) = line.strip_prefix("PRETTY_NAME=") {
+                return Ok(val.trim_matches('"').to_string());
+            }
+        }
+        for line in out.lines() {
+            if let Some(val) = line.strip_prefix("NAME=") {
+                return Ok(val.trim_matches('"').to_string());
+            }
+        }
+        Err("No NAME found".to_string())
+    })();
+
+    Ok(SystemInfo {
+        os: os_label.unwrap_or(os),
+        arch,
+        hostname,
+        kernel,
+        shell: "remote".to_string(),
+    })
+}
+
+#[tauri::command]
 pub fn get_cli_args() -> Vec<String> {
     std::env::args().skip(1).collect()
 }

@@ -119,6 +119,7 @@ pub fn run() {
             commands::proxy_delete,
             commands::get_cli_args,
             commands::get_system_info,
+            commands::get_remote_system_info,
             commands::key_list,
             commands::key_generate_rsa,
             commands::key_generate_ed25519,

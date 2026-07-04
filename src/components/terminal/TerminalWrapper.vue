@@ -67,69 +67,6 @@ function stripTrailingPrompt(output: string, prompt: string): string {
   return output
 }
 
-function parseUname(text: string): Partial<SystemInfo> | null {
-  const parts = text.trim().split(/\s+/)
-  if (parts.length < 3) return null
-  return {
-    os: parts[0],
-    hostname: parts[1],
-    kernel: parts[2],
-    arch: parts[parts.length - 2] || 'unknown',
-    shell: 'remote',
-  }
-}
-
-function parseOsRelease(text: string): string | null {
-  for (const line of text.split('\n')) {
-    const m = line.match(/^PRETTY_NAME=["']?(.+?)["']?$/)
-    if (m) return m[1]
-  }
-  for (const line of text.split('\n')) {
-    const m = line.match(/^NAME=["']?(.+?)["']?$/)
-    if (m) return m[1]
-  }
-  return null
-}
-
-async function detectSystemInfo(sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo): Promise<SystemInfo | null> {
-  const cmd = 'uname -a'
-  const uname = await executeInTerminal(cmd, undefined, true).catch(() => '')
-  if (!uname) return null
-  const parsed = parseUname(uname)
-  if (!parsed) return null
-
-  let osLabel = parsed.os || 'remote'
-  if (sshInfo) {
-    const osRelease = await executeInTerminal('cat /etc/os-release', undefined, true).catch(() => '')
-    const prettyName = osRelease ? parseOsRelease(osRelease) : null
-    if (prettyName) osLabel = prettyName
-  }
-
-  return {
-    os: osLabel,
-    arch: parsed.arch || 'remote',
-    hostname: (sshInfo?.host || telnetInfo?.host || parsed.hostname || 'remote')!,
-    kernel: parsed.kernel || 'remote',
-    shell: 'remote',
-  }
-}
-
-/** Wait until a shell prompt is detected in the output stream */
-async function waitForShellPrompt(): Promise<void> {
-  let buf = ''
-  return new Promise(async (resolve) => {
-    const unsub = (await onOutput((data: string) => {
-      buf += data
-      const last = buf.trim().split(/\r?\n/).pop()
-      if (last && /[$#>]\s*$/.test(last)) {
-        unsub()
-        setTimeout(resolve, 200)
-      }
-    })) ?? (() => {})
-    setTimeout(() => { unsub(); resolve() }, 8000)
-  })
-}
-
 async function executeInTerminal(cmd: string, prompt?: string, silent?: boolean): Promise<string> {
   const p = prompt || '$ '
   return new Promise(async (resolve) => {
@@ -319,11 +256,16 @@ async function initTerminal() {
     })
     if (unsub) unlisten = unsub
 
-    if (props.sshInfo || props.telnetInfo) {
+    if (props.sshInfo) {
       const tabId = store.activeTabId
       if (tabId) {
-        await waitForShellPrompt()
-        const info = await detectSystemInfo(props.sshInfo, props.telnetInfo)
+        const info = await invoke<SystemInfo>('get_remote_system_info', {
+          host: props.sshInfo.host,
+          port: props.sshInfo.port,
+          username: props.sshInfo.username,
+          password: props.sshInfo.password,
+          privateKeyPath: props.sshInfo.privateKeyPath ?? null,
+        }).catch(() => null)
         if (info) {
           store.updateSystemInfo(tabId, info)
           store.updateTabTitle(tabId, `${info.os} | ${info.hostname}`)
