@@ -272,6 +272,7 @@ export function useAiConversation(
     pendingToolId.value = ''
 
     writeAI('已取消命令执行')
+    writeToBackend?.('\x03')
     endConversation()
   }
 
@@ -288,7 +289,6 @@ export function useAiConversation(
     if (pendingConfirm.value) {
       pendingConfirm.value = null
     }
-    setTimeout(() => writeToBackend?.('\x03'), 300)
   }
 
   /** Submit a complete line from the input bar (deprecated, kept for compat) */
