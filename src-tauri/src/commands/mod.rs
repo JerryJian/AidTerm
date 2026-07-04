@@ -1,4 +1,5 @@
 use tauri::{Manager, State};
+use crate::ai;
 use crate::keychain;
 use crate::known_hosts;
 use crate::proxy;
@@ -363,4 +364,79 @@ pub fn known_hosts_remove(
     key_type: String,
 ) -> Result<(), String> {
     manager.remove(&host, &key_type)
+}
+
+#[tauri::command]
+pub async fn ai_chat(
+    ai_state: State<'_, ai::AiState>,
+    session_id: String,
+    messages: Vec<ai::ChatMessage>,
+    config: ai::AiConfig,
+) -> Result<ai::AiResponse, String> {
+    // Save conversation history
+    ai_state.save_history(&session_id, messages.clone());
+
+    let response = ai::chat_completion(messages, &config).await?;
+
+    // If there are tool calls, append the assistant message with tool_calls to history
+    if !response.tool_calls.is_empty() {
+        let mut updated = ai_state.load_history(&session_id);
+        updated.push(ai::ChatMessage {
+            role: "assistant".to_string(),
+            content: response.text.clone().unwrap_or_default(),
+            tool_call_id: None,
+        });
+        ai_state.save_history(&session_id, updated);
+    }
+
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn ai_execute(command: String) -> Result<String, String> {
+    ai::execute_command(&command).await
+}
+
+#[tauri::command]
+pub async fn ai_continue(
+    ai_state: State<'_, ai::AiState>,
+    session_id: String,
+    tool_call_id: String,
+    tool_result: String,
+    config: ai::AiConfig,
+) -> Result<ai::AiResponse, String> {
+    let mut history = ai_state.load_history(&session_id);
+
+    // Add tool result message
+    history.push(ai::ChatMessage {
+        role: "tool".to_string(),
+        content: tool_result,
+        tool_call_id: Some(tool_call_id),
+    });
+
+    ai_state.save_history(&session_id, history.clone());
+
+    let response = ai::chat_completion(history, &config).await?;
+
+    // If more tool calls, save the assistant message
+    if !response.tool_calls.is_empty() {
+        let mut updated = ai_state.load_history(&session_id);
+        updated.push(ai::ChatMessage {
+            role: "assistant".to_string(),
+            content: response.text.clone().unwrap_or_default(),
+            tool_call_id: None,
+        });
+        ai_state.save_history(&session_id, updated);
+    }
+
+    Ok(response)
+}
+
+#[tauri::command]
+pub fn ai_clear_history(
+    ai_state: State<'_, ai::AiState>,
+    session_id: String,
+) -> Result<(), String> {
+    ai_state.clear_history(&session_id);
+    Ok(())
 }

@@ -1,16 +1,22 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { setLanguage } from '../../i18n'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useAiStore } from '../../stores/aiStore'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { open } from '@tauri-apps/plugin-dialog'
 
 const { t, locale } = useI18n()
 const settings = useSettingsStore()
+const ai = useAiStore()
 
 const emit = defineEmits<{
   close: []
 }>()
+
+const showAiKey = ref(false)
+const aiKeyBuffer = ref(ai.config.api_key)
 
 async function onLanguageChange(e: Event) {
   const lang = (e.target as HTMLSelectElement).value
@@ -99,6 +105,60 @@ async function toggleFullscreen() {
             <input type="checkbox" v-model="settings.closeToTray" />
             {{ t('settings.close_to_tray') }}
           </label>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>🤖 AI</h3>
+        <div class="setting-row">
+          <label>提供商</label>
+          <div class="provider-group">
+            <button
+              v-for="(_, name) in ai.defaultProviders"
+              :key="name"
+              class="provider-chip"
+              :class="{ active: ai.config.provider === name }"
+              @click="ai.setProvider(name)"
+            >{{ name }}</button>
+          </div>
+        </div>
+        <div class="setting-row col">
+          <label>API Key</label>
+          <div class="input-with-toggle">
+            <input
+              :type="showAiKey ? 'text' : 'password'"
+              :value="aiKeyBuffer"
+              @input="(e: any) => { aiKeyBuffer = e.target.value; ai.updateConfig({ api_key: e.target.value }) }"
+              placeholder="sk-..."
+              class="text-input"
+            />
+            <button class="toggle-btn" @click="showAiKey = !showAiKey">{{ showAiKey ? '隐藏' : '显示' }}</button>
+          </div>
+        </div>
+        <div class="setting-row col">
+          <label>Model</label>
+          <input
+            :value="ai.config.model"
+            @input="(e: any) => ai.updateConfig({ model: e.target.value })"
+            class="text-input"
+          />
+        </div>
+        <div class="setting-row col">
+          <label>Base URL</label>
+          <input
+            :value="ai.config.base_url"
+            @input="(e: any) => ai.updateConfig({ base_url: e.target.value })"
+            class="text-input"
+          />
+        </div>
+        <div class="setting-row">
+          <label>状态</label>
+          <span :class="ai.enabled ? 'status-ok' : 'status-ko'">
+            {{ ai.enabled ? '✅ 已配置' : '❌ 未配置' }}
+          </span>
+        </div>
+        <div class="setting-row">
+          <button class="action-btn" @click="ai.clearHistory()">清除对话历史</button>
         </div>
       </div>
     </div>
@@ -221,5 +281,80 @@ async function toggleFullscreen() {
 .action-btn.danger:hover {
   background: #f38ba8;
   color: #1e1e2e;
+}
+
+.setting-row.col {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.provider-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.provider-chip {
+  padding: 4px 10px;
+  border: 1px solid #45475a;
+  background: #313244;
+  color: #cdd6f4;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  text-transform: capitalize;
+}
+.provider-chip:hover {
+  background: #45475a;
+}
+.provider-chip.active {
+  border-color: #89b4fa;
+  background: #181825;
+  color: #89b4fa;
+}
+
+.text-input {
+  width: 100%;
+  padding: 6px 8px;
+  background: #181825;
+  border: 1px solid #45475a;
+  border-radius: 4px;
+  color: #cdd6f4;
+  font-size: 12px;
+  outline: none;
+}
+.text-input:focus {
+  border-color: #89b4fa;
+}
+
+.input-with-toggle {
+  display: flex;
+  gap: 4px;
+}
+.input-with-toggle .text-input {
+  flex: 1;
+}
+
+.toggle-btn {
+  padding: 4px 8px;
+  border: 1px solid #45475a;
+  background: #313244;
+  color: #a6adc8;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.toggle-btn:hover {
+  background: #45475a;
+}
+
+.status-ok {
+  color: #a6e3a1;
+  font-size: 12px;
+}
+.status-ko {
+  color: #f38ba8;
+  font-size: 12px;
 }
 </style>

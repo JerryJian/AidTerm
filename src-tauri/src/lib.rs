@@ -1,3 +1,4 @@
+mod ai;
 mod commands;
 mod keychain;
 mod known_hosts;
@@ -8,6 +9,7 @@ mod sftp;
 mod tunnel;
 mod zmodem;
 
+use ai::AiState;
 use keychain::KeychainManager;
 use known_hosts::KnownHostsManager;
 use session::SessionManager;
@@ -83,6 +85,7 @@ pub fn run() {
 
             Ok(())
         })
+        .manage(AiState::new())
         .manage(SessionManager::new())
         .manage(sftp::SftpManager::new())
         .manage(zmodem::ZmodemState::new())
@@ -123,6 +126,10 @@ pub fn run() {
             commands::known_hosts_list,
             commands::known_hosts_add,
             commands::known_hosts_remove,
+            commands::ai_chat,
+            commands::ai_execute,
+            commands::ai_continue,
+            commands::ai_clear_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

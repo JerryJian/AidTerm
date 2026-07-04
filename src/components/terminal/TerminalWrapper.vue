@@ -7,7 +7,10 @@ import { SearchAddon } from '@xterm/addon-search'
 import { invoke } from '@tauri-apps/api/core'
 import { useTerminal } from '../../hooks/useTerminal'
 import { useTerminalStore } from '../../stores/terminal'
+import { useAiConversation } from '../../hooks/useAiConversation'
 import type { SshConnectionInfo, TelnetConnectionInfo } from '../../types'
+import AiConfirmOverlay from '../ai/AiConfirmOverlay.vue'
+import { useAiStore } from '../../stores/aiStore'
 
 const props = defineProps<{
   sshInfo?: SshConnectionInfo
@@ -27,6 +30,7 @@ const ctxMenu = ref<{ x: number; y: number }>({ x: 0, y: 0 })
 const ctxVisible = ref(false)
 
 const store = useTerminalStore()
+const aiStore = useAiStore()
 
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
@@ -35,9 +39,12 @@ let resizeObserver: ResizeObserver | null = null
 let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 let lastSize = { w: 0, h: 0 }
 
+const aiConv = useAiConversation(() => terminal)
+
 const { createSession, sshConnect, telnetConnect, writeInput, resize, onOutput } = useTerminal()
 
 function handleTerminalData(data: string) {
+  if (aiConv.interceptInput(data)) return
   writeInput(data)
 }
 
@@ -290,6 +297,14 @@ function doToggleSearch() {
   }
 }
 
+function doAskAi() {
+  closeContextMenu()
+  const sel = terminal?.getSelection()
+  if (!sel) return
+  aiConv.writeAI(`分析以下终端输出：\n${sel}`)
+  aiConv.startConversation(`分析以下终端输出，解释其含义：\n${sel}`)
+}
+
 function doNewTab() {
   closeContextMenu()
   store.addTab('local')
@@ -339,6 +354,19 @@ defineExpose({ focusSearch, doFit })
     </div>
     <div ref="terminalRef" class="terminal-xterm" />
 
+    <AiConfirmOverlay
+      v-if="aiConv.showConfirm.value"
+      :command="aiConv.pendingCommand.value"
+      :ai-message="aiConv.pendingAiMsg.value"
+      @confirm="aiConv.onConfirmCommand()"
+      @cancel="aiConv.onCancelCommand()"
+      @modify="(cmd: string) => aiConv.onModifyCommand(cmd)"
+    />
+
+    <div v-if="aiConv.aiActive.value" class="ai-bar">
+      <span class="ai-dot">●</span> AI 模式 — 输入 <code>/exit</code> 退出
+    </div>
+
     <!-- Context menu -->
     <teleport to="body">
       <div v-if="ctxVisible" class="ctx-backdrop" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu" />
@@ -352,6 +380,9 @@ defineExpose({ focusSearch, doFit })
         <div class="ctx-sep" />
         <div class="ctx-item" @click="doNewTab">新建标签</div>
         <div class="ctx-item" @click="doNewSsh">新建 SSH 连接...</div>
+        <div class="ctx-sep" />
+        <div v-if="aiStore.enabled" class="ctx-item" @click="doAskAi">🤖 AI 解释选中内容</div>
+        <div v-if="aiConv.aiActive.value" class="ctx-item" @click="aiConv.resetConversation()">🔄 重置 AI 对话</div>
         <div class="ctx-sep" />
         <div class="ctx-item ctx-danger" @click="doCloseTab">关闭标签</div>
       </div>
@@ -451,5 +482,36 @@ defineExpose({ focusSearch, doFit })
   height: 1px;
   margin: 4px 8px;
   background: #313244;
+}
+
+.ai-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #1a1a2e;
+  border-top: 1px solid #4547a0;
+  font-size: 12px;
+  color: #89b4fa;
+  flex-shrink: 0;
+}
+
+.ai-bar .ai-dot {
+  color: #a6e3a1;
+  font-size: 10px;
+  animation: ai-pulse 1.5s infinite;
+}
+
+.ai-bar code {
+  background: #313244;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: #cdd6f4;
+}
+
+@keyframes ai-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 </style>

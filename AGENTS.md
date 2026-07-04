@@ -151,9 +151,9 @@
 ### Phase 7: AI 智能助手
 | # | 任务 | 说明 |
 |---|------|------|
-| 7.1 | AI 命令建议 | 集成 DeepSeek / OpenAI API，自然语言 → 命令 |
-| 7.2 | AI 脚本生成 | 自然语言描述需求，AI 生成 shell 脚本 |
-| 7.3 | 终端内容解释 | 选中终端输出，AI 解释含义 |
+| 7.1 | AI 终端助手 | 终端输入检测：自然语言 → 调用 AI（DeepSeek / OpenAI / DashScope），命令 → 直接执行。AI 通过 `execute_command` 工具建议命令，内联展示供用户确认执行，输出回传给 AI 继续推理，直至任务完成。参考阿里云 ECS 控制台 AI 助手工作流。 |
+| 7.2 | AI 配置面板 | API Key、Model、Base URL、Provider 配置 |
+| 7.3 | 终端内容解释 | 选中终端输出，快捷键/AI 按钮发给 AI 解释含义 |
 | 7.4 | AI 书签 | 自然语言描述连接目标，AI 辅助填写参数 |
 | 7.5 | MCP 协议支持 | Model Context Protocol，供外部 AI 工具集成 |
 | 7.6 | MCP Widget | UI 组件，供 AI 助手和外部工具集成 |
