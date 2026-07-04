@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import type { Terminal } from '@xterm/xterm'
 import { useAiStore, type AiMessage } from '../stores/aiStore'
 
-export function useAiConversation(getTerminal: () => Terminal | null) {
+export function useAiConversation(getTerminal: () => Terminal | null, writeToBackend?: (data: string) => void) {
   const ai = useAiStore()
   const showConfirm = ref(false)
   const pendingCommand = ref('')
@@ -149,6 +149,7 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
     aiActive.value = false
     inputBuffer.value = ''
     ai.pendingToolCall = null
+    writeToBackend?.('\r')
   }
 
   /**
@@ -163,7 +164,6 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
         if (line === '/exit') {
           writeAI('AI 模式已退出')
           endConversation()
-          getTerminal()?.write('\r\n\x1b[90m提示: 按 Ctrl+C 可清除终端中残留的输入\x1b[0m\r\n')
           return true
         }
         if (line) {
@@ -192,6 +192,7 @@ export function useAiConversation(getTerminal: () => Terminal | null) {
       if (line && ai.isNaturalLanguage(line)) {
         if (!ai.enabled) {
           getTerminal()?.write(`\r\n\x1b[33m⚠ 请在设置 → AI 中配置 API Key 后使用 AI 助手\x1b[0m\r\n`)
+          writeToBackend?.('\r')
           return true
         }
         // Don't send to terminal, start AI conversation

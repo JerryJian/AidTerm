@@ -39,9 +39,9 @@ let resizeObserver: ResizeObserver | null = null
 let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 let lastSize = { w: 0, h: 0 }
 
-const aiConv = useAiConversation(() => terminal)
-
 const { createSession, sshConnect, telnetConnect, writeInput, resize, onOutput } = useTerminal()
+
+const aiConv = useAiConversation(() => terminal, writeInput)
 
 function handleTerminalData(data: string) {
   if (aiConv.interceptInput(data)) return
