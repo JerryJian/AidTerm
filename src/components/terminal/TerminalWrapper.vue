@@ -38,6 +38,7 @@ let unlisten: (() => void) | null = null
 let resizeObserver: ResizeObserver | null = null
 let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 let lastSize = { w: 0, h: 0 }
+const suppressOutput = ref(false)
 
 const { createSession, sshConnect, telnetConnect, writeInput, resize, onOutput } = useTerminal()
 
@@ -45,13 +46,38 @@ function stripAnsi(text: string): string {
   return text.replace(/\x1b\[[\d;]*[a-zA-Z]/g, '').replace(/\r/g, '')
 }
 
-async function executeInTerminal(cmd: string): Promise<string> {
+function stripLeadingEcho(output: string, cmd: string): string {
+  const idx = output.indexOf(cmd)
+  if (idx === 0) {
+    let rest = output.slice(cmd.length)
+    if (rest.startsWith('\r\n')) rest = rest.slice(2)
+    else if (rest.startsWith('\n')) rest = rest.slice(1)
+    else if (rest.startsWith('\r')) rest = rest.slice(1)
+    return rest
+  }
+  return output
+}
+
+function stripTrailingPrompt(output: string, prompt: string): string {
+  if (!prompt || prompt === '$ ' || !output) return output
+  const plain = output.replace(/\x1b\[[\d;]*[a-zA-Z]/g, '')
+  if (plain.endsWith(prompt.trimEnd())) {
+    return output.slice(0, -prompt.trimEnd().length)
+  }
+  return output
+}
+
+async function executeInTerminal(cmd: string, prompt?: string): Promise<string> {
+  const p = prompt || '$ '
   return new Promise(async (resolve) => {
+    suppressOutput.value = true
+
     let output = ''
     const unsub = (await onOutput((data: string) => {
       output += data
     })) ?? (() => {})
 
+    terminal?.write(`\r\n${p}${cmd}\r\n`)
     writeInput(cmd + '\r')
 
     let prevLen = 0
@@ -67,6 +93,12 @@ async function executeInTerminal(cmd: string): Promise<string> {
       }
       if (stableCount >= 5 || Date.now() - t0 > 30000) {
         unsub()
+
+        let display = stripLeadingEcho(output, cmd)
+        display = stripTrailingPrompt(display, p)
+        terminal?.write(display)
+
+        suppressOutput.value = false
         resolve(stripAnsi(output))
         return
       }
@@ -203,7 +235,7 @@ async function initTerminal() {
   if (id) {
     store.updateSessionId(store.activeTabId ?? '', id)
     const unsub = await onOutput((data: string) => {
-      terminal?.write(data)
+      if (!suppressOutput.value) terminal?.write(data)
     })
     if (unsub) unlisten = unsub
   }

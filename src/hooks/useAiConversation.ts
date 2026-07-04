@@ -100,7 +100,7 @@ function buildSystemPrompt(systemInfo: SystemInfo, history: CommandRecord[]): st
 export function useAiConversation(
   getTerminal: () => Terminal | null,
   writeToBackend?: (data: string) => void,
-  executeInTerminal?: (cmd: string) => Promise<string>,
+  executeInTerminal?: (cmd: string, prompt?: string) => Promise<string>,
 ) {
   const ai = useAiStore()
   const showConfirm = ref(false)
@@ -113,6 +113,7 @@ export function useAiConversation(
   const cancelled = ref(false)
   const pendingConfirm = ref<((value: boolean) => void) | null>(null)
   const commandHistory = ref<CommandRecord[]>([])
+  const savedPrompt = ref('$ ')
 
   let passthrough = false
 
@@ -199,14 +200,11 @@ export function useAiConversation(
     pendingCommand.value = ''
     pendingToolId.value = ''
 
-    const t = getTerminal()
-
     try {
       let result: string
 
       if (executeInTerminal) {
-        t?.write(`\r\n`)
-        result = await executeInTerminal(cmd)
+        result = await executeInTerminal(cmd, savedPrompt.value)
         if (cancelled.value) return
 
         // Long output: ask user before sending to AI
@@ -355,6 +353,16 @@ export function useAiConversation(
           writeToBackend?.('\r')
           return true
         }
+        try {
+          const buf = t.buffer.active
+          const ln = buf.getLine(buf.baseY + buf.cursorY)
+          if (ln) {
+            const text = ln.translateToString()
+            if (text.endsWith(line)) {
+              savedPrompt.value = text.slice(0, -line.length)
+            }
+          }
+        } catch {}
         t.write('\r\n')
         startConversation(line)
         return true
