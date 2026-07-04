@@ -377,7 +377,7 @@ export function useAiConversation(
       if (line) {
         eraseLine(line, t)
         inputBuffer.value = ''
-        writeToBackend?.('\x03' + line + '\t')
+        writeToBackend?.(line + '\t')
         passthrough = true
       } else {
         writeToBackend?.('\t')
