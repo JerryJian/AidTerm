@@ -63,8 +63,10 @@ function eraseLine(inputBuffer: string, t: Terminal): void {
 
 function buildSystemPrompt(systemInfo: SystemInfo, history: CommandRecord[]): string {
   const lines: string[] = [
-    '你是 TndTerm 终端 AI 助手。你可以通过 execute_command 工具在用户的系统上执行命令。',
+    '你是 TndTerm 终端 AI 助手。你可以通过 execute_command 工具在用户当前的终端中执行命令。',
     '请根据用户的请求，分析问题并执行适当的命令。每次执行命令前，请先解释你要做什么。',
+    '',
+    '注意：命令会直接在用户的终端 shell 中执行，拥有与用户相同的环境变量、PATH 和权限。',
     '',
     '=== 当前终端系统信息 ===',
     `操作系统: ${systemInfo.os}`,
@@ -95,7 +97,11 @@ function buildSystemPrompt(systemInfo: SystemInfo, history: CommandRecord[]): st
   return lines.join('\n')
 }
 
-export function useAiConversation(getTerminal: () => Terminal | null, writeToBackend?: (data: string) => void) {
+export function useAiConversation(
+  getTerminal: () => Terminal | null,
+  writeToBackend?: (data: string) => void,
+  executeInTerminal?: (cmd: string) => Promise<string>,
+) {
   const ai = useAiStore()
   const showConfirm = ref(false)
   const pendingCommand = ref('')
@@ -178,12 +184,20 @@ export function useAiConversation(getTerminal: () => Terminal | null, writeToBac
     pendingCommand.value = ''
     pendingToolId.value = ''
 
-    writeAITitle('执行命令')
-    writeCommand(cmd)
+    const t = getTerminal()
 
     try {
-      const result = await ai.executeCommand(cmd)
-      writeOutput(result || '(无输出)')
+      let result: string
+
+      if (executeInTerminal) {
+        t?.write(`\r\n`)
+        result = await executeInTerminal(cmd)
+      } else {
+        writeAITitle('执行命令')
+        writeCommand(cmd)
+        result = await ai.executeCommand(cmd)
+        writeOutput(result || '(无输出)')
+      }
 
       commandHistory.value.unshift({ command: cmd, result: result || '(无输出)' })
       if (commandHistory.value.length > MAX_HISTORY) {

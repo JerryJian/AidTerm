@@ -41,7 +41,42 @@ let lastSize = { w: 0, h: 0 }
 
 const { createSession, sshConnect, telnetConnect, writeInput, resize, onOutput } = useTerminal()
 
-const aiConv = useAiConversation(() => terminal, writeInput)
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[[\d;]*[a-zA-Z]/g, '').replace(/\r/g, '')
+}
+
+async function executeInTerminal(cmd: string): Promise<string> {
+  return new Promise(async (resolve) => {
+    let output = ''
+    const unsub = (await onOutput((data: string) => {
+      output += data
+    })) ?? (() => {})
+
+    writeInput(cmd + '\r\n')
+
+    let prevLen = 0
+    let stableCount = 0
+    const t0 = Date.now()
+
+    const poll = () => {
+      if (output.length !== prevLen) {
+        prevLen = output.length
+        stableCount = 0
+      } else {
+        stableCount++
+      }
+      if (stableCount >= 5 || Date.now() - t0 > 30000) {
+        unsub()
+        resolve(stripAnsi(output))
+        return
+      }
+      setTimeout(poll, 300)
+    }
+    setTimeout(poll, 800)
+  })
+}
+
+const aiConv = useAiConversation(() => terminal, writeInput, executeInTerminal)
 
 function handleTerminalData(data: string) {
   if (aiConv.interceptInput(data)) return
