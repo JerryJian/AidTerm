@@ -168,8 +168,6 @@ export function useAiConversation(
       let result: string
 
       if (executeInTerminal) {
-        writeToBackend?.('\r')
-        await new Promise(r => setTimeout(r, 50))
         result = await executeInTerminal(cmd, savedPrompt.value)
         if (cancelled.value) return
 
@@ -253,7 +251,6 @@ export function useAiConversation(
     if (pendingConfirm.value) {
       pendingConfirm.value = null
     }
-    writeToBackend?.('\r')
   }
 
   /** Submit a complete line from the input bar (deprecated, kept for compat) */
@@ -303,17 +300,27 @@ export function useAiConversation(
       return true
     }
 
+    // === AI conversation in progress - intercept all input ===
+    if (busy.value) {
+      if (data === '\x03') {
+        cancelled.value = true
+        writeToBackend?.('\x03')
+        endConversation()
+        return true
+      }
+      return true
+    }
+
     // === Normal mode ===
     if (data === '\r' || data === '\n') {
       const line = inputBuffer.value
       inputBuffer.value = ''
 
       if (!line.trim()) {
-        if (busy.value) return true
         return false
       }
 
-      if (!busy.value && ai.isNaturalLanguage(line)) {
+      if (ai.isNaturalLanguage(line)) {
         if (!ai.enabled) {
           t.write(`\r\n\x1b[33m⚠ 请在设置 → AI 中配置 API Key 后使用 AI 助手\x1b[0m\r\n`)
           writeToBackend?.('\r')
@@ -329,6 +336,8 @@ export function useAiConversation(
             }
           }
         } catch {}
+        // Cancel any buffered text in shell before starting AI conversation
+        writeToBackend?.('\x03')
         t.write('\r\n')
         startConversation(line)
         return true
@@ -350,14 +359,6 @@ export function useAiConversation(
       inputBuffer.value = ''
       passthrough = true
       writeToBackend?.('\t')
-      return true
-    }
-
-    // Ctrl+C during AI conversation → cancel
-    if (data === '\x03' && busy.value) {
-      cancelled.value = true
-      writeToBackend?.('\x03')
-      endConversation()
       return true
     }
 
