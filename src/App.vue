@@ -259,18 +259,19 @@ onUnmounted(() => {
         </Pane>
         <Pane>
           <div class="terminal-area">
-            <FileEditor
-              v-if="editorFile"
-              :conn-id="editorFile.connId"
-              :remote-path="editorFile.remotePath"
-              @close="editorFile = null"
-            />
-            <TerminalPane
-              v-else-if="store.activeTab"
-              :key="store.activeTab.id"
-              :tab="store.activeTab"
-              @newSsh="ui.sshDialog = true"
-            />
+          <FileEditor
+            v-if="editorFile"
+            :conn-id="editorFile.connId"
+            :remote-path="editorFile.remotePath"
+            @close="editorFile = null"
+          />
+          <TerminalPane
+            v-for="tab in store.tabs"
+            :key="tab.id"
+            v-show="store.activeTab && tab.id === store.activeTabId"
+            :tab="tab"
+            @newSsh="ui.sshDialog = true"
+          />
           </div>
         </Pane>
         <Pane v-if="ui.rightSidebar" :size="ui.rightSidebarPct" :min-size="17" :max-size="50">
@@ -337,6 +338,11 @@ body,
 
 ::-webkit-scrollbar-thumb:hover {
   background: #585b70;
+}
+
+.splitpanes__pane {
+  display: flex;
+  flex-direction: column;
 }
 
 .splitpanes--vertical > .splitpanes__splitter {

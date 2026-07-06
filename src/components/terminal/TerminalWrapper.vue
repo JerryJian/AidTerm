@@ -40,7 +40,7 @@ let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 let lastSize = { w: 0, h: 0 }
 const suppressOutput = ref(false)
 
-const { createSession, sshConnect, telnetConnect, writeInput, resize, onOutput } = useTerminal()
+const { createSession, sshConnect, telnetConnect, writeInput, resize, onOutput, killSession } = useTerminal()
 
 function stripAnsi(text: string): string {
   return text.replace(/\x1b\[[\d;]*[a-zA-Z]/g, '').replace(/\r/g, '')
@@ -280,6 +280,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  killSession()
   if (fallbackTimer) clearTimeout(fallbackTimer)
   if (resizeObserver) resizeObserver.disconnect()
   if (unlisten) unlisten()
