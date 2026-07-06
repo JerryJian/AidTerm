@@ -4,6 +4,10 @@ import { invoke } from '@tauri-apps/api/core'
 import { useAiStore, type AiMessage } from '../stores/aiStore'
 import { useTerminalStore } from '../stores/terminal'
 import type { SystemInfo } from '../types'
+import { marked } from 'marked'
+import { AnsiRenderer } from './ansiRenderer'
+
+const renderer = new AnsiRenderer()
 
 const MAX_HISTORY = 10
 
@@ -112,8 +116,8 @@ export function useAiConversation(
   let passthrough = false
 
   function writeAI(text: string, prefix = '[AI] ') {
-    const lines = sanitizeForTerminal(text).replace(/\n/g, '\r\n')
-    getTerminal()?.write(`\r\n\x1b[36m${prefix}\x1b[0m${lines}`)
+    const formatted = marked.parse(sanitizeForTerminal(text), { renderer, async: false }) as string
+    getTerminal()?.write(`\r\n\x1b[36m${prefix}\x1b[0m${formatted.replace(/\n/g, '\r\n')}`)
   }
 
   function writeAITitle(text: string) {
