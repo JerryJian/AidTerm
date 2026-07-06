@@ -404,7 +404,8 @@ body,
 .splitpanes--vertical > .splitpanes__splitter {
   background: transparent;
   border: none;
-  min-width: 6px;
+  width: 5px;
+  min-width: 5px;
 }
 .splitpanes--vertical > .splitpanes__splitter:hover {
   background: var(--accent-glass);
@@ -415,7 +416,7 @@ body,
 .splitpanes--vertical > .splitpanes__splitter::before {
   content: '';
   position: absolute;
-  left: 2px;
+  left: 1.5px;
   top: 0;
   bottom: 0;
   width: 2px;
