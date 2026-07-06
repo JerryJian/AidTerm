@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -46,9 +46,8 @@ const suppressOutput = ref(false)
 
 const { createSession, sshConnect, telnetConnect, writeInput, resize, onOutput, killSession } = useTerminal()
 
-const xtermTheme = computed(() => {
-  const d = document.documentElement
-  const s = getComputedStyle(d)
+function getXtermTheme() {
+  const s = getComputedStyle(document.documentElement)
   return {
     background: s.getPropertyValue('--bg-base').trim() || '#1e1e2e',
     foreground: s.getPropertyValue('--text').trim() || '#cdd6f4',
@@ -71,7 +70,7 @@ const xtermTheme = computed(() => {
     brightCyan: s.getPropertyValue('--teal').trim() || '#94e2d5',
     brightWhite: s.getPropertyValue('--text-sub0').trim() || '#a6adc8',
   }
-})
+}
 
 function stripAnsi(text: string): string {
   return text.replace(/\x1b\[[\d;]*[a-zA-Z]/g, '').replace(/\r/g, '')
@@ -205,7 +204,7 @@ async function initTerminal() {
     allowTransparency: true,
     cols: 80,
     rows: 24,
-    theme: xtermTheme.value,
+    theme: getXtermTheme(),
   })
 
   terminal.loadAddon(fitAddon)
@@ -290,7 +289,7 @@ onMounted(() => {
 
   const stopWatch = watch(() => themeStore.mode, () => {
     if (terminal) {
-      terminal.options.theme = xtermTheme.value
+      terminal.options.theme = getXtermTheme()
     }
   })
   onUnmounted(() => stopWatch())
