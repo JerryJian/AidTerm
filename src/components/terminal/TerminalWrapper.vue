@@ -270,6 +270,7 @@ async function initTerminal() {
 
   if (id) {
     store.updateSessionId(store.activeTabId ?? '', id)
+    store.updateSessionStatus(store.activeTabId ?? '', 'connected')
     const unsub = await onOutput((data: string) => {
       if (!suppressOutput.value) terminal?.write(data)
     })
