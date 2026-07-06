@@ -121,7 +121,6 @@ export function useAiConversation(
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userInput },
     ]
-    getTerminal()?.write('\r\n')
     continueConversation()
   }
 
@@ -169,6 +168,7 @@ export function useAiConversation(
       let result: string
 
       if (executeInTerminal) {
+        setOutputSuppression?.(false)
         writeToBackend?.('\r')
         await new Promise(r => setTimeout(r, 200))
         result = await executeInTerminal(cmd, savedPrompt.value)
@@ -255,6 +255,7 @@ export function useAiConversation(
     if (pendingConfirm.value) {
       pendingConfirm.value = null
     }
+    getTerminal()?.write('\x1b[?25h\x1b[?12h')
     setOutputSuppression?.(false)
     writeToBackend?.('\r')
   }
@@ -269,7 +270,6 @@ export function useAiConversation(
         getTerminal()?.write(`\r\n\x1b[33m⚠ 请在设置 → AI 中配置 API Key 后使用 AI 助手\x1b[0m\r\n`)
         return
       }
-      getTerminal()?.write('\r\n')
       startConversation(trimmed)
       return
     }
@@ -345,7 +345,6 @@ export function useAiConversation(
         // Cancel buffered text in shell while suppressing the "^C" + new prompt output
         setOutputSuppression?.(true)
         writeToBackend?.('\x03')
-        t.write('\r\n')
         startConversation(line)
         setTimeout(() => setOutputSuppression?.(false), 200)
         return true
