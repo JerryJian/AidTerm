@@ -40,8 +40,8 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
     <div class="panel-header">
       <span class="panel-title">Sessions</span>
       <div class="panel-actions">
-        <button class="panel-btn" @click="emit('newSession')">New</button>
-        <button class="panel-btn" @click="emit('close')">Close</button>
+        <button class="panel-btn" title="New Session" @click="emit('newSession')">＋</button>
+        <button class="panel-btn" title="Close Panel" @click="emit('close')">✕</button>
       </div>
     </div>
 
@@ -130,9 +130,13 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
   border: 1px solid transparent;
   color: var(--text-sub0);
   cursor: pointer;
-  padding: 2px 6px;
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .panel-btn:hover {
   background: var(--bg-surface0);

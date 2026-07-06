@@ -173,6 +173,7 @@ export function useAiConversation(
         await new Promise(r => setTimeout(r, 200))
         result = await executeInTerminal(cmd, savedPrompt.value)
         if (cancelled.value) return
+        await new Promise(r => setTimeout(r, 200))
         setOutputSuppression?.(true)
 
         // Long output: ask user before sending to AI
