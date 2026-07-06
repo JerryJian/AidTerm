@@ -39,13 +39,11 @@ function openToolTab(tab: ToolTab) {
   }
   ui.activeToolTab = tab
   ui.rightSidebar = true
-  ui.leftSidebar = false
   menuOpen.value = false
 }
 
 function toggleSessions() {
   ui.leftSidebar = !ui.leftSidebar
-  ui.rightSidebar = false
   menuOpen.value = false
 }
 
