@@ -91,6 +91,7 @@ export default {
     no_files: 'No files',
     connecting: 'Connecting...',
     disconnected: 'Disconnected',
+    drop_to_upload: 'Drop files here to upload',
   },
   tunnel: {
     title: 'Port Forwarding',

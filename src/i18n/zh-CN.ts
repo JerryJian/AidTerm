@@ -91,6 +91,7 @@ export default {
     no_files: '暂无文件',
     connecting: '连接中...',
     disconnected: '已断开',
+    drop_to_upload: '拖拽文件到此处上传',
   },
   tunnel: {
     title: '端口转发',

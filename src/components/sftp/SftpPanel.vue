@@ -3,8 +3,10 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSftpStore } from '../../stores/sftpStore'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
+import { useI18n } from 'vue-i18n'
 import type { FileEntry } from '../../types'
 
+const { t } = useI18n()
 const store = useSftpStore()
 
 const emit = defineEmits<{
@@ -35,18 +37,23 @@ const sortedEntries = computed(() => {
 })
 
 onMounted(async () => {
-  const un = await listen<{ type: string; paths?: string[] }>('tauri://drag-drop', (event) => {
-    if (event.payload.type === 'over' || event.payload.type === 'enter') {
+  const un = await listen<{ type: string; paths?: string[]; position?: { x: number; y: number } }>('tauri://drag-drop', (event) => {
+    const { type, paths } = event.payload
+    if (type === 'over' || type === 'enter') {
       dragOver.value = true
     } else {
       dragOver.value = false
     }
-    if (event.payload.type === 'drop' && event.payload.paths) {
-      for (const path of event.payload.paths) {
+    if (type === 'leave') {
+      dragOver.value = false
+    }
+    if (type === 'drop' && paths && paths.length > 0) {
+      for (const path of paths) {
         const name = path.split('\\').pop()?.split('/').pop() || 'file'
         const remotePath = store.currentPath.replace(/\/?$/, '/') + name
         store.upload(path, remotePath)
       }
+      dragOver.value = false
     }
   })
   unlistens.push(un)
@@ -109,11 +116,14 @@ function onEntryDblClick(entry: FileEntry) {
 }
 
 async function doUpload() {
-  const selected = await open({ multiple: false, directory: false })
+  const selected = await open({ multiple: true, directory: false })
   if (!selected) return
-  const name = selected.split('\\').pop()?.split('/').pop() || 'file'
-  const remotePath = store.currentPath.replace(/\/?$/, '/') + name
-  await store.upload(selected, remotePath)
+  const files = Array.isArray(selected) ? selected : [selected]
+  for (const file of files) {
+    const name = file.split('\\').pop()?.split('/').pop() || 'file'
+    const remotePath = store.currentPath.replace(/\/?$/, '/') + name
+    await store.upload(file, remotePath)
+  }
 }
 
 async function doDownload(entry: FileEntry) {
@@ -209,7 +219,7 @@ function fileIcon(entry: FileEntry): string {
       <div v-if="store.error" class="error-bar">{{ store.error }}</div>
 
       <!-- Loading -->
-      <div v-if="store.loading" class="loading">Loading...</div>
+        <div v-if="store.loading" class="loading">{{ t('common.loading') }}...</div>
 
       <!-- File list -->
       <div
@@ -254,6 +264,11 @@ function fileIcon(entry: FileEntry): string {
         </div>
 
         <div v-if="sortedEntries.length === 0" class="empty">Empty directory</div>
+      </div>
+
+      <!-- Drop zone overlay -->
+      <div v-if="dragOver" class="drop-zone">
+        <span class="drop-label">{{ t('sftp.drop_to_upload') }}</span>
       </div>
     </div>
   </div>
@@ -343,6 +358,7 @@ function fileIcon(entry: FileEntry): string {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 .toolbar {
@@ -573,5 +589,22 @@ function fileIcon(entry: FileEntry): string {
   background: rgba(137, 180, 250, 0.08);
   outline: 2px dashed var(--accent);
   outline-offset: -2px;
+}
+
+.drop-zone {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-glass);
+  z-index: 10;
+}
+
+.drop-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  pointer-events: none;
 }
 </style>
