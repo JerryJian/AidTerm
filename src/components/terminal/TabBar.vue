@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useTerminalStore } from '../../stores/terminal'
-import { useUiStore } from '../../stores/uiStore'
+import { useUiStore, type ToolTab } from '../../stores/uiStore'
 import QuickConnectBar from '../session/QuickConnectBar.vue'
 
 const store = useTerminalStore()
@@ -21,6 +21,34 @@ const batchInput = ref('')
 const batchFocused = ref(false)
 
 const availableShells = ref<string[]>([])
+const viewsMenuOpen = ref(false)
+
+const toolTabs: { id: ToolTab; label: string; icon: string }[] = [
+  { id: 'sftp', label: 'SFTP', icon: '\uD83D\uDCC2' },
+  { id: 'tunnel', label: 'Tunnel', icon: '\uD83D\uDD0C' },
+  { id: 'proxy', label: 'Proxy', icon: '\uD83C\uDF10' },
+  { id: 'snippet', label: 'Snippets', icon: '\u26A1' },
+  { id: 'trigger', label: 'Triggers', icon: '\uD83D\uDD2B' },
+  { id: 'key', label: 'Keys', icon: '\uD83D\uDD11' },
+  { id: 'knownHosts', label: 'Hosts', icon: '\uD83D\uDDC2' },
+]
+
+function openToolTab(tab: ToolTab) {
+  if (!ui.openToolTabs.includes(tab)) {
+    ui.openToolTabs.push(tab)
+  }
+  ui.activeToolTab = tab
+  ui.rightSidebar = true
+  ui.leftSidebar = false
+  menuOpen.value = false
+}
+
+function toggleSessions() {
+  ui.leftSidebar = !ui.leftSidebar
+  ui.rightSidebar = false
+  menuOpen.value = false
+}
+
 onMounted(async () => {
   try {
     const shells = await invoke<string[]>('detect_shells')
@@ -63,6 +91,8 @@ function onDocClick(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (!target.closest('.new-tab-wrapper') && !target.closest('.menu-wrapper')) {
     newTabMenuOpen.value = false
+    menuOpen.value = false
+    viewsMenuOpen.value = false
   }
 }
 
@@ -127,14 +157,25 @@ defineExpose({ onKeydown })
   <div class="tab-bar" @keydown="onKeydown">
     <div class="tab-bar-left">
       <div class="menu-wrapper">
-        <button class="menu-btn" @click="menuOpen = !menuOpen" title="Menu" @blur="menuOpen = false">{{ '\u2630' }}</button>
-        <div v-if="menuOpen" class="menu-dropdown" @mousedown.prevent>
-          <button @click="ui.settingsDialog = true; menuOpen = false" class="menu-item">{{ '\u2699' }} Settings</button>
-          <button @click="emit('lockClick'); menuOpen = false" class="menu-item">{{ '\uD83D\uDD12' }} Lock</button>
-          <button @click="store.toggleBatch(); menuOpen = false" class="menu-item" :class="{ active: store.batchMode }">{{ '\uD83D\uDCE1' }} Batch Mode</button>
+        <button class="menu-btn" @click="menuOpen = !menuOpen; viewsMenuOpen = false" title="Menu">{{ '\u2630' }}</button>
+        <div v-if="menuOpen" class="menu-dropdown">
+          <button @click="ui.settingsDialog = true; menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\u2699' }}</span><span>Settings</span></button>
+          <button @click="emit('lockClick'); menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>Lock</span></button>
+          <button @click="store.toggleBatch(); menuOpen = false" class="menu-item" :class="{ active: store.batchMode }"><span class="mi-icon">{{ '\uD83D\uDCE1' }}</span><span>Batch Mode</span></button>
           <div class="menu-divider" />
-          <button @click="quickConnectVisible = !quickConnectVisible; menuOpen = false" class="menu-item">{{ '\uD83D\uDD0C' }} Quick Connect</button>
-          <button @click="ui.sshDialog = true; menuOpen = false" class="menu-item">{{ '\uD83D\uDD12' }} New SSH...</button>
+          <button class="menu-item has-submenu" @click="viewsMenuOpen = !viewsMenuOpen">
+            <span class="mi-icon">{{ '\u25B6' }}</span><span>Views</span><span class="sub-arrow">{{ '\u25B6' }}</span>
+          </button>
+          <div v-if="viewsMenuOpen" class="submenu-dropdown">
+            <button class="menu-item" @click="toggleSessions()"><span class="mi-icon">{{ '\uD83D\uDCCB' }}</span><span>Sessions</span></button>
+            <div class="menu-divider" />
+            <button v-for="t in toolTabs" :key="t.id" class="menu-item" @click="openToolTab(t.id)">
+              <span class="mi-icon">{{ t.icon }}</span><span>{{ t.label }}</span>
+            </button>
+          </div>
+          <div class="menu-divider" />
+          <button @click="quickConnectVisible = !quickConnectVisible; menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\uD83D\uDD0C' }}</span><span>Quick Connect</span></button>
+          <button @click="ui.sshDialog = true; menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>New SSH...</span></button>
         </div>
       </div>
       <div
@@ -164,25 +205,12 @@ defineExpose({ onKeydown })
           <button v-for="s in availableShells" :key="s" class="menu-item" @click="openLocalShell(s)">{{ shellDisplayNames[s] || s }}</button>
           <div class="menu-divider" />
           <div class="new-tab-section-title">Remote Connection</div>
-          <button class="menu-item" @click="openSsh()">{{ '\uD83D\uDD12' }} SSH...</button>
-          <button class="menu-item" @click="openTelnet()">{{ '\uD83D\uDD0C' }} Telnet...</button>
+          <button class="menu-item" @click="openSsh()"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>SSH...</span></button>
+          <button class="menu-item" @click="openTelnet()"><span class="mi-icon">{{ '\uD83D\uDD0C' }}</span><span>Telnet...</span></button>
         </div>
       </div>
     </div>
-    <div class="tab-bar-right">
-      <button
-        class="tb-btn"
-        :class="{ active: ui.leftSidebar }"
-        @click="ui.leftSidebar = !ui.leftSidebar"
-        title="Sessions"
-      >{{ '\uD83D\uDCCB' }}</button>
-      <button
-        class="tb-btn"
-        :class="{ active: ui.rightSidebar }"
-        @click="ui.rightSidebar = !ui.rightSidebar"
-        title="Tools"
-      >{{ '\uD83D\uDD27' }}</button>
-    </div>
+
   </div>
   <!-- Quick connect / batch bars -->
   <QuickConnectBar
@@ -223,14 +251,6 @@ defineExpose({ onKeydown })
   min-width: 0;
 }
 
-.tab-bar-right {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding-right: 8px;
-  flex-shrink: 0;
-}
-
 .menu-wrapper {
   position: relative;
 }
@@ -267,8 +287,24 @@ defineExpose({ onKeydown })
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
+.submenu-dropdown {
+  position: absolute;
+  left: 100%;
+  top: 85px;
+  z-index: 1001;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface0);
+  border-radius: 6px;
+  min-width: 150px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  margin-left: 2px;
+}
+
 .menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   text-align: left;
   padding: 6px 12px;
@@ -286,6 +322,22 @@ defineExpose({ onKeydown })
 }
 .menu-item.active {
   color: var(--success);
+}
+
+.mi-icon {
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.has-submenu {
+  justify-content: space-between;
+}
+
+.sub-arrow {
+  font-size: 8px;
+  color: var(--text-overlay0);
+  margin-left: auto;
 }
 
 .menu-divider {
@@ -408,11 +460,6 @@ defineExpose({ onKeydown })
   background: var(--bg-surface0);
   color: var(--text);
 }
-.tb-btn.active {
-  background: var(--bg-surface0);
-  color: var(--accent);
-}
-
 .batch-bar {
   display: flex;
   align-items: center;

@@ -40,8 +40,8 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
     <div class="panel-header">
       <span class="panel-title">Sessions</span>
       <div class="panel-actions">
-        <button class="panel-btn" title="New Session" @click="emit('newSession')">+</button>
-        <button class="panel-btn" title="Close Panel" @click="emit('close')">✕</button>
+        <button class="panel-btn" @click="emit('newSession')">New</button>
+        <button class="panel-btn" @click="emit('close')">Close</button>
       </div>
     </div>
 

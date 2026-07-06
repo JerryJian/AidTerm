@@ -14,34 +14,35 @@ const emit = defineEmits<{
   editFile: [remotePath: string, connId: string]
 }>()
 
-const tabs: { id: ToolTab; label: string; icon: string }[] = [
-  { id: 'sftp', label: 'SFTP', icon: '\uD83D\uDCC2' },
-  { id: 'tunnel', label: 'Tunnel', icon: '\uD83D\uDD0C' },
-  { id: 'proxy', label: 'Proxy', icon: '\uD83C\uDF10' },
-  { id: 'snippet', label: 'Snippets', icon: '\u26A1' },
-  { id: 'trigger', label: 'Triggers', icon: '\uD83D\uDD2B' },
-  { id: 'key', label: 'Keys', icon: '\uD83D\uDD11' },
-  { id: 'knownHosts', label: 'Hosts', icon: '\uD83D\uDDC2' },
-]
+const toolMeta: Record<ToolTab, { label: string; icon: string }> = {
+  sftp: { label: 'SFTP', icon: '\uD83D\uDCC2' },
+  tunnel: { label: 'Tunnel', icon: '\uD83D\uDD0C' },
+  proxy: { label: 'Proxy', icon: '\uD83C\uDF10' },
+  snippet: { label: 'Snippets', icon: '\u26A1' },
+  trigger: { label: 'Triggers', icon: '\uD83D\uDD2B' },
+  key: { label: 'Keys', icon: '\uD83D\uDD11' },
+  knownHosts: { label: 'Hosts', icon: '\uD83D\uDDC2' },
+}
+
+function onCloseTab(e: MouseEvent, tab: ToolTab) {
+  e.stopPropagation()
+  ui.closeToolTab(tab)
+}
 </script>
 
 <template>
   <div class="tool-panel">
-    <div class="panel-header">
-      <span class="panel-title">{{ '\uD83D\uDD27' }} Tools</span>
-      <button class="panel-close" @click="ui.rightSidebar = false">{{ '\u2715' }}</button>
-    </div>
     <div class="tool-tabs">
       <button
-        v-for="t in tabs"
-        :key="t.id"
+        v-for="t in ui.openToolTabs"
+        :key="t"
         class="tool-tab"
-        :class="{ active: ui.activeToolTab === t.id }"
-        @click="ui.activeToolTab = t.id"
-        :title="t.label"
+        :class="{ active: ui.activeToolTab === t }"
+        @click="ui.activeToolTab = t"
       >
-        <span class="tool-tab-icon">{{ t.icon }}</span>
-        <span class="tool-tab-label">{{ t.label }}</span>
+        <span class="tab-icon">{{ toolMeta[t].icon }}</span>
+        <span class="tab-label">{{ toolMeta[t].label }}</span>
+        <span class="tab-close" @click="(e) => onCloseTab(e, t)">{{ '\u2715' }}</span>
       </button>
     </div>
     <div class="tool-body">
@@ -69,37 +70,6 @@ const tabs: { id: ToolTab; label: string; icon: string }[] = [
   height: 100%;
 }
 
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--bg-mantle);
-  border-bottom: 1px solid var(--bg-surface0);
-}
-
-.panel-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-sub0);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.panel-close {
-  border: none;
-  background: none;
-  color: var(--text-sub0);
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-.panel-close:hover {
-  background: var(--bg-surface1);
-  color: var(--text);
-}
-
 .tool-tabs {
   display: flex;
   overflow-x: auto;
@@ -120,7 +90,6 @@ const tabs: { id: ToolTab; label: string; icon: string }[] = [
   font-size: 11px;
   white-space: nowrap;
   border-bottom: 2px solid transparent;
-  transition: none;
 }
 .tool-tab:hover {
   background: var(--bg-base);
@@ -132,12 +101,25 @@ const tabs: { id: ToolTab; label: string; icon: string }[] = [
   background: var(--bg-base);
 }
 
-.tool-tab-icon {
+.tab-icon {
   font-size: 13px;
 }
 
-.tool-tab-label {
+.tab-label {
   font-size: 11px;
+}
+
+.tab-close {
+  font-size: 10px;
+  color: var(--text-overlay0);
+  padding: 1px 2px;
+  border-radius: 2px;
+  line-height: 1;
+  margin-left: 2px;
+}
+.tab-close:hover {
+  color: var(--danger);
+  background: var(--bg-surface0);
 }
 
 .tool-body {
