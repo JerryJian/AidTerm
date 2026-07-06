@@ -122,7 +122,6 @@ function toggleEnabled(t: { id: string; enabled: boolean }) {
 
 <style scoped>
 .panel {
-  width: 280px;
   background: var(--bg-base);
   border-left: 1px solid var(--bg-surface0);
   display: flex;

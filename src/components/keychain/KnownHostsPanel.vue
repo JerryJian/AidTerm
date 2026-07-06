@@ -78,8 +78,6 @@ async function doRemove(host: string, keyType: string) {
 
 <style scoped>
 .kh-panel {
-  width: 320px;
-  min-width: 320px;
   background: var(--bg-base);
   border-left: 1px solid var(--bg-surface0);
   display: flex;

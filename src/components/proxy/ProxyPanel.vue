@@ -171,7 +171,6 @@ function typeHint(t: ProxyType): string {
 
 <style scoped>
 .panel {
-  width: 280px;
   background: var(--bg-base);
   border-left: 1px solid var(--bg-surface0);
   display: flex;

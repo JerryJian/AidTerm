@@ -331,8 +331,7 @@ function fileIcon(entry: FileEntry): string {
 
 <style scoped>
 .sftp-panel {
-  width: 400px;
-  min-width: 300px;
+  height: 100%;
   background: var(--bg-mantle);
   border-left: 1px solid var(--bg-surface0);
   display: flex;
