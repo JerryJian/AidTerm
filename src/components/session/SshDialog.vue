@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { open } from '@tauri-apps/plugin-dialog'
+import { useI18n } from 'vue-i18n'
 import { useProxyStore } from '../../stores/proxyStore'
 import type { SshConnectionInfo } from '../../types'
 
@@ -17,6 +18,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
+const { t } = useI18n()
 const proxyStore = useProxyStore()
 
 const host = ref(props.initialHost || '')
@@ -71,7 +73,7 @@ function onBackdropClick(e: MouseEvent) {
   <div class="overlay" @click="onBackdropClick">
     <div class="dialog">
       <div class="dialog-header">
-        <span>SSH Connection</span>
+        <span>{{ t('ssh_dialog.title') }}</span>
         <button class="dialog-close" @click="emit('close')">✕</button>
       </div>
       <form class="dialog-body" @submit.prevent="onSubmit">
@@ -99,9 +101,9 @@ function onBackdropClick(e: MouseEvent) {
           </div>
         </label>
         <label class="field">
-          <span class="field-label">代理 (可选)</span>
+          <span class="field-label">{{ t('ssh_dialog.proxy') }}</span>
           <select v-model="selectedProxyId" class="input">
-            <option value="">无代理</option>
+            <option value="">{{ t('ssh_dialog.none') }}</option>
             <option v-for="p in proxyStore.proxies.value" :key="p.id" :value="p.id">
               {{ p.name }} ({{ p.proxy_type === 'Http' ? 'HTTP' : p.proxy_type === 'Socks5' ? 'SOCKS5' : 'Jump' }})
             </option>
@@ -110,11 +112,11 @@ function onBackdropClick(e: MouseEvent) {
         <div class="checkbox-row">
           <label class="checkbox-label">
             <input type="checkbox" v-model="agentForwarding" />
-            SSH Agent 转发
+            {{ t('ssh_dialog.agent_forwarding') }}
           </label>
           <label class="checkbox-label">
             <input type="checkbox" v-model="x11Forwarding" />
-            X11 转发
+            {{ t('ssh_dialog.x11_forwarding') }}
           </label>
         </div>
         <div class="dialog-actions">

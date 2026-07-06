@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   command: string
@@ -39,7 +42,7 @@ function submitEdit() {
     <div class="confirm-box" @click.stop>
       <div class="confirm-header">
         <span class="confirm-icon">🤖</span>
-        <span class="confirm-title">AI 建议执行命令</span>
+        <span class="confirm-title">{{ t('ai.suggest_command') }}</span>
       </div>
       <div v-if="aiMessage" class="ai-message">{{ aiMessage }}</div>
       <div v-if="!editing" class="command-box">
@@ -49,9 +52,9 @@ function submitEdit() {
         <input v-model="editedCommand" class="command-input" @keydown.enter="submitEdit" />
       </div>
       <div class="confirm-actions">
-        <button class="btn btn-cancel" @click="doCancel">取消</button>
-        <button class="btn btn-edit" @click="startEdit">修改</button>
-        <button class="btn btn-confirm" @click="doConfirm">执行</button>
+        <button class="btn btn-cancel" @click="doCancel">{{ t('ai.cancel') }}</button>
+        <button class="btn btn-edit" @click="startEdit">{{ t('ai.modify') }}</button>
+        <button class="btn btn-confirm" @click="doConfirm">{{ t('ai.execute') }}</button>
       </div>
     </div>
   </div>

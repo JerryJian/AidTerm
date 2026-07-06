@@ -12,6 +12,7 @@ import { useAiConversation } from '../../hooks/useAiConversation'
 import type { SshConnectionInfo, TelnetConnectionInfo, SystemInfo } from '../../types'
 import AiConfirmOverlay from '../ai/AiConfirmOverlay.vue'
 import { useAiStore } from '../../stores/aiStore'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   sshInfo?: SshConnectionInfo
@@ -30,6 +31,7 @@ const searchQuery = ref('')
 const ctxMenu = ref<{ x: number; y: number }>({ x: 0, y: 0 })
 const ctxVisible = ref(false)
 
+const { t } = useI18n()
 const store = useTerminalStore()
 const aiStore = useAiStore()
 const themeStore = useThemeStore()
@@ -491,19 +493,19 @@ defineExpose({ focusSearch, doFit })
     <teleport to="body">
       <div v-if="ctxVisible" class="ctx-backdrop" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu" />
       <div v-if="ctxVisible" class="ctx-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
-        <div class="ctx-item" @click="doCopy">复制</div>
-        <div class="ctx-item" @click="doPaste">粘贴</div>
-        <div class="ctx-item" @click="doSelectAll">全选</div>
+        <div class="ctx-item" @click="doCopy">{{ t('context_menu.copy') }}</div>
+        <div class="ctx-item" @click="doPaste">{{ t('context_menu.paste') }}</div>
+        <div class="ctx-item" @click="doSelectAll">{{ t('context_menu.select_all') }}</div>
         <div class="ctx-sep" />
-        <div class="ctx-item" @click="doToggleSearch">搜索</div>
-        <div class="ctx-item" @click="doClear">清除终端</div>
+        <div class="ctx-item" @click="doToggleSearch">{{ t('context_menu.search') }}</div>
+        <div class="ctx-item" @click="doClear">{{ t('context_menu.clear') }}</div>
         <div class="ctx-sep" />
-        <div class="ctx-item" @click="doNewTab">新建标签</div>
-        <div class="ctx-item" @click="doNewSsh">新建 SSH 连接...</div>
+        <div class="ctx-item" @click="doNewTab">{{ t('context_menu.new_tab') }}</div>
+        <div class="ctx-item" @click="doNewSsh">{{ t('context_menu.new_ssh') }}</div>
         <div class="ctx-sep" />
-        <div v-if="aiStore.enabled" class="ctx-item" @click="doAskAi">🤖 AI 解释选中内容</div>
+        <div v-if="aiStore.enabled" class="ctx-item" @click="doAskAi">🤖 {{ t('context_menu.ask_ai') }}</div>
         <div class="ctx-sep" />
-        <div class="ctx-item ctx-danger" @click="doCloseTab">关闭标签</div>
+        <div class="ctx-item ctx-danger" @click="doCloseTab">{{ t('context_menu.close_tab') }}</div>
       </div>
     </teleport>
   </div>

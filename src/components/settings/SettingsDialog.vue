@@ -121,7 +121,7 @@ async function toggleFullscreen() {
         <div class="section">
           <h3>🤖 AI</h3>
           <div class="setting-row">
-            <label>提供商</label>
+            <label>{{ t('settings.ai_provider') }}</label>
             <div class="provider-group">
               <button
                 v-for="(_, name) in ai.defaultProviders"
@@ -142,7 +142,7 @@ async function toggleFullscreen() {
                 placeholder="sk-..."
                 class="text-input"
               />
-              <button class="toggle-btn" @click="showAiKey = !showAiKey">{{ showAiKey ? '隐藏' : '显示' }}</button>
+              <button class="toggle-btn" @click="showAiKey = !showAiKey">{{ showAiKey ? t('settings.ai_hide') : t('settings.ai_show') }}</button>
             </div>
           </div>
           <div class="setting-row col">
@@ -162,13 +162,13 @@ async function toggleFullscreen() {
             />
           </div>
           <div class="setting-row">
-            <label>状态</label>
+            <label>{{ t('settings.ai_status') }}</label>
             <span :class="ai.enabled ? 'status-ok' : 'status-ko'">
-              {{ ai.enabled ? '✅ 已配置' : '❌ 未配置' }}
+              {{ ai.enabled ? t('settings.ai_configured') : t('settings.ai_not_configured') }}
             </span>
           </div>
           <div class="setting-row">
-            <button class="action-btn" @click="ai.clearHistory()">清除对话历史</button>
+            <button class="action-btn" @click="ai.clearHistory()">{{ t('settings.ai_clear_history') }}</button>
           </div>
         </div>
       </div>

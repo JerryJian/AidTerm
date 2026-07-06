@@ -2,11 +2,14 @@
 import { ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
+import { useI18n } from 'vue-i18n'
 import type { KeyInfo } from '../../types'
 
 const emit = defineEmits<{
   close: []
 }>()
+
+const { t } = useI18n()
 
 const keys = ref<KeyInfo[]>([])
 const loading = ref(true)
@@ -117,10 +120,10 @@ function copyToClipboard(text: string) {
 <template>
   <div class="key-panel">
     <div class="panel-header">
-      <span class="panel-title">🔑 密钥管理</span>
+      <span class="panel-title">🔑 {{ t('keychain.title') }}</span>
       <div class="panel-actions">
-        <button class="panel-btn" @click="showGenerate = !showGenerate">生成</button>
-        <button class="panel-btn" @click="showImport = !showImport">导入</button>
+        <button class="panel-btn" @click="showGenerate = !showGenerate">{{ t('keychain.generate') }}</button>
+        <button class="panel-btn" @click="showImport = !showImport">{{ t('keychain.import') }}</button>
         <button class="panel-btn" @click="emit('close')">✕</button>
       </div>
     </div>
@@ -130,38 +133,38 @@ function copyToClipboard(text: string) {
 
     <!-- Generate Form -->
     <div v-if="showGenerate" class="form-section">
-      <h4>生成密钥对</h4>
+      <h4>{{ t('keychain.generate_keypair') }}</h4>
       <select v-model="genType" class="input">
-        <option value="ED25519">ED25519 (推荐)</option>
+        <option value="ED25519">{{ t('keychain.ed25519') }}</option>
         <option value="RSA">RSA</option>
       </select>
-      <input v-model="genName" placeholder="密钥名称" class="input" />
+      <input v-model="genName" :placeholder="t('keychain.key_name')" class="input" />
       <div v-if="genType === 'RSA'" class="bits-row">
-        <label>位数:</label>
+        <label>{{ t('keychain.bits') }}</label>
         <select v-model="genBits" class="input">
           <option :value="2048">2048</option>
           <option :value="4096">4096</option>
         </select>
       </div>
-      <input v-model="genPassphrase" type="password" placeholder="密码短语 (可选)" class="input" />
-      <button class="btn btn-primary" @click="doGenerate">生成</button>
+      <input v-model="genPassphrase" type="password" :placeholder="t('keychain.passphrase')" class="input" />
+      <button class="btn btn-primary" @click="doGenerate">{{ t('keychain.generate') }}</button>
     </div>
 
     <!-- Import Form -->
     <div v-if="showImport" class="form-section">
-      <h4>导入密钥</h4>
-      <input v-model="importName" placeholder="密钥名称" class="input" />
+      <h4>{{ t('keychain.import') }}</h4>
+      <input v-model="importName" :placeholder="t('keychain.key_name')" class="input" />
       <div class="key-row">
-        <input v-model="importPath" placeholder="私钥文件路径" class="input key-input" readonly />
-        <button class="btn btn-browse" @click="pickKeyFile">浏览</button>
+        <input v-model="importPath" :placeholder="t('keychain.key_path')" class="input key-input" readonly />
+        <button class="btn btn-browse" @click="pickKeyFile">{{ t('keychain.browse') }}</button>
       </div>
-      <button class="btn btn-primary" @click="doImport">导入</button>
+      <button class="btn btn-primary" @click="doImport">{{ t('keychain.import') }}</button>
     </div>
 
     <!-- Key List -->
     <div class="key-list">
-      <div v-if="loading" class="loading">加载中...</div>
-      <div v-else-if="keys.length === 0" class="empty">暂无密钥</div>
+      <div v-if="loading" class="loading">{{ t('keychain.loading') }}</div>
+      <div v-else-if="keys.length === 0" class="empty">{{ t('keychain.no_keys') }}</div>
       <div v-for="key in keys" :key="key.id" class="key-item">
         <div class="key-info">
           <span class="key-name">{{ key.name }}</span>
@@ -169,9 +172,9 @@ function copyToClipboard(text: string) {
         </div>
         <div class="key-fingerprint">{{ key.fingerprint }}</div>
         <div class="key-actions">
-          <button class="action-btn" title="复制公钥" @click="copyToClipboard(key.public_key)">📋</button>
-          <button class="action-btn" title="复制私钥路径" @click="copyToClipboard(key.private_key_path)">📁</button>
-          <button class="action-btn danger" title="删除" @click="doDelete(key.id)">🗑</button>
+          <button class="action-btn" :title="t('keychain.copy_public')" @click="copyToClipboard(key.public_key)">📋</button>
+          <button class="action-btn" :title="t('keychain.copy_path')" @click="copyToClipboard(key.private_key_path)">📁</button>
+          <button class="action-btn danger" :title="t('keychain.delete')" @click="doDelete(key.id)">🗑</button>
         </div>
       </div>
     </div>

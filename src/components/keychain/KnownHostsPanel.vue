@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { useI18n } from 'vue-i18n'
 
 interface KnownHostEntry {
   host: string
@@ -8,6 +9,8 @@ interface KnownHostEntry {
   fingerprint: string
   line: string
 }
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
   close: []
@@ -51,7 +54,7 @@ async function doRemove(host: string, keyType: string) {
     <div class="panel-header">
       <span class="panel-title">🖂 known_hosts</span>
       <div class="panel-actions">
-        <button class="panel-btn" @click="loadEntries">刷新</button>
+        <button class="panel-btn" @click="loadEntries">{{ t('keychain.refresh') }}</button>
         <button class="panel-btn" @click="emit('close')">✕</button>
       </div>
     </div>
@@ -60,13 +63,13 @@ async function doRemove(host: string, keyType: string) {
     <div v-if="error" class="error">{{ error }}</div>
 
     <div class="kh-list">
-      <div v-if="loading" class="loading">加载中...</div>
-      <div v-else-if="entries.length === 0" class="empty">~/.ssh/known_hosts 为空</div>
+      <div v-if="loading" class="loading">{{ t('keychain.loading') }}</div>
+      <div v-else-if="entries.length === 0" class="empty">{{ t('keychain.known_hosts_empty') }}</div>
       <div v-for="entry in entries" :key="entry.host + entry.key_type" class="kh-item">
         <div class="kh-host">{{ entry.host }}</div>
         <div class="kh-fingerprint">{{ entry.fingerprint }}</div>
         <div class="kh-actions">
-          <button class="action-btn danger" title="删除" @click="doRemove(entry.host, entry.key_type)">🗑</button>
+          <button class="action-btn danger" :title="t('keychain.delete')" @click="doRemove(entry.host, entry.key_type)">🗑</button>
         </div>
       </div>
     </div>
