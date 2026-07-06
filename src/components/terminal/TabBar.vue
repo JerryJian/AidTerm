@@ -352,7 +352,7 @@ defineExpose({ onKeydown })
 }
 
 .tab-close {
-  display: none;
+  visibility: hidden;
   border: none;
   background: none;
   color: #a6adc8;
@@ -360,10 +360,13 @@ defineExpose({ onKeydown })
   padding: 2px 4px;
   font-size: 12px;
   border-radius: 4px;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 .tab:hover .tab-close {
-  display: block;
+  visibility: visible;
 }
 
 .tab-close:hover {
