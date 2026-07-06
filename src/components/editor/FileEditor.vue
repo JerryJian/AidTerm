@@ -70,7 +70,7 @@ async function doSave() {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: #1e1e2e;
+  background: var(--bg-base);
 }
 
 .editor-header {
@@ -78,14 +78,14 @@ async function doSave() {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: #181825;
-  border-bottom: 1px solid #313244;
+  background: var(--bg-mantle);
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .editor-title {
   font-size: 13px;
   font-weight: 600;
-  color: #cdd6f4;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -100,7 +100,7 @@ async function doSave() {
 
 .editor-saved {
   font-size: 12px;
-  color: #a6e3a1;
+  color: var(--success);
 }
 
 .btn {
@@ -116,41 +116,41 @@ async function doSave() {
 }
 
 .btn-save {
-  background: #89b4fa;
-  color: #1e1e2e;
+  background: var(--accent);
+  color: var(--bg-base);
   font-weight: 600;
 }
 .btn-save:hover:not(:disabled) {
-  background: #74c7ec;
+  background: var(--accent-hover);
 }
 
 .btn-close {
-  background: #313244;
-  color: #a6adc8;
+  background: var(--bg-surface0);
+  color: var(--text-sub0);
   padding: 6px 10px;
 }
 .btn-close:hover {
-  background: #45475a;
-  color: #cdd6f4;
+  background: var(--bg-surface1);
+  color: var(--text);
 }
 
 .editor-loading,
 .editor-error {
   padding: 20px;
   text-align: center;
-  color: #a6adc8;
+  color: var(--text-sub0);
   font-size: 13px;
 }
 .editor-error {
-  color: #f38ba8;
+  color: var(--danger);
 }
 
 .editor-textarea {
   flex: 1;
   padding: 12px;
-  background: #1e1e2e;
+  background: var(--bg-base);
   border: none;
-  color: #cdd6f4;
+  color: var(--text);
   font-family: Consolas, "Courier New", monospace;
   font-size: 13px;
   line-height: 1.5;
@@ -159,6 +159,6 @@ async function doSave() {
   tab-size: 4;
 }
 .editor-textarea:focus {
-  background: #181825;
+  background: var(--bg-mantle);
 }
 </style>

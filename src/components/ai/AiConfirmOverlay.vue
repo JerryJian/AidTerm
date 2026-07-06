@@ -69,13 +69,13 @@ function submitEdit() {
 }
 
 .confirm-box {
-  background: #1e1e2e;
-  border: 1px solid #89b4fa;
+  background: var(--bg-base);
+  border: 1px solid var(--accent);
   border-radius: 8px;
   padding: 20px;
   min-width: 400px;
   max-width: 600px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 32px var(--overlay);
 }
 
 .confirm-header {
@@ -92,19 +92,19 @@ function submitEdit() {
 .confirm-title {
   font-size: 14px;
   font-weight: 600;
-  color: #89b4fa;
+  color: var(--accent);
 }
 
 .ai-message {
   font-size: 13px;
-  color: #a6adc8;
+  color: var(--text-sub0);
   margin-bottom: 12px;
   line-height: 1.5;
 }
 
 .command-box {
-  background: #181825;
-  border: 1px solid #45475a;
+  background: var(--bg-mantle);
+  border: 1px solid var(--bg-surface1);
   border-radius: 4px;
   padding: 10px;
   margin-bottom: 12px;
@@ -113,7 +113,7 @@ function submitEdit() {
 .command-text {
   font-family: Consolas, "Courier New", monospace;
   font-size: 13px;
-  color: #a6e3a1;
+  color: var(--success);
   white-space: pre-wrap;
   word-break: break-all;
   margin: 0;
@@ -122,10 +122,10 @@ function submitEdit() {
 .command-input {
   width: 100%;
   padding: 8px;
-  background: #11111b;
-  border: 1px solid #89b4fa;
+  background: var(--bg-crust);
+  border: 1px solid var(--accent);
   border-radius: 4px;
-  color: #a6e3a1;
+  color: var(--success);
   font-family: Consolas, "Courier New", monospace;
   font-size: 13px;
   outline: none;
@@ -147,28 +147,28 @@ function submitEdit() {
 }
 
 .btn-cancel {
-  background: #45475a;
-  color: #cdd6f4;
+  background: var(--bg-surface1);
+  color: var(--text);
 }
 .btn-cancel:hover {
-  background: #585b70;
+  background: var(--text-overlay0);
 }
 
 .btn-edit {
-  background: #313244;
-  color: #f9e2af;
-  border: 1px solid #f9e2af;
+  background: var(--bg-surface0);
+  color: var(--warning);
+  border: 1px solid var(--warning);
 }
 .btn-edit:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 
 .btn-confirm {
-  background: #a6e3a1;
-  color: #1e1e2e;
+  background: var(--success);
+  color: var(--bg-base);
   font-weight: 600;
 }
 .btn-confirm:hover {
-  background: #94e2d5;
+  background: var(--teal);
 }
 </style>

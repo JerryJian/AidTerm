@@ -82,8 +82,8 @@ function selectProvider(name: string) {
 .ai-panel {
   width: 300px;
   min-width: 300px;
-  background: #1e1e2e;
-  border-left: 1px solid #313244;
+  background: var(--bg-base);
+  border-left: 1px solid var(--bg-surface0);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -94,28 +94,28 @@ function selectProvider(name: string) {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background: #181825;
-  border-bottom: 1px solid #313244;
+  background: var(--bg-mantle);
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .panel-title {
   font-size: 13px;
   font-weight: 600;
-  color: #cdd6f4;
+  color: var(--text);
 }
 
 .panel-close {
   border: none;
   background: none;
-  color: #a6adc8;
+  color: var(--text-sub0);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
 }
 .panel-close:hover {
-  background: #45475a;
-  color: #cdd6f4;
+  background: var(--bg-surface1);
+  color: var(--text);
 }
 
 .panel-body {
@@ -131,10 +131,10 @@ function selectProvider(name: string) {
 .section h3 {
   font-size: 12px;
   font-weight: 600;
-  color: #89b4fa;
+  color: var(--accent);
   text-transform: uppercase;
   padding-bottom: 4px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
   margin-bottom: 8px;
 }
 
@@ -146,21 +146,21 @@ function selectProvider(name: string) {
 
 .provider-btn {
   padding: 6px 12px;
-  border: 1px solid #45475a;
-  background: #313244;
-  color: #cdd6f4;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-surface0);
+  color: var(--text);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
   text-transform: capitalize;
 }
 .provider-btn:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 .provider-btn.active {
-  border-color: #89b4fa;
-  background: #181825;
-  color: #89b4fa;
+  border-color: var(--accent);
+  background: var(--bg-mantle);
+  color: var(--accent);
 }
 
 .field {
@@ -172,28 +172,28 @@ function selectProvider(name: string) {
 
 .field label {
   font-size: 12px;
-  color: #a6adc8;
+  color: var(--text-sub0);
 }
 
 .input {
   padding: 8px 10px;
-  background: #181825;
-  border: 1px solid #45475a;
+  background: var(--bg-mantle);
+  border: 1px solid var(--bg-surface1);
   border-radius: 4px;
-  color: #cdd6f4;
+  color: var(--text);
   font-size: 13px;
   outline: none;
 }
 .input:focus {
-  border-color: #89b4fa;
+  border-color: var(--accent);
 }
 
 .status {
   font-size: 13px;
-  color: #f38ba8;
+  color: var(--danger);
 }
 .status.ok {
-  color: #a6e3a1;
+  color: var(--success);
 }
 
 .btn {
@@ -205,11 +205,11 @@ function selectProvider(name: string) {
   margin-top: 8px;
 }
 .btn-primary {
-  background: #89b4fa;
-  color: #1e1e2e;
+  background: var(--accent);
+  color: var(--bg-base);
   font-weight: 600;
 }
 .btn-primary:hover {
-  background: #74c7ec;
+  background: var(--accent-hover);
 }
 </style>

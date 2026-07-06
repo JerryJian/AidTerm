@@ -182,8 +182,8 @@ function copyToClipboard(text: string) {
 .key-panel {
   width: 320px;
   min-width: 320px;
-  background: #1e1e2e;
-  border-left: 1px solid #313244;
+  background: var(--bg-base);
+  border-left: 1px solid var(--bg-surface0);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -194,14 +194,14 @@ function copyToClipboard(text: string) {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background: #181825;
-  border-bottom: 1px solid #313244;
+  background: var(--bg-mantle);
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .panel-title {
   font-size: 13px;
   font-weight: 600;
-  color: #cdd6f4;
+  color: var(--text);
 }
 
 .panel-actions {
@@ -210,37 +210,37 @@ function copyToClipboard(text: string) {
 }
 
 .panel-btn {
-  border: 1px solid #45475a;
-  background: #313244;
-  color: #cdd6f4;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-surface0);
+  color: var(--text);
   cursor: pointer;
   padding: 4px 10px;
   border-radius: 4px;
   font-size: 11px;
 }
 .panel-btn:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 
 .notification {
   padding: 8px 12px;
   background: #1e3a2e;
-  color: #a6e3a1;
+  color: var(--success);
   font-size: 12px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .error {
   padding: 8px 12px;
   background: #3a1e1e;
-  color: #f38ba8;
+  color: var(--danger);
   font-size: 12px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .form-section {
   padding: 12px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -248,21 +248,21 @@ function copyToClipboard(text: string) {
 
 .form-section h4 {
   font-size: 12px;
-  color: #89b4fa;
+  color: var(--accent);
   margin: 0;
 }
 
 .input {
   padding: 8px 10px;
-  background: #181825;
-  border: 1px solid #45475a;
+  background: var(--bg-mantle);
+  border: 1px solid var(--bg-surface1);
   border-radius: 4px;
-  color: #cdd6f4;
+  color: var(--text);
   font-size: 13px;
   outline: none;
 }
 .input:focus {
-  border-color: #89b4fa;
+  border-color: var(--accent);
 }
 
 .bits-row {
@@ -272,7 +272,7 @@ function copyToClipboard(text: string) {
 }
 .bits-row label {
   font-size: 12px;
-  color: #a6adc8;
+  color: var(--text-sub0);
 }
 .bits-row select {
   flex: 1;
@@ -295,25 +295,25 @@ function copyToClipboard(text: string) {
   cursor: pointer;
 }
 .btn-primary {
-  background: #89b4fa;
-  color: #1e1e2e;
+  background: var(--accent);
+  color: var(--bg-base);
   font-weight: 600;
 }
 .btn-primary:hover {
-  background: #74c7ec;
+  background: var(--accent-hover);
 }
 .btn-browse {
   padding: 8px 12px;
-  border: 1px solid #45475a;
+  border: 1px solid var(--bg-surface1);
   border-radius: 4px;
-  background: #313244;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  color: var(--text);
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
 }
 .btn-browse:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 
 .key-list {
@@ -324,13 +324,13 @@ function copyToClipboard(text: string) {
 .loading, .empty {
   padding: 24px 12px;
   text-align: center;
-  color: #585b70;
+  color: var(--text-overlay0);
   font-size: 12px;
 }
 
 .key-item {
   padding: 10px 12px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .key-info {
@@ -343,20 +343,20 @@ function copyToClipboard(text: string) {
 .key-name {
   font-size: 13px;
   font-weight: 600;
-  color: #cdd6f4;
+  color: var(--text);
 }
 
 .key-type {
   font-size: 11px;
-  color: #89b4fa;
-  background: #181825;
+  color: var(--accent);
+  background: var(--bg-mantle);
   padding: 2px 6px;
   border-radius: 4px;
 }
 
 .key-fingerprint {
   font-size: 11px;
-  color: #585b70;
+  color: var(--text-overlay0);
   font-family: monospace;
   margin-bottom: 6px;
 }
@@ -367,19 +367,19 @@ function copyToClipboard(text: string) {
 }
 
 .action-btn {
-  border: 1px solid #45475a;
-  background: #313244;
-  color: #cdd6f4;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-surface0);
+  color: var(--text);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
 }
 .action-btn:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 .action-btn.danger:hover {
-  background: #f38ba8;
-  color: #1e1e2e;
+  background: var(--danger);
+  color: var(--bg-base);
 }
 </style>

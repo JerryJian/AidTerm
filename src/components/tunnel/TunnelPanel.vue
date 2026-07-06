@@ -170,8 +170,8 @@ onMounted(refresh)
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--panel-bg, #1e1e2e);
-  color: var(--fg, #cdd6f4);
+  background: var(--panel-bg, var(--bg-base));
+  color: var(--fg, var(--text));
   font-size: 13px;
   overflow: hidden;
 }
@@ -180,51 +180,51 @@ onMounted(refresh)
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--border, #313244);
+  border-bottom: 1px solid var(--border, var(--bg-surface0));
 }
 .panel-title { font-weight: 600; }
 .panel-actions { display: flex; gap: 6px; }
 .btn {
   padding: 4px 10px;
-  border: 1px solid var(--border, #313244);
+  border: 1px solid var(--border, var(--bg-surface0));
   border-radius: 4px;
-  background: var(--btn-bg, #313244);
-  color: var(--fg, #cdd6f4);
+  background: var(--btn-bg, var(--bg-surface0));
+  color: var(--fg, var(--text));
   cursor: pointer;
   font-size: 12px;
 }
-.btn:hover { background: var(--btn-hover, #45475a); }
+.btn:hover { background: var(--btn-hover, var(--bg-surface1)); }
 .btn-sm { padding: 2px 8px; font-size: 11px; }
 .btn-close { border: none; background: transparent; font-size: 14px; }
-.btn-close:hover { background: transparent; color: #f38ba8; }
+.btn-close:hover { background: transparent; color: var(--danger); }
 .btn-primary {
-  background: var(--accent, #89b4fa);
-  color: #1e1e2e;
-  border-color: var(--accent, #89b4fa);
+  background: var(--accent, var(--accent));
+  color: var(--bg-base);
+  border-color: var(--accent, var(--accent));
 }
 .btn-primary:hover { opacity: 0.9; }
-.btn-danger { border-color: #f38ba8; color: #f38ba8; }
-.btn-danger:hover { background: #f38ba8; color: #1e1e2e; }
+.btn-danger { border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover { background: var(--danger); color: var(--bg-base); }
 .btn-full { width: 100%; margin-top: 8px; }
 .input {
   padding: 5px 8px;
-  border: 1px solid var(--border, #313244);
+  border: 1px solid var(--border, var(--bg-surface0));
   border-radius: 4px;
-  background: var(--input-bg, #181825);
-  color: var(--fg, #cdd6f4);
+  background: var(--input-bg, var(--bg-mantle));
+  color: var(--fg, var(--text));
   font-size: 12px;
   outline: none;
 }
-.input:focus { border-color: var(--accent, #89b4fa); }
+.input:focus { border-color: var(--accent, var(--accent)); }
 .w-20 { width: 70px; }
 .w-24 { width: 80px; }
 .flex-1 { flex: 1; }
 .form-group { margin-bottom: 8px; }
-.form-group label { display: block; font-size: 11px; color: var(--fg-dim, #a6adc8); margin-bottom: 3px; }
+.form-group label { display: block; font-size: 11px; color: var(--fg-dim, var(--text-sub0)); margin-bottom: 3px; }
 .form-row { display: flex; gap: 6px; }
 .tunnel-form {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--border, #313244);
+  border-bottom: 1px solid var(--border, var(--bg-surface0));
   overflow-y: auto;
   max-height: 380px;
 }
@@ -234,7 +234,7 @@ onMounted(refresh)
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--border, #313244);
+  border-bottom: 1px solid var(--border, var(--bg-surface0));
 }
 .tunnel-item:hover { background: rgba(255,255,255,0.03); }
 .tunnel-info {
@@ -255,9 +255,9 @@ onMounted(refresh)
   font-weight: 700;
   flex-shrink: 0;
 }
-.tunnel-type-badge.local { background: #89b4fa; color: #1e1e2e; }
-.tunnel-type-badge.remote { background: #a6e3a1; color: #1e1e2e; }
-.tunnel-type-badge.dynamic { background: #f9e2af; color: #1e1e2e; }
+.tunnel-type-badge.local { background: var(--accent); color: var(--bg-base); }
+.tunnel-type-badge.remote { background: var(--success); color: var(--bg-base); }
+.tunnel-type-badge.dynamic { background: var(--warning); color: var(--bg-base); }
 .tunnel-desc { min-width: 0; }
 .tunnel-endpoint {
   font-size: 12px;
@@ -268,7 +268,7 @@ onMounted(refresh)
 }
 .tunnel-meta {
   font-size: 10px;
-  color: var(--fg-dim, #6c7086);
+  color: var(--fg-dim, var(--text-overlay1));
 }
 .tunnel-status {
   font-size: 10px;
@@ -276,15 +276,15 @@ onMounted(refresh)
   border-radius: 3px;
   white-space: nowrap;
 }
-.tunnel-status.running { background: rgba(166,227,161,0.15); color: #a6e3a1; }
-.tunnel-status.stopped { background: rgba(108,112,134,0.15); color: #6c7086; }
+.tunnel-status.running { background: rgba(166,227,161,0.15); color: var(--success); }
+.tunnel-status.stopped { background: rgba(108,112,134,0.15); color: var(--text-overlay1); }
 select.input {
   appearance: auto;
 }
 .empty-hint {
   text-align: center;
   padding: 32px;
-  color: var(--fg-dim, #6c7086);
+  color: var(--fg-dim, var(--text-overlay1));
   font-size: 12px;
 }
 </style>

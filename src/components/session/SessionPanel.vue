@@ -99,8 +99,8 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
 .session-panel {
   min-width: 180px;
   height: 100%;
-  background: #181825;
-  border-right: 1px solid #313244;
+  background: var(--bg-mantle);
+  border-right: 1px solid var(--bg-surface0);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -111,13 +111,13 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .panel-title {
   font-weight: 600;
   font-size: 13px;
-  color: #cdd6f4;
+  color: var(--text);
 }
 
 .panel-actions {
@@ -128,15 +128,15 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
 .panel-btn {
   background: none;
   border: 1px solid transparent;
-  color: #a6adc8;
+  color: var(--text-sub0);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
 }
 .panel-btn:hover {
-  background: #313244;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  color: var(--text);
 }
 
 .session-list {
@@ -145,7 +145,7 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
 }
 
 .group-section {
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .group-header {
@@ -158,25 +158,25 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
   font-size: 12px;
 }
 .group-header:hover {
-  background: #1e1e2e;
+  background: var(--bg-base);
 }
 
 .group-arrow {
-  color: #585b70;
+  color: var(--text-overlay0);
   font-size: 10px;
   width: 12px;
 }
 
 .group-name {
   flex: 1;
-  color: #a6adc8;
+  color: var(--text-sub0);
   font-weight: 600;
 }
 
 .group-del {
   background: none;
   border: none;
-  color: #585b70;
+  color: var(--text-overlay0);
   cursor: pointer;
   font-size: 10px;
   padding: 2px;
@@ -186,7 +186,7 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
   visibility: visible;
 }
 .group-del:hover {
-  color: #f38ba8;
+  color: var(--danger);
 }
 
 .group-sessions {
@@ -202,7 +202,7 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
   font-size: 12px;
 }
 .session-item:hover {
-  background: #1e1e2e;
+  background: var(--bg-base);
 }
 
 .sess-icon {
@@ -213,14 +213,14 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
 
 .sess-name {
   flex: 1;
-  color: #cdd6f4;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .sess-host {
-  color: #585b70;
+  color: var(--text-overlay0);
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -231,7 +231,7 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
 .sess-edit {
   background: none;
   border: none;
-  color: #585b70;
+  color: var(--text-overlay0);
   cursor: pointer;
   font-size: 12px;
   padding: 2px 4px;
@@ -242,20 +242,20 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
   visibility: visible;
 }
 .sess-edit:hover {
-  background: #313244;
-  color: #89b4fa;
+  background: var(--bg-surface0);
+  color: var(--accent);
 }
 
 .empty-hint {
   padding: 2px 12px 2px 30px;
-  color: #585b70;
+  color: var(--text-overlay0);
   font-size: 11px;
   font-style: italic;
 }
 
 .empty-state {
   padding: 24px 12px;
-  color: #585b70;
+  color: var(--text-overlay0);
   font-size: 12px;
   text-align: center;
 }

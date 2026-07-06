@@ -263,8 +263,8 @@ function fileIcon(entry: FileEntry): string {
 .sftp-panel {
   width: 400px;
   min-width: 300px;
-  background: #181825;
-  border-left: 1px solid #313244;
+  background: var(--bg-mantle);
+  border-left: 1px solid var(--bg-surface0);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -275,19 +275,19 @@ function fileIcon(entry: FileEntry): string {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .panel-title {
   font-weight: 600;
   font-size: 13px;
-  color: #cdd6f4;
+  color: var(--text);
 }
 
 .panel-btn {
   background: none;
   border: 1px solid transparent;
-  color: #a6adc8;
+  color: var(--text-sub0);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
@@ -295,8 +295,8 @@ function fileIcon(entry: FileEntry): string {
 }
 
 .panel-btn:hover {
-  background: #313244;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  color: var(--text);
 }
 
 .connect-form {
@@ -307,16 +307,16 @@ function fileIcon(entry: FileEntry): string {
 }
 
 .sftp-input {
-  background: #1e1e2e;
-  border: 1px solid #45475a;
-  color: #cdd6f4;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface1);
+  color: var(--text);
   padding: 6px 10px;
   font-size: 12px;
   outline: none;
 }
 
 .sftp-input:focus {
-  border-color: #89b4fa;
+  border-color: var(--accent);
 }
 
 .sftp-input-sm {
@@ -324,9 +324,9 @@ function fileIcon(entry: FileEntry): string {
 }
 
 .connect-btn {
-  background: #89b4fa;
+  background: var(--accent);
   border: none;
-  color: #1e1e2e;
+  color: var(--bg-base);
   cursor: pointer;
   padding: 8px;
   font-weight: 600;
@@ -350,7 +350,7 @@ function fileIcon(entry: FileEntry): string {
   align-items: center;
   justify-content: space-between;
   padding: 6px 12px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
   gap: 8px;
 }
 
@@ -364,17 +364,17 @@ function fileIcon(entry: FileEntry): string {
 }
 
 .crumb {
-  color: #89b4fa;
+  color: var(--accent);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .crumb:hover {
-  color: #74c7ec;
+  color: var(--accent-hover);
 }
 
 .crumb-sep {
-  color: #585b70;
+  color: var(--text-overlay0);
   margin: 0 1px;
 }
 
@@ -387,7 +387,7 @@ function fileIcon(entry: FileEntry): string {
 .tb-btn {
   background: none;
   border: 1px solid transparent;
-  color: #a6adc8;
+  color: var(--text-sub0);
   cursor: pointer;
   padding: 2px 5px;
   border-radius: 3px;
@@ -395,31 +395,31 @@ function fileIcon(entry: FileEntry): string {
 }
 
 .tb-btn:hover {
-  background: #313244;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  color: var(--text);
 }
 
 .inline-form {
   display: flex;
   gap: 4px;
   padding: 4px 12px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .inline-form input {
   flex: 1;
-  background: #1e1e2e;
-  border: 1px solid #45475a;
-  color: #cdd6f4;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface1);
+  color: var(--text);
   padding: 4px 8px;
   font-size: 12px;
   outline: none;
 }
 
 .inline-form button {
-  background: #313244;
-  border: 1px solid #45475a;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  border: 1px solid var(--bg-surface1);
+  color: var(--text);
   cursor: pointer;
   padding: 4px 8px;
   font-size: 12px;
@@ -427,16 +427,16 @@ function fileIcon(entry: FileEntry): string {
 
 .error-bar {
   padding: 6px 12px;
-  background: #1e1e2e;
-  color: #f38ba8;
+  background: var(--bg-base);
+  color: var(--danger);
   font-size: 12px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .loading {
   padding: 24px;
   text-align: center;
-  color: #585b70;
+  color: var(--text-overlay0);
   font-size: 13px;
 }
 
@@ -449,12 +449,12 @@ function fileIcon(entry: FileEntry): string {
 .file-header {
   display: flex;
   padding: 6px 12px;
-  color: #585b70;
+  color: var(--text-overlay0);
   font-weight: 600;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
   position: sticky;
   top: 0;
-  background: #181825;
+  background: var(--bg-mantle);
 }
 
 .file-row {
@@ -465,11 +465,11 @@ function fileIcon(entry: FileEntry): string {
 }
 
 .file-row:hover {
-  background: #1e1e2e;
+  background: var(--bg-base);
 }
 
 .file-row.selected {
-  background: #313244;
+  background: var(--bg-surface0);
 }
 
 .col-name {
@@ -483,13 +483,13 @@ function fileIcon(entry: FileEntry): string {
 .col-size {
   width: 70px;
   text-align: right;
-  color: #a6adc8;
+  color: var(--text-sub0);
   flex-shrink: 0;
 }
 
 .col-modified {
   width: 120px;
-  color: #585b70;
+  color: var(--text-overlay0);
   flex-shrink: 0;
   text-align: right;
 }
@@ -512,13 +512,13 @@ function fileIcon(entry: FileEntry): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #cdd6f4;
+  color: var(--text);
 }
 
 .action-btn {
   background: none;
   border: none;
-  color: #585b70;
+  color: var(--text-overlay0);
   cursor: pointer;
   padding: 1px 3px;
   font-size: 12px;
@@ -526,37 +526,37 @@ function fileIcon(entry: FileEntry): string {
 }
 
 .action-btn:hover {
-  color: #cdd6f4;
-  background: #45475a;
+  color: var(--text);
+  background: var(--bg-surface1);
 }
 
 .action-btn.danger:hover {
-  color: #f38ba8;
+  color: var(--danger);
 }
 
 .rename-row {
   display: flex;
   padding: 4px 12px;
   gap: 4px;
-  background: #1e1e2e;
-  border-bottom: 1px solid #313244;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--bg-surface0);
   align-items: center;
 }
 
 .rename-input {
   flex: 1;
-  background: #313244;
-  border: 1px solid #89b4fa;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  border: 1px solid var(--accent);
+  color: var(--text);
   padding: 3px 6px;
   font-size: 12px;
   outline: none;
 }
 
 .rename-row button {
-  background: #313244;
-  border: 1px solid #45475a;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  border: 1px solid var(--bg-surface1);
+  color: var(--text);
   cursor: pointer;
   padding: 3px 8px;
   font-size: 11px;
@@ -565,13 +565,13 @@ function fileIcon(entry: FileEntry): string {
 .empty {
   padding: 24px 12px;
   text-align: center;
-  color: #585b70;
+  color: var(--text-overlay0);
   font-style: italic;
 }
 
 .drag-over {
   background: rgba(137, 180, 250, 0.08);
-  outline: 2px dashed #89b4fa;
+  outline: 2px dashed var(--accent);
   outline-offset: -2px;
 }
 </style>

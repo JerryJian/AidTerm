@@ -169,8 +169,8 @@ async function toggleFullscreen() {
 .settings-panel {
   width: 320px;
   min-width: 320px;
-  background: #1e1e2e;
-  border-left: 1px solid #313244;
+  background: var(--bg-base);
+  border-left: 1px solid var(--bg-surface0);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -181,28 +181,28 @@ async function toggleFullscreen() {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background: #181825;
-  border-bottom: 1px solid #313244;
+  background: var(--bg-mantle);
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .panel-title {
   font-size: 13px;
   font-weight: 600;
-  color: #cdd6f4;
+  color: var(--text);
 }
 
 .panel-close {
   border: none;
   background: none;
-  color: #a6adc8;
+  color: var(--text-sub0);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
 }
 .panel-close:hover {
-  background: #45475a;
-  color: #cdd6f4;
+  background: var(--bg-surface1);
+  color: var(--text);
 }
 
 .panel-body {
@@ -218,12 +218,12 @@ async function toggleFullscreen() {
 .section h3 {
   font-size: 12px;
   font-weight: 600;
-  color: #89b4fa;
+  color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 8px;
   padding-bottom: 4px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .setting-row {
@@ -236,7 +236,7 @@ async function toggleFullscreen() {
 
 .setting-row label {
   font-size: 13px;
-  color: #cdd6f4;
+  color: var(--text);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -244,9 +244,9 @@ async function toggleFullscreen() {
 
 .setting-row select,
 .setting-row input[type="range"] {
-  background: #313244;
-  color: #cdd6f4;
-  border: 1px solid #45475a;
+  background: var(--bg-surface0);
+  color: var(--text);
+  border: 1px solid var(--bg-surface1);
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 12px;
@@ -258,7 +258,7 @@ async function toggleFullscreen() {
 }
 
 .setting-row input[type="checkbox"] {
-  accent-color: #89b4fa;
+  accent-color: var(--accent);
 }
 
 .row-actions {
@@ -268,19 +268,19 @@ async function toggleFullscreen() {
 
 .action-btn {
   padding: 4px 10px;
-  border: 1px solid #45475a;
-  background: #313244;
-  color: #cdd6f4;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-surface0);
+  color: var(--text);
   border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
 }
 .action-btn:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 .action-btn.danger:hover {
-  background: #f38ba8;
-  color: #1e1e2e;
+  background: var(--danger);
+  color: var(--bg-base);
 }
 
 .setting-row.col {
@@ -296,35 +296,35 @@ async function toggleFullscreen() {
 
 .provider-chip {
   padding: 4px 10px;
-  border: 1px solid #45475a;
-  background: #313244;
-  color: #cdd6f4;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-surface0);
+  color: var(--text);
   border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
   text-transform: capitalize;
 }
 .provider-chip:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 .provider-chip.active {
-  border-color: #89b4fa;
-  background: #181825;
-  color: #89b4fa;
+  border-color: var(--accent);
+  background: var(--bg-mantle);
+  color: var(--accent);
 }
 
 .text-input {
   width: 100%;
   padding: 6px 8px;
-  background: #181825;
-  border: 1px solid #45475a;
+  background: var(--bg-mantle);
+  border: 1px solid var(--bg-surface1);
   border-radius: 4px;
-  color: #cdd6f4;
+  color: var(--text);
   font-size: 12px;
   outline: none;
 }
 .text-input:focus {
-  border-color: #89b4fa;
+  border-color: var(--accent);
 }
 
 .input-with-toggle {
@@ -337,24 +337,24 @@ async function toggleFullscreen() {
 
 .toggle-btn {
   padding: 4px 8px;
-  border: 1px solid #45475a;
-  background: #313244;
-  color: #a6adc8;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-surface0);
+  color: var(--text-sub0);
   border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
   white-space: nowrap;
 }
 .toggle-btn:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 
 .status-ok {
-  color: #a6e3a1;
+  color: var(--success);
   font-size: 12px;
 }
 .status-ko {
-  color: #f38ba8;
+  color: var(--danger);
   font-size: 12px;
 }
 </style>

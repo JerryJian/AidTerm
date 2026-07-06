@@ -95,12 +95,12 @@ function onKeydown(e: KeyboardEvent) {
   align-items: center;
   gap: 8px;
   padding: 4px 12px;
-  background: #181825;
-  border-bottom: 1px solid #313244;
+  background: var(--bg-mantle);
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .qc-prompt {
-  color: #89b4fa;
+  color: var(--accent);
   font-size: 14px;
   font-weight: bold;
 }
@@ -110,12 +110,12 @@ function onKeydown(e: KeyboardEvent) {
   background: transparent;
   border: none;
   outline: none;
-  color: #cdd6f4;
+  color: var(--text);
   font-size: 13px;
   font-family: Consolas, 'Courier New', monospace;
 }
 
 .qc-input::placeholder {
-  color: #585b70;
+  color: var(--text-overlay0);
 }
 </style>

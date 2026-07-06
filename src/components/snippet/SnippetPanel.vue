@@ -162,8 +162,8 @@ function submitVariables() {
 <style scoped>
 .panel {
   width: 280px;
-  background: #1e1e2e;
-  border-left: 1px solid #313244;
+  background: var(--bg-base);
+  border-left: 1px solid var(--bg-surface0);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -174,7 +174,7 @@ function submitVariables() {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
   font-size: 13px;
   font-weight: 600;
 }
@@ -182,15 +182,15 @@ function submitVariables() {
 .panel-close {
   border: none;
   background: none;
-  color: #a6adc8;
+  color: var(--text-sub0);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 14px;
 }
 .panel-close:hover {
-  background: #313244;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  color: var(--text);
 }
 
 .panel-body {
@@ -206,7 +206,7 @@ function submitVariables() {
   align-items: center;
   justify-content: space-between;
   padding: 8px;
-  background: #181825;
+  background: var(--bg-mantle);
   border-radius: 4px;
   font-size: 12px;
 }
@@ -220,11 +220,11 @@ function submitVariables() {
   gap: 2px;
 }
 .snippet-info:hover strong {
-  color: #89b4fa;
+  color: var(--accent);
 }
 
 .snippet-cmd {
-  color: #585b70;
+  color: var(--text-overlay0);
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -240,23 +240,23 @@ function submitVariables() {
 
 .btn-sm {
   padding: 4px 8px;
-  border: 1px solid #45475a;
-  background: #313244;
-  color: #cdd6f4;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-surface0);
+  color: var(--text);
   border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
 }
 .btn-sm:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 .btn-danger:hover {
-  border-color: #f38ba8;
-  color: #f38ba8;
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .empty {
-  color: #585b70;
+  color: var(--text-overlay0);
   font-size: 12px;
   text-align: center;
   padding: 20px;
@@ -270,34 +270,34 @@ function submitVariables() {
   cursor: pointer;
 }
 .btn-add {
-  background: #313244;
-  color: #89b4fa;
-  border: 1px solid #45475a;
+  background: var(--bg-surface0);
+  color: var(--accent);
+  border: 1px solid var(--bg-surface1);
   width: 100%;
 }
 .btn-add:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 .btn-cancel {
-  background: #313244;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  color: var(--text);
 }
 .btn-cancel:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 .btn-save {
-  background: #89b4fa;
-  color: #1e1e2e;
+  background: var(--accent);
+  color: var(--bg-base);
   font-weight: 600;
 }
 .btn-save:hover {
-  background: #74c7ec;
+  background: var(--accent-hover);
 }
 
 .form-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -305,8 +305,8 @@ function submitVariables() {
 }
 
 .form-card {
-  background: #1e1e2e;
-  border: 1px solid #313244;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface0);
   border-radius: 8px;
   min-width: 380px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
@@ -317,7 +317,7 @@ function submitVariables() {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
   font-size: 14px;
   font-weight: 600;
 }
@@ -336,24 +336,24 @@ function submitVariables() {
 }
 .field-label {
   font-size: 12px;
-  color: #a6adc8;
+  color: var(--text-sub0);
 }
 .field-hint {
   font-size: 11px;
-  color: #585b70;
+  color: var(--text-overlay0);
 }
 
 .input {
   padding: 8px 10px;
-  background: #181825;
-  border: 1px solid #45475a;
+  background: var(--bg-mantle);
+  border: 1px solid var(--bg-surface1);
   border-radius: 4px;
-  color: #cdd6f4;
+  color: var(--text);
   font-size: 13px;
   outline: none;
 }
 .input:focus {
-  border-color: #89b4fa;
+  border-color: var(--accent);
 }
 .textarea {
   resize: vertical;

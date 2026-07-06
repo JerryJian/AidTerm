@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -7,6 +7,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import { invoke } from '@tauri-apps/api/core'
 import { useTerminal } from '../../hooks/useTerminal'
 import { useTerminalStore } from '../../stores/terminal'
+import { useThemeStore } from '../../stores/themeStore'
 import { useAiConversation } from '../../hooks/useAiConversation'
 import type { SshConnectionInfo, TelnetConnectionInfo, SystemInfo } from '../../types'
 import AiConfirmOverlay from '../ai/AiConfirmOverlay.vue'
@@ -31,6 +32,7 @@ const ctxVisible = ref(false)
 
 const store = useTerminalStore()
 const aiStore = useAiStore()
+const themeStore = useThemeStore()
 
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
@@ -41,6 +43,33 @@ let lastSize = { w: 0, h: 0 }
 const suppressOutput = ref(false)
 
 const { createSession, sshConnect, telnetConnect, writeInput, resize, onOutput, killSession } = useTerminal()
+
+const xtermTheme = computed(() => {
+  const d = document.documentElement
+  const s = getComputedStyle(d)
+  return {
+    background: s.getPropertyValue('--bg-base').trim() || '#1e1e2e',
+    foreground: s.getPropertyValue('--text').trim() || '#cdd6f4',
+    cursor: s.getPropertyValue('--rosewater').trim() || '#f5e0dc',
+    selectionBackground: s.getPropertyValue('--text-overlay0').trim() || '#585b70',
+    black: s.getPropertyValue('--bg-surface1').trim() || '#45475a',
+    red: s.getPropertyValue('--danger').trim() || '#f38ba8',
+    green: s.getPropertyValue('--success').trim() || '#a6e3a1',
+    yellow: s.getPropertyValue('--warning').trim() || '#f9e2af',
+    blue: s.getPropertyValue('--accent').trim() || '#89b4fa',
+    magenta: s.getPropertyValue('--pink').trim() || '#f5c2e7',
+    cyan: s.getPropertyValue('--teal').trim() || '#94e2d5',
+    white: s.getPropertyValue('--text-sub1').trim() || '#bac2de',
+    brightBlack: s.getPropertyValue('--text-overlay0').trim() || '#585b70',
+    brightRed: s.getPropertyValue('--danger').trim() || '#f38ba8',
+    brightGreen: s.getPropertyValue('--success').trim() || '#a6e3a1',
+    brightYellow: s.getPropertyValue('--warning').trim() || '#f9e2af',
+    brightBlue: s.getPropertyValue('--accent').trim() || '#89b4fa',
+    brightMagenta: s.getPropertyValue('--pink').trim() || '#f5c2e7',
+    brightCyan: s.getPropertyValue('--teal').trim() || '#94e2d5',
+    brightWhite: s.getPropertyValue('--text-sub0').trim() || '#a6adc8',
+  }
+})
 
 function stripAnsi(text: string): string {
   return text.replace(/\x1b\[[\d;]*[a-zA-Z]/g, '').replace(/\r/g, '')
@@ -174,28 +203,7 @@ async function initTerminal() {
     allowTransparency: true,
     cols: 80,
     rows: 24,
-    theme: {
-      background: '#1e1e2e',
-      foreground: '#cdd6f4',
-      cursor: '#f5e0dc',
-      selectionBackground: '#585b70',
-      black: '#45475a',
-      red: '#f38ba8',
-      green: '#a6e3a1',
-      yellow: '#f9e2af',
-      blue: '#89b4fa',
-      magenta: '#f5c2e7',
-      cyan: '#94e2d5',
-      white: '#bac2de',
-      brightBlack: '#585b70',
-      brightRed: '#f38ba8',
-      brightGreen: '#a6e3a1',
-      brightYellow: '#f9e2af',
-      brightBlue: '#89b4fa',
-      brightMagenta: '#f5c2e7',
-      brightCyan: '#94e2d5',
-      brightWhite: '#a6adc8',
-    },
+    theme: xtermTheme.value,
   })
 
   terminal.loadAddon(fitAddon)
@@ -277,6 +285,13 @@ async function initTerminal() {
 
 onMounted(() => {
   initTerminal()
+
+  const stopWatch = watch(() => themeStore.mode, () => {
+    if (terminal) {
+      terminal.options.theme = xtermTheme.value
+    }
+  })
+  onUnmounted(() => stopWatch())
 })
 
 onUnmounted(() => {
@@ -502,7 +517,7 @@ defineExpose({ focusSearch, doFit })
   height: 100%;
   min-height: 0;
   min-width: 0;
-  background: #1e1e2e;
+  background: var(--bg-base);
 }
 
 .terminal-xterm {
@@ -517,36 +532,36 @@ defineExpose({ focusSearch, doFit })
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  background: #181825;
-  border-bottom: 1px solid #313244;
+  background: var(--bg-mantle);
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .search-input {
   flex: 1;
   max-width: 200px;
   padding: 4px 8px;
-  background: #313244;
-  border: 1px solid #45475a;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  border: 1px solid var(--bg-surface1);
+  color: var(--text);
   font-size: 12px;
   outline: none;
 }
 
 .search-input:focus {
-  border-color: #89b4fa;
+  border-color: var(--accent);
 }
 
 .search-btn {
   padding: 4px 8px;
-  background: #313244;
-  border: 1px solid #45475a;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  border: 1px solid var(--bg-surface1);
+  color: var(--text);
   cursor: pointer;
   font-size: 12px;
 }
 
 .search-btn:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 
 .ctx-backdrop {
@@ -558,8 +573,8 @@ defineExpose({ focusSearch, doFit })
 .ctx-menu {
   position: fixed;
   z-index: 1000;
-  background: #181825;
-  border: 1px solid #313244;
+  background: var(--bg-mantle);
+  border: 1px solid var(--bg-surface0);
   border-radius: 6px;
   padding: 4px 0;
   min-width: 160px;
@@ -569,23 +584,23 @@ defineExpose({ focusSearch, doFit })
 .ctx-item {
   padding: 6px 16px;
   font-size: 12px;
-  color: #cdd6f4;
+  color: var(--text);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .ctx-item:hover {
-  background: #313244;
+  background: var(--bg-surface0);
 }
 
 .ctx-danger:hover {
-  color: #f38ba8;
+  color: var(--danger);
 }
 
 .ctx-sep {
   height: 1px;
   margin: 4px 8px;
-  background: #313244;
+  background: var(--bg-surface0);
 }
 
 </style>

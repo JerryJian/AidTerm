@@ -210,8 +210,8 @@ defineExpose({ onKeydown })
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #181825;
-  border-bottom: 1px solid #313244;
+  background: var(--bg-mantle);
+  border-bottom: 1px solid var(--bg-surface0);
   user-select: none;
   min-height: 32px;
 }
@@ -243,15 +243,15 @@ defineExpose({ onKeydown })
   height: 28px;
   border: none;
   background: none;
-  color: #a6adc8;
+  color: var(--text-sub0);
   cursor: pointer;
   border-radius: 4px;
   font-size: 14px;
   margin: 0 2px;
 }
 .menu-btn:hover {
-  background: #313244;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  color: var(--text);
 }
 
 .menu-dropdown {
@@ -259,8 +259,8 @@ defineExpose({ onKeydown })
   top: 100%;
   left: 2px;
   z-index: 1000;
-  background: #1e1e2e;
-  border: 1px solid #313244;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface0);
   border-radius: 6px;
   min-width: 180px;
   padding: 4px;
@@ -274,23 +274,23 @@ defineExpose({ onKeydown })
   padding: 6px 12px;
   border: none;
   background: none;
-  color: #cdd6f4;
+  color: var(--text);
   cursor: pointer;
   font-size: 12px;
   border-radius: 4px;
   white-space: nowrap;
 }
 .menu-item:hover {
-  background: #313244;
-  color: #89b4fa;
+  background: var(--bg-surface0);
+  color: var(--accent);
 }
 .menu-item.active {
-  color: #a6e3a1;
+  color: var(--success);
 }
 
 .menu-divider {
   height: 1px;
-  background: #313244;
+  background: var(--bg-surface0);
   margin: 4px 8px;
 }
 
@@ -300,27 +300,27 @@ defineExpose({ onKeydown })
   gap: 6px;
   padding: 6px 12px;
   cursor: pointer;
-  color: #a6adc8;
+  color: var(--text-sub0);
   font-size: 13px;
-  border-right: 1px solid #313244;
+  border-right: 1px solid var(--bg-surface0);
   min-width: 0;
   position: relative;
 }
 
 .tab:hover {
-  background: #1e1e2e;
-  color: #cdd6f4;
+  background: var(--bg-base);
+  color: var(--text);
 }
 
 .tab.active {
-  background: #1e1e2e;
-  color: #cdd6f4;
-  border-bottom: 2px solid #89b4fa;
+  background: var(--bg-base);
+  color: var(--text);
+  border-bottom: 2px solid var(--accent);
 }
 
 .tab-checkbox {
   margin: 0;
-  accent-color: #89b4fa;
+  accent-color: var(--accent);
   width: 14px;
   height: 14px;
 }
@@ -333,15 +333,15 @@ defineExpose({ onKeydown })
 }
 
 .tab-status.connected {
-  background: #a6e3a1;
+  background: var(--success);
 }
 
 .tab-status.connecting {
-  background: #f9e2af;
+  background: var(--warning);
 }
 
 .tab-status.disconnected {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 
 .tab-title {
@@ -355,7 +355,7 @@ defineExpose({ onKeydown })
   visibility: hidden;
   border: none;
   background: none;
-  color: #a6adc8;
+  color: var(--text-sub0);
   cursor: pointer;
   padding: 2px 4px;
   font-size: 12px;
@@ -370,8 +370,8 @@ defineExpose({ onKeydown })
 }
 
 .tab-close:hover {
-  background: #45475a;
-  color: #f38ba8;
+  background: var(--bg-surface1);
+  color: var(--danger);
 }
 
 .tab-add,
@@ -381,7 +381,7 @@ defineExpose({ onKeydown })
   justify-content: center;
   border: none;
   background: none;
-  color: #a6adc8;
+  color: var(--text-sub0);
   cursor: pointer;
   border-radius: 4px;
 }
@@ -395,8 +395,8 @@ defineExpose({ onKeydown })
 }
 
 .tab-add:hover {
-  background: #313244;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  color: var(--text);
 }
 
 .tb-btn {
@@ -405,12 +405,12 @@ defineExpose({ onKeydown })
   font-size: 14px;
 }
 .tb-btn:hover {
-  background: #313244;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  color: var(--text);
 }
 .tb-btn.active {
-  background: #313244;
-  color: #89b4fa;
+  background: var(--bg-surface0);
+  color: var(--accent);
 }
 
 .batch-bar {
@@ -418,41 +418,41 @@ defineExpose({ onKeydown })
   align-items: center;
   gap: 8px;
   padding: 4px 12px;
-  background: #1e1e2e;
-  border-bottom: 1px solid #313244;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .batch-input {
   flex: 1;
   max-width: 400px;
   padding: 6px 10px;
-  background: #181825;
-  border: 1px solid #a6e3a1;
+  background: var(--bg-mantle);
+  border: 1px solid var(--success);
   border-radius: 4px;
-  color: #cdd6f4;
+  color: var(--text);
   font-size: 13px;
   outline: none;
 }
 .batch-input:focus {
-  border-color: #89b4fa;
+  border-color: var(--accent);
 }
 
 .batch-select-btn {
   padding: 4px 10px;
-  border: 1px solid #45475a;
-  background: #313244;
-  color: #cdd6f4;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-surface0);
+  color: var(--text);
   border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
 }
 .batch-select-btn:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 
 .batch-count {
   font-size: 11px;
-  color: #a6adc8;
+  color: var(--text-sub0);
 }
 
 .new-tab-wrapper {
@@ -464,8 +464,8 @@ defineExpose({ onKeydown })
   top: 100%;
   left: 2px;
   z-index: 1000;
-  background: #1e1e2e;
-  border: 1px solid #313244;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface0);
   border-radius: 6px;
   min-width: 160px;
   padding: 4px;
@@ -476,7 +476,7 @@ defineExpose({ onKeydown })
   padding: 6px 10px 3px;
   font-size: 10px;
   text-transform: uppercase;
-  color: #585b70;
+  color: var(--text-overlay0);
   font-weight: 600;
   letter-spacing: 0.5px;
 }

@@ -62,8 +62,8 @@ const tabs: { id: ToolTab; label: string; icon: string }[] = [
 <style scoped>
 .tool-panel {
   min-width: 200px;
-  background: #1e1e2e;
-  border-left: 1px solid #313244;
+  background: var(--bg-base);
+  border-left: 1px solid var(--bg-surface0);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -74,14 +74,14 @@ const tabs: { id: ToolTab; label: string; icon: string }[] = [
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: #181825;
-  border-bottom: 1px solid #313244;
+  background: var(--bg-mantle);
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .panel-title {
   font-size: 12px;
   font-weight: 600;
-  color: #a6adc8;
+  color: var(--text-sub0);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -89,22 +89,22 @@ const tabs: { id: ToolTab; label: string; icon: string }[] = [
 .panel-close {
   border: none;
   background: none;
-  color: #a6adc8;
+  color: var(--text-sub0);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 12px;
 }
 .panel-close:hover {
-  background: #45475a;
-  color: #cdd6f4;
+  background: var(--bg-surface1);
+  color: var(--text);
 }
 
 .tool-tabs {
   display: flex;
   overflow-x: auto;
-  background: #181825;
-  border-bottom: 1px solid #313244;
+  background: var(--bg-mantle);
+  border-bottom: 1px solid var(--bg-surface0);
   flex-shrink: 0;
 }
 
@@ -115,7 +115,7 @@ const tabs: { id: ToolTab; label: string; icon: string }[] = [
   padding: 6px 10px;
   border: none;
   background: none;
-  color: #a6adc8;
+  color: var(--text-sub0);
   cursor: pointer;
   font-size: 11px;
   white-space: nowrap;
@@ -123,13 +123,13 @@ const tabs: { id: ToolTab; label: string; icon: string }[] = [
   transition: none;
 }
 .tool-tab:hover {
-  background: #1e1e2e;
-  color: #cdd6f4;
+  background: var(--bg-base);
+  color: var(--text);
 }
 .tool-tab.active {
-  color: #89b4fa;
-  border-bottom-color: #89b4fa;
-  background: #1e1e2e;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--bg-base);
 }
 
 .tool-tab-icon {

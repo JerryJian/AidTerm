@@ -40,10 +40,10 @@ const statusText = computed(() => {
   justify-content: space-between;
   height: 24px;
   padding: 0 12px;
-  background: #181825;
-  border-top: 1px solid #313244;
+  background: var(--bg-mantle);
+  border-top: 1px solid var(--bg-surface0);
   font-size: 11px;
-  color: #a6adc8;
+  color: var(--text-sub0);
   user-select: none;
   flex-shrink: 0;
 }
@@ -55,7 +55,7 @@ const statusText = computed(() => {
 }
 
 .status-right {
-  color: #585b70;
+  color: var(--text-overlay0);
 }
 
 .status-dot {
@@ -66,14 +66,14 @@ const statusText = computed(() => {
 }
 
 .status-dot.connected {
-  background: #a6e3a1;
+  background: var(--success);
 }
 
 .status-dot.connecting {
-  background: #f9e2af;
+  background: var(--warning);
 }
 
 .status-dot.disconnected {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 </style>

@@ -77,8 +77,8 @@ async function doRemove(host: string, keyType: string) {
 .kh-panel {
   width: 320px;
   min-width: 320px;
-  background: #1e1e2e;
-  border-left: 1px solid #313244;
+  background: var(--bg-base);
+  border-left: 1px solid var(--bg-surface0);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -89,14 +89,14 @@ async function doRemove(host: string, keyType: string) {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background: #181825;
-  border-bottom: 1px solid #313244;
+  background: var(--bg-mantle);
+  border-bottom: 1px solid var(--bg-surface0);
 }
 
 .panel-title {
   font-size: 13px;
   font-weight: 600;
-  color: #cdd6f4;
+  color: var(--text);
 }
 
 .panel-actions {
@@ -105,29 +105,29 @@ async function doRemove(host: string, keyType: string) {
 }
 
 .panel-btn {
-  border: 1px solid #45475a;
-  background: #313244;
-  color: #cdd6f4;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-surface0);
+  color: var(--text);
   cursor: pointer;
   padding: 4px 10px;
   border-radius: 4px;
   font-size: 11px;
 }
 .panel-btn:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 
 .notification {
   padding: 8px 12px;
   background: #1e3a2e;
-  color: #a6e3a1;
+  color: var(--success);
   font-size: 12px;
 }
 
 .error {
   padding: 8px 12px;
   background: #3a1e1e;
-  color: #f38ba8;
+  color: var(--danger);
   font-size: 12px;
 }
 
@@ -139,7 +139,7 @@ async function doRemove(host: string, keyType: string) {
 .loading, .empty {
   padding: 24px 12px;
   text-align: center;
-  color: #585b70;
+  color: var(--text-overlay0);
   font-size: 12px;
 }
 
@@ -147,14 +147,14 @@ async function doRemove(host: string, keyType: string) {
   display: flex;
   align-items: center;
   padding: 8px 12px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
   gap: 8px;
 }
 
 .kh-host {
   font-size: 13px;
   font-weight: 600;
-  color: #cdd6f4;
+  color: var(--text);
   min-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -164,7 +164,7 @@ async function doRemove(host: string, keyType: string) {
 .kh-fingerprint {
   flex: 1;
   font-size: 11px;
-  color: #585b70;
+  color: var(--text-overlay0);
   font-family: monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -176,19 +176,19 @@ async function doRemove(host: string, keyType: string) {
 }
 
 .action-btn {
-  border: 1px solid #45475a;
-  background: #313244;
-  color: #cdd6f4;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-surface0);
+  color: var(--text);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
 }
 .action-btn:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 .action-btn.danger:hover {
-  background: #f38ba8;
-  color: #1e1e2e;
+  background: var(--danger);
+  color: var(--bg-base);
 }
 </style>

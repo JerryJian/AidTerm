@@ -110,13 +110,13 @@ function onKeydown(e: KeyboardEvent) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(24, 24, 37, 0.95);
+  background: var(--overlay-heavy);
   backdrop-filter: blur(8px);
 }
 
 .lock-box {
-  background: #1e1e2e;
-  border: 1px solid #313244;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface0);
   border-radius: 12px;
   padding: 32px;
   width: 360px;
@@ -131,7 +131,7 @@ function onKeydown(e: KeyboardEvent) {
 .lock-title {
   font-size: 20px;
   font-weight: 600;
-  color: #cdd6f4;
+  color: var(--text);
   margin-bottom: 20px;
 }
 
@@ -143,27 +143,27 @@ function onKeydown(e: KeyboardEvent) {
 
 .lock-hint {
   font-size: 13px;
-  color: #a6adc8;
+  color: var(--text-sub0);
   margin-bottom: 4px;
 }
 
 .lock-input {
   padding: 10px 14px;
-  background: #181825;
-  border: 1px solid #45475a;
+  background: var(--bg-mantle);
+  border: 1px solid var(--bg-surface1);
   border-radius: 6px;
-  color: #cdd6f4;
+  color: var(--text);
   font-size: 14px;
   outline: none;
 }
 .lock-input:focus {
-  border-color: #89b4fa;
+  border-color: var(--accent);
 }
 
 .lock-btn {
   padding: 10px;
-  background: #89b4fa;
-  color: #1e1e2e;
+  background: var(--accent);
+  color: var(--bg-base);
   border: none;
   border-radius: 6px;
   font-size: 14px;
@@ -171,12 +171,12 @@ function onKeydown(e: KeyboardEvent) {
   cursor: pointer;
 }
 .lock-btn:hover {
-  background: #74c7ec;
+  background: var(--accent-hover);
 }
 
 .lock-error {
   margin-top: 10px;
   font-size: 13px;
-  color: #f38ba8;
+  color: var(--danger);
 }
 </style>

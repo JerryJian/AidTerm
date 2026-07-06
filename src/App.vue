@@ -4,6 +4,7 @@ import { useTerminalStore } from './stores/terminal'
 import { useSessionStore } from './stores/sessionStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useUiStore } from './stores/uiStore'
+import { useThemeStore } from './stores/themeStore'
 import type { SshConnectionInfo, TelnetConnectionInfo, SavedSession } from './types'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
@@ -28,6 +29,7 @@ const store = useTerminalStore()
 const sessionStore = useSessionStore()
 const settings = useSettingsStore()
 const ui = useUiStore()
+useThemeStore()
 
 const sshDialogPrefill = ref<{ host: string; port: number; username: string }>()
 const showSessionDialog = ref(false)
@@ -317,9 +319,61 @@ body,
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #1e1e2e;
-  color: #cdd6f4;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+[data-theme="dark"] {
+  --bg-base: #1e1e2e;
+  --bg-mantle: #181825;
+  --bg-surface0: #313244;
+  --bg-surface1: #45475a;
+  --bg-crust: #11111b;
+  --text: #cdd6f4;
+  --text-sub0: #a6adc8;
+  --text-sub1: #bac2de;
+  --text-overlay0: #585b70;
+  --text-overlay1: #6c7086;
+  --accent: #89b4fa;
+  --accent-hover: #74c7ec;
+  --accent-glass: rgba(137, 180, 250, 0.15);
+  --danger: #f38ba8;
+  --success: #a6e3a1;
+  --warning: #f9e2af;
+  --pink: #f5c2e7;
+  --teal: #94e2d5;
+  --rosewater: #f5e0dc;
+  --overlay: rgba(0, 0, 0, 0.5);
+  --overlay-heavy: rgba(24, 24, 37, 0.95);
+}
+
+[data-theme="light"] {
+  --bg-base: #eff1f5;
+  --bg-mantle: #e6e9ef;
+  --bg-surface0: #ccd0da;
+  --bg-surface1: #bcc0cc;
+  --bg-crust: #dce0e8;
+  --text: #4c4f69;
+  --text-sub0: #6c6f85;
+  --text-sub1: #5c5f77;
+  --text-overlay0: #9ca0b0;
+  --text-overlay1: #8c8fa1;
+  --accent: #1e66f5;
+  --accent-hover: #2a7cf6;
+  --accent-glass: rgba(30, 102, 245, 0.12);
+  --danger: #d20f39;
+  --success: #40a02b;
+  --warning: #df8e1d;
+  --pink: #ea76cb;
+  --teal: #179299;
+  --rosewater: #dc8a78;
+  --overlay: rgba(0, 0, 0, 0.3);
+  --overlay-heavy: rgba(230, 233, 239, 0.95);
+}
+
+[data-theme="dark"],
+[data-theme="light"] {
+  background: var(--bg-base);
+  color: var(--text);
 }
 
 ::-webkit-scrollbar {
@@ -328,16 +382,16 @@ body,
 }
 
 ::-webkit-scrollbar-track {
-  background: #181825;
+  background: var(--bg-mantle);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #45475a;
+  background: var(--bg-surface1);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #585b70;
+  background: var(--text-overlay0);
 }
 
 .splitpanes__pane {
@@ -351,7 +405,7 @@ body,
   min-width: 6px;
 }
 .splitpanes--vertical > .splitpanes__splitter:hover {
-  background: rgba(137, 180, 250, 0.15);
+  background: var(--accent-glass);
 }
 .splitpanes__splitter {
   position: relative;
@@ -363,11 +417,11 @@ body,
   top: 0;
   bottom: 0;
   width: 2px;
-  background: #313244;
+  background: var(--bg-surface0);
   pointer-events: none;
 }
 .splitpanes--vertical > .splitpanes__splitter:hover::before {
-  background: #89b4fa;
+  background: var(--accent);
 }
 </style>
 

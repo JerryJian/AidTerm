@@ -102,7 +102,7 @@ function onBackdropClick(e: MouseEvent) {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -110,8 +110,8 @@ function onBackdropClick(e: MouseEvent) {
 }
 
 .dialog {
-  background: #1e1e2e;
-  border: 1px solid #313244;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface0);
   border-radius: 8px;
   min-width: 360px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
@@ -122,7 +122,7 @@ function onBackdropClick(e: MouseEvent) {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--bg-surface0);
   font-size: 14px;
   font-weight: 600;
 }
@@ -130,15 +130,15 @@ function onBackdropClick(e: MouseEvent) {
 .dialog-close {
   border: none;
   background: none;
-  color: #a6adc8;
+  color: var(--text-sub0);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 14px;
 }
 .dialog-close:hover {
-  background: #313244;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  color: var(--text);
 }
 
 .dialog-body {
@@ -156,20 +156,20 @@ function onBackdropClick(e: MouseEvent) {
 
 .field-label {
   font-size: 12px;
-  color: #a6adc8;
+  color: var(--text-sub0);
 }
 
 .input {
   padding: 8px 10px;
-  background: #181825;
-  border: 1px solid #45475a;
+  background: var(--bg-mantle);
+  border: 1px solid var(--bg-surface1);
   border-radius: 4px;
-  color: #cdd6f4;
+  color: var(--text);
   font-size: 13px;
   outline: none;
 }
 .input:focus {
-  border-color: #89b4fa;
+  border-color: var(--accent);
 }
 
 .dialog-actions {
@@ -188,19 +188,19 @@ function onBackdropClick(e: MouseEvent) {
 }
 
 .btn-cancel {
-  background: #313244;
-  color: #cdd6f4;
+  background: var(--bg-surface0);
+  color: var(--text);
 }
 .btn-cancel:hover {
-  background: #45475a;
+  background: var(--bg-surface1);
 }
 
 .btn-save {
-  background: #89b4fa;
-  color: #1e1e2e;
+  background: var(--accent);
+  color: var(--bg-base);
   font-weight: 600;
 }
 .btn-save:hover {
-  background: #74c7ec;
+  background: var(--accent-hover);
 }
 </style>
