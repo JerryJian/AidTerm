@@ -4,11 +4,15 @@ import { useTerminalStore } from '../../stores/terminal'
 
 const store = useTerminalStore()
 
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+
 const statusText = computed(() => {
   const tab = store.activeTab
   if (!tab) return ''
   const s = tab.session
-  if (!s) return 'local'
+  if (!s) return t('status.local')
   const parts: string[] = [s.type.toUpperCase()]
   if (s.status === 'connected') {
     const ssh = tab.sshInfo
@@ -28,7 +32,7 @@ const statusText = computed(() => {
       {{ statusText }}
     </span>
     <span class="status-right">
-      {{ store.tabs.length }} tab{{ store.tabs.length !== 1 ? 's' : '' }}
+      {{ $t('status.tabs_count', { count: store.tabs.length }) }}
     </span>
   </div>
 </template>

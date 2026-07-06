@@ -14,14 +14,14 @@ const emit = defineEmits<{
   editFile: [remotePath: string, connId: string]
 }>()
 
-const toolMeta: Record<ToolTab, { label: string; icon: string }> = {
-  sftp: { label: 'SFTP', icon: '\uD83D\uDCC2' },
-  tunnel: { label: 'Tunnel', icon: '\uD83D\uDD0C' },
-  proxy: { label: 'Proxy', icon: '\uD83C\uDF10' },
-  snippet: { label: 'Snippets', icon: '\u26A1' },
-  trigger: { label: 'Triggers', icon: '\uD83D\uDD2B' },
-  key: { label: 'Keys', icon: '\uD83D\uDD11' },
-  knownHosts: { label: 'Hosts', icon: '\uD83D\uDDC2' },
+const toolMeta: Record<ToolTab, { icon: string }> = {
+  sftp: { icon: '\uD83D\uDCC2' },
+  tunnel: { icon: '\uD83D\uDD0C' },
+  proxy: { icon: '\uD83C\uDF10' },
+  snippet: { icon: '\u26A1' },
+  trigger: { icon: '\uD83D\uDD2B' },
+  key: { icon: '\uD83D\uDD11' },
+  knownHosts: { icon: '\uD83D\uDDC2' },
 }
 
 function onCloseTab(e: MouseEvent, tab: ToolTab) {
@@ -41,7 +41,7 @@ function onCloseTab(e: MouseEvent, tab: ToolTab) {
         @click="ui.activeToolTab = t"
       >
         <span class="tab-icon">{{ toolMeta[t].icon }}</span>
-        <span class="tab-label">{{ toolMeta[t].label }}</span>
+        <span class="tab-label">{{ $t('tool_panel.' + t) }}</span>
         <span class="tab-close" @click="(e) => onCloseTab(e, t)">{{ '\u2715' }}</span>
       </button>
     </div>

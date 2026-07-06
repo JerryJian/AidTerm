@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { open } from '@tauri-apps/plugin-dialog'
+import { useI18n } from 'vue-i18n'
 import { useProxyStore } from '../../stores/proxyStore'
 import type { ProxyConfig, ProxyType } from '../../types'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -81,21 +84,21 @@ function typeLabel(t: ProxyType): string {
 }
 
 function typeHint(t: ProxyType): string {
-  if (t === 'Http') return 'HTTP CONNECT 代理端口 (常用 3128, 8080)'
-  if (t === 'Socks5') return 'SOCKS5 代理端口 (常用 1080)'
-  return 'Jump Host SSH 端口 (常用 22)'
+  if (t === 'Http') return 'HTTP CONNECT (3128, 8080)'
+  if (t === 'Socks5') return 'SOCKS5 (1080)'
+  return 'Jump Host SSH (22)'
 }
 </script>
 
 <template>
   <div class="panel">
     <div class="panel-header">
-      <span>代理配置</span>
+      <span>{{ t('proxy.title') }}</span>
       <button class="panel-close" @click="emit('close')">✕</button>
     </div>
 
     <div class="panel-body">
-      <button class="btn btn-add" @click="resetForm">+ 添加代理</button>
+      <button class="btn btn-add" @click="resetForm">+ {{ t('proxy.add') }}</button>
 
       <div v-for="p in store.proxies.value" :key="p.id" class="proxy-item">
         <div class="proxy-info">
@@ -104,61 +107,61 @@ function typeHint(t: ProxyType): string {
           <span class="proxy-addr">{{ p.host }}:{{ p.port }}</span>
         </div>
         <div class="proxy-actions">
-          <button class="btn-sm" @click="editProxy(p)">编辑</button>
-          <button class="btn-sm btn-danger" @click="deleteProxy(p.id)">删除</button>
+          <button class="btn-sm" @click="editProxy(p)">{{ t('common.edit') }}</button>
+          <button class="btn-sm btn-danger" @click="deleteProxy(p.id)">{{ t('common.delete') }}</button>
         </div>
       </div>
       <div v-if="store.proxies.value.length === 0 && !showForm" class="empty">
-        暂无代理配置
+        {{ t('proxy.no_proxies') }}
       </div>
     </div>
 
     <div v-if="showForm" class="form-overlay" @click.self="showForm = false">
       <div class="form-card">
         <div class="form-header">
-          <span>{{ editId ? '编辑代理' : '添加代理' }}</span>
+          <span>{{ editId ? t('common.edit') : t('proxy.add') }}</span>
           <button class="panel-close" @click="showForm = false">✕</button>
         </div>
         <form class="form-body" @submit.prevent="submitForm">
           <label class="field">
-            <span class="field-label">名称</span>
+            <span class="field-label">{{ t('proxy.name') }}</span>
             <input v-model="formName" type="text" class="input" placeholder="My Proxy" required />
           </label>
           <label class="field">
-            <span class="field-label">类型</span>
+            <span class="field-label">{{ t('proxy.type') }}</span>
             <select v-model="formType" class="input">
-              <option value="Http">HTTP CONNECT</option>
-              <option value="Socks5">SOCKS5</option>
-              <option value="JumpHost">Jump Host</option>
+              <option value="Http">{{ t('proxy.http') }}</option>
+              <option value="Socks5">{{ t('proxy.socks5') }}</option>
+              <option value="JumpHost">{{ t('proxy.jump_host') }}</option>
             </select>
           </label>
           <label class="field">
-            <span class="field-label">代理主机</span>
+            <span class="field-label">{{ t('proxy.host') }}</span>
             <input v-model="formHost" type="text" class="input" placeholder="192.168.1.1" required />
           </label>
           <label class="field">
-            <span class="field-label">端口</span>
+            <span class="field-label">{{ t('proxy.port') }}</span>
             <input v-model.number="formPort" type="number" class="input" min="1" max="65535" />
             <span class="field-hint">{{ typeHint(formType) }}</span>
           </label>
           <label class="field">
-            <span class="field-label">用户名 (可选)</span>
+            <span class="field-label">{{ t('proxy.username') }}</span>
             <input v-model="formUsername" type="text" class="input" placeholder="root" />
           </label>
           <label class="field">
-            <span class="field-label">密码 (可选)</span>
+            <span class="field-label">{{ t('proxy.password') }}</span>
             <input v-model="formPassword" type="password" class="input" placeholder="password" />
           </label>
           <label v-if="formType === 'JumpHost'" class="field">
-            <span class="field-label">私钥路径 (可选)</span>
+            <span class="field-label">{{ t('proxy.private_key_path') }}</span>
             <div class="key-row">
               <input v-model="formKeyPath" type="text" class="input key-input" readonly />
-              <button type="button" class="btn btn-browse" @click="pickKey">选择</button>
+              <button type="button" class="btn btn-browse" @click="pickKey">{{ t('proxy.select') }}</button>
             </div>
           </label>
           <div class="form-actions">
-            <button type="button" class="btn btn-cancel" @click="showForm = false">取消</button>
-            <button type="submit" class="btn btn-save">保存</button>
+            <button type="button" class="btn btn-cancel" @click="showForm = false">{{ t('proxy.cancel') }}</button>
+            <button type="submit" class="btn btn-save">{{ t('proxy.save') }}</button>
           </div>
         </form>
       </div>

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useTriggerStore } from '../../stores/triggerStore'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -54,31 +57,31 @@ function toggleEnabled(t: { id: string; enabled: boolean }) {
 <template>
   <div class="panel">
     <div class="panel-header">
-      <span>触发器</span>
+      <span>{{ t('trigger.title') }}</span>
       <button class="panel-close" @click="emit('close')">✕</button>
     </div>
 
     <div class="panel-body">
-      <button class="btn btn-add" @click="resetForm">+ 添加触发器</button>
+      <button class="btn btn-add" @click="resetForm">+ {{ t('trigger.add') }}</button>
 
-      <div v-for="t in store.triggers.value" :key="t.id" class="trigger-item" :class="{ disabled: !t.enabled }">
+      <div v-for="tr in store.triggers.value" :key="tr.id" class="trigger-item" :class="{ disabled: !tr.enabled }">
         <div class="trigger-info">
           <div class="trigger-name-row">
-            <strong>{{ t.name }}</strong>
-            <span class="trigger-badge" :class="{ on: t.enabled, off: !t.enabled }" @click="toggleEnabled(t)">
-              {{ t.enabled ? 'ON' : 'OFF' }}
+            <strong>{{ tr.name }}</strong>
+            <span class="trigger-badge" :class="{ on: tr.enabled, off: !tr.enabled }" @click="toggleEnabled(tr)">
+              {{ tr.enabled ? 'ON' : 'OFF' }}
             </span>
           </div>
-          <span class="trigger-detail">匹配: {{ t.pattern }}</span>
-          <span class="trigger-detail">响应: {{ t.response }}</span>
+          <span class="trigger-detail">{{ t('trigger.pattern') }}: {{ tr.pattern }}</span>
+          <span class="trigger-detail">{{ t('trigger.response') }}: {{ tr.response }}</span>
         </div>
         <div class="trigger-actions">
-          <button class="btn-sm" @click="editTrigger(t)">编辑</button>
-          <button class="btn-sm btn-danger" @click="store.remove(t.id)">删除</button>
+          <button class="btn-sm" @click="editTrigger(tr)">{{ t('trigger.edit') }}</button>
+          <button class="btn-sm btn-danger" @click="store.remove(tr.id)">{{ t('trigger.delete') }}</button>
         </div>
       </div>
       <div v-if="store.triggers.value.length === 0 && !showForm" class="empty">
-        暂无触发器
+        {{ t('trigger.no_triggers') }}
       </div>
     </div>
 
@@ -86,30 +89,30 @@ function toggleEnabled(t: { id: string; enabled: boolean }) {
     <div v-if="showForm" class="form-overlay" @click.self="showForm = false">
       <div class="form-card">
         <div class="form-header">
-          <span>{{ editId ? '编辑触发器' : '添加触发器' }}</span>
+          <span>{{ editId ? t('trigger.edit') : t('trigger.add') }}</span>
           <button class="panel-close" @click="showForm = false">✕</button>
         </div>
         <form class="form-body" @submit.prevent="submitForm">
           <label class="field">
-            <span class="field-label">名称</span>
-            <input v-model="formName" type="text" class="input" placeholder="自动登录" required />
+            <span class="field-label">{{ t('snippet.name') }}</span>
+            <input v-model="formName" type="text" class="input" required />
           </label>
           <label class="field">
-            <span class="field-label">匹配模式 (正则)</span>
+            <span class="field-label">{{ t('trigger.pattern') }}</span>
             <input v-model="formPattern" type="text" class="input" placeholder="[Pp]assword:" required />
           </label>
           <label class="field">
-            <span class="field-label">响应命令</span>
+            <span class="field-label">{{ t('trigger.response') }}</span>
             <textarea v-model="formResponse" class="input textarea" rows="2" placeholder="mypassword" required />
           </label>
           <label class="field">
-            <span class="field-label">冷却时间 (毫秒)</span>
+            <span class="field-label">{{ t('trigger.cooldown') }}</span>
             <input v-model.number="formCooldown" type="number" class="input" min="0" step="500" />
-            <span class="field-hint">防止触发器在短时间内重复触发</span>
+            <span class="field-hint">{{ t('trigger.cooldown') }} ms</span>
           </label>
           <div class="form-actions">
-            <button type="button" class="btn btn-cancel" @click="showForm = false">取消</button>
-            <button type="submit" class="btn btn-save">保存</button>
+            <button type="button" class="btn btn-cancel" @click="showForm = false">{{ t('trigger.cancel') }}</button>
+            <button type="submit" class="btn btn-save">{{ t('trigger.save') }}</button>
           </div>
         </form>
       </div>

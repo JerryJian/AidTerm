@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSessionStore } from '../../stores/sessionStore'
 import type { SavedSession } from '../../types'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   session?: SavedSession
@@ -55,43 +58,43 @@ function onBackdropClick(e: MouseEvent) {
   <div class="overlay" @click="onBackdropClick">
     <div class="dialog">
       <div class="dialog-header">
-        <span>{{ isEditing ? 'Edit Session' : 'New Session' }}</span>
+        <span>{{ isEditing ? t('session_dialog.title_edit') : t('session_dialog.title_new') }}</span>
         <button class="dialog-close" @click="emit('close')">✕</button>
       </div>
       <form class="dialog-body" @submit.prevent="onSubmit">
         <label class="field">
-          <span class="field-label">Name</span>
+          <span class="field-label">{{ t('session_dialog.name') }}</span>
           <input ref="firstInput" v-model="name" type="text" class="input" placeholder="My Server" required />
         </label>
         <label class="field">
-          <span class="field-label">Type</span>
+          <span class="field-label">{{ t('session_dialog.type') }}</span>
           <select v-model="sessionType" class="input">
             <option value="ssh">SSH</option>
             <option value="telnet">Telnet</option>
           </select>
         </label>
         <label class="field">
-          <span class="field-label">Host</span>
+          <span class="field-label">{{ t('session_dialog.host') }}</span>
           <input v-model="host" type="text" class="input" placeholder="192.168.1.1" required />
         </label>
         <label class="field">
-          <span class="field-label">Port</span>
+          <span class="field-label">{{ t('session_dialog.port') }}</span>
           <input v-model.number="port" type="number" class="input" min="1" max="65535" />
         </label>
         <label class="field">
-          <span class="field-label">Username</span>
+          <span class="field-label">{{ t('session_dialog.username') }}</span>
           <input v-model="username" type="text" class="input" placeholder="root" />
         </label>
         <label class="field">
-          <span class="field-label">Group</span>
+          <span class="field-label">{{ t('session_dialog.group') }}</span>
           <input v-model="groupName" type="text" class="input" placeholder="Select or type new group name" list="group-list" />
           <datalist id="group-list">
             <option v-for="g in existingGroupNames" :key="g" :value="g" />
           </datalist>
         </label>
         <div class="dialog-actions">
-          <button type="button" class="btn btn-cancel" @click="emit('close')">Cancel</button>
-          <button type="submit" class="btn btn-save">{{ isEditing ? 'Save' : 'Create' }}</button>
+          <button type="button" class="btn btn-cancel" @click="emit('close')">{{ t('session_dialog.cancel') }}</button>
+          <button type="submit" class="btn btn-save">{{ isEditing ? t('session_dialog.save') : t('session_dialog.create') }}</button>
         </div>
       </form>
     </div>

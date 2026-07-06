@@ -119,7 +119,7 @@ async function toggleFullscreen() {
         </div>
 
         <div class="section">
-          <h3>🤖 AI</h3>
+          <h3>🤖 {{ t('ai.title') }}</h3>
           <div class="setting-row">
             <label>{{ t('settings.ai_provider') }}</label>
             <div class="provider-group">
@@ -133,7 +133,7 @@ async function toggleFullscreen() {
             </div>
           </div>
           <div class="setting-row col">
-            <label>API Key</label>
+            <label>{{ t('ai.api_key') }}</label>
             <div class="input-with-toggle">
               <input
                 :type="showAiKey ? 'text' : 'password'"
@@ -146,7 +146,7 @@ async function toggleFullscreen() {
             </div>
           </div>
           <div class="setting-row col">
-            <label>Model</label>
+            <label>{{ t('ai.model') }}</label>
             <input
               :value="ai.config.model"
               @input="(e: any) => ai.updateConfig({ model: e.target.value })"
@@ -154,7 +154,7 @@ async function toggleFullscreen() {
             />
           </div>
           <div class="setting-row col">
-            <label>Base URL</label>
+            <label>{{ t('ai.base_url') }}</label>
             <input
               :value="ai.config.base_url"
               @input="(e: any) => ai.updateConfig({ base_url: e.target.value })"

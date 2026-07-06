@@ -109,9 +109,9 @@ async function toggleFullscreen() {
       </div>
 
       <div class="section">
-        <h3>🤖 AI</h3>
+        <h3>🤖 {{ t('ai.title') }}</h3>
         <div class="setting-row">
-          <label>提供商</label>
+          <label>{{ t('ai.provider') }}</label>
           <div class="provider-group">
             <button
               v-for="(_, name) in ai.defaultProviders"
@@ -123,7 +123,7 @@ async function toggleFullscreen() {
           </div>
         </div>
         <div class="setting-row col">
-          <label>API Key</label>
+          <label>{{ t('ai.api_key') }}</label>
           <div class="input-with-toggle">
             <input
               :type="showAiKey ? 'text' : 'password'"
@@ -132,11 +132,11 @@ async function toggleFullscreen() {
               placeholder="sk-..."
               class="text-input"
             />
-            <button class="toggle-btn" @click="showAiKey = !showAiKey">{{ showAiKey ? '隐藏' : '显示' }}</button>
+            <button class="toggle-btn" @click="showAiKey = !showAiKey">{{ showAiKey ? t('settings.ai_hide') : t('settings.ai_show') }}</button>
           </div>
         </div>
         <div class="setting-row col">
-          <label>Model</label>
+          <label>{{ t('ai.model') }}</label>
           <input
             :value="ai.config.model"
             @input="(e: any) => ai.updateConfig({ model: e.target.value })"
@@ -144,7 +144,7 @@ async function toggleFullscreen() {
           />
         </div>
         <div class="setting-row col">
-          <label>Base URL</label>
+          <label>{{ t('ai.base_url') }}</label>
           <input
             :value="ai.config.base_url"
             @input="(e: any) => ai.updateConfig({ base_url: e.target.value })"
@@ -152,13 +152,13 @@ async function toggleFullscreen() {
           />
         </div>
         <div class="setting-row">
-          <label>状态</label>
+          <label>{{ t('ai.status') }}</label>
           <span :class="ai.enabled ? 'status-ok' : 'status-ko'">
-            {{ ai.enabled ? '✅ 已配置' : '❌ 未配置' }}
+            {{ ai.enabled ? t('ai.configured') : t('ai.not_configured') }}
           </span>
         </div>
         <div class="setting-row">
-          <button class="action-btn" @click="ai.clearHistory()">清除对话历史</button>
+          <button class="action-btn" @click="ai.clearHistory()">{{ t('ai.clear_history') }}</button>
         </div>
       </div>
     </div>

@@ -176,18 +176,18 @@ function fileIcon(entry: FileEntry): string {
 <template>
   <div class="sftp-panel">
     <div class="panel-header">
-      <span class="panel-title">SFTP</span>
-      <button class="panel-btn" title="Close" @click="emit('close')">✕</button>
+      <span class="panel-title">{{ t('sftp.panel_title') }}</span>
+      <button class="panel-btn" :title="t('sftp.close')" @click="emit('close')">✕</button>
     </div>
 
     <!-- Connection form -->
     <div v-if="!store.connected" class="connect-form">
-      <input v-model="host" placeholder="Host" class="sftp-input" />
-      <input v-model="port" type="number" placeholder="Port" class="sftp-input sftp-input-sm" />
-      <input v-model="username" placeholder="Username" class="sftp-input" />
-      <input v-model="password" type="password" placeholder="Password" class="sftp-input" />
+      <input v-model="host" :placeholder="t('common.host')" class="sftp-input" />
+      <input v-model="port" type="number" :placeholder="t('common.port')" class="sftp-input sftp-input-sm" />
+      <input v-model="username" :placeholder="t('common.username')" class="sftp-input" />
+      <input v-model="password" type="password" :placeholder="t('common.password')" class="sftp-input" />
       <button class="connect-btn" :disabled="connecting" @click="doConnect">
-        {{ connecting ? 'Connecting...' : 'Connect' }}
+        {{ connecting ? t('sftp.connecting') : t('sftp.connect') }}
       </button>
     </div>
 
@@ -201,18 +201,18 @@ function fileIcon(entry: FileEntry): string {
           </span>
         </span>
         <div class="toolbar-actions">
-          <button class="tb-btn" title="Go Up" @click="goUp">⬆</button>
-          <button class="tb-btn" title="Refresh" @click="store.listDir(store.currentPath)">🔄</button>
-          <button class="tb-btn" title="New Folder" @click="showNewDir = !showNewDir">📁+</button>
-          <button class="tb-btn" title="Upload" @click="doUpload">⬆</button>
-          <button class="tb-btn" title="Disconnect" @click="store.disconnect">✕</button>
+          <button class="tb-btn" :title="t('sftp.go_up')" @click="goUp">⬆</button>
+          <button class="tb-btn" :title="t('sftp.refresh')" @click="store.listDir(store.currentPath)">🔄</button>
+          <button class="tb-btn" :title="t('sftp.mkdir')" @click="showNewDir = !showNewDir">📁+</button>
+          <button class="tb-btn" :title="t('sftp.upload')" @click="doUpload">⬆</button>
+          <button class="tb-btn" :title="t('sftp.disconnect')" @click="store.disconnect">✕</button>
         </div>
       </div>
 
       <!-- New dir input -->
       <div v-if="showNewDir" class="inline-form">
-        <input v-model="newDirName" placeholder="Folder name" @keydown.enter="doMkdir" @keydown.escape="showNewDir = false" />
-        <button @click="doMkdir">OK</button>
+        <input v-model="newDirName" :placeholder="t('sftp.folder_name')" @keydown.enter="doMkdir" @keydown.escape="showNewDir = false" />
+        <button @click="doMkdir">{{ t('sftp.ok') }}</button>
       </div>
 
       <!-- Error -->
@@ -228,17 +228,17 @@ function fileIcon(entry: FileEntry): string {
         :class="{ 'drag-over': dragOver }"
       >
         <div class="file-header">
-          <span class="col-name">Name</span>
-          <span class="col-size">Size</span>
-          <span class="col-modified">Modified</span>
-          <span class="col-actions">Actions</span>
+          <span class="col-name">{{ t('sftp.name') }}</span>
+          <span class="col-size">{{ t('sftp.size') }}</span>
+          <span class="col-modified">{{ t('sftp.modified') }}</span>
+          <span class="col-actions">{{ t('sftp.actions') }}</span>
         </div>
 
         <!-- Rename inline -->
         <div v-if="renameTarget" class="rename-row">
           <input v-model="renameValue" class="rename-input" @keydown.enter="confirmRename" @keydown.escape="renameTarget = null" />
-          <button @click="confirmRename">OK</button>
-          <button @click="renameTarget = null">Cancel</button>
+          <button @click="confirmRename">{{ t('sftp.ok') }}</button>
+          <button @click="renameTarget = null">{{ t('common.cancel') }}</button>
         </div>
 
         <div
@@ -256,14 +256,14 @@ function fileIcon(entry: FileEntry): string {
           <span class="col-size">{{ entry.is_dir ? '—' : formatSize(entry.size) }}</span>
           <span class="col-modified">{{ entry.modified }}</span>
           <span class="col-actions">
-            <button v-if="!entry.is_dir" class="action-btn" title="Edit" @click.stop="onEntryDblClick(entry)">✎</button>
-            <button class="action-btn" title="Download" @click.stop="doDownload(entry)">⬇</button>
-            <button class="action-btn" title="Rename" @click.stop="startRename(entry)">✏</button>
-            <button class="action-btn danger" title="Delete" @click.stop="doDelete(entry)">🗑</button>
+            <button v-if="!entry.is_dir" class="action-btn" :title="t('sftp.edit')" @click.stop="onEntryDblClick(entry)">✎</button>
+            <button class="action-btn" :title="t('sftp.download')" @click.stop="doDownload(entry)">⬇</button>
+            <button class="action-btn" :title="t('sftp.rename')" @click.stop="startRename(entry)">✏</button>
+            <button class="action-btn danger" :title="t('sftp.delete')" @click.stop="doDelete(entry)">🗑</button>
           </span>
         </div>
 
-        <div v-if="sortedEntries.length === 0" class="empty">Empty directory</div>
+        <div v-if="sortedEntries.length === 0" class="empty">{{ t('sftp.empty_directory') }}</div>
       </div>
 
       <!-- Drop zone overlay -->

@@ -81,7 +81,7 @@ function onKeydown(e: KeyboardEvent) {
       ref="inputRef"
       v-model="input"
       class="qc-input"
-      placeholder="ssh user@host[:port] | telnet host[:port]"
+      :placeholder="$t('quick_connect.placeholder')"
       @keydown.enter="parseAndSubmit"
       @keydown="onKeydown"
       @blur="emit('close')"

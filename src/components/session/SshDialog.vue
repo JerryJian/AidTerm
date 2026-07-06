@@ -78,26 +78,26 @@ function onBackdropClick(e: MouseEvent) {
       </div>
       <form class="dialog-body" @submit.prevent="onSubmit">
         <label class="field">
-          <span class="field-label">Host</span>
+          <span class="field-label">{{ t('ssh_dialog.host') }}</span>
           <input ref="firstInput" v-model="host" type="text" class="input" placeholder="192.168.1.1" required />
         </label>
         <label class="field">
-          <span class="field-label">Port</span>
+          <span class="field-label">{{ t('ssh_dialog.port') }}</span>
           <input v-model.number="port" type="number" class="input" min="1" max="65535" />
         </label>
         <label class="field">
-          <span class="field-label">Username</span>
+          <span class="field-label">{{ t('ssh_dialog.username') }}</span>
           <input v-model="username" type="text" class="input" placeholder="root" required />
         </label>
         <label class="field">
-          <span class="field-label">Password</span>
+          <span class="field-label">{{ t('ssh_dialog.password') }}</span>
           <input v-model="password" type="password" class="input" placeholder="password" />
         </label>
         <label class="field">
-          <span class="field-label">Private Key (optional)</span>
+          <span class="field-label">{{ t('ssh_dialog.private_key') }}</span>
           <div class="key-row">
             <input v-model="privateKeyPath" type="text" class="input key-input" placeholder="~/.ssh/id_rsa" readonly />
-            <button type="button" class="btn btn-browse" @click="pickKey">Browse</button>
+            <button type="button" class="btn btn-browse" @click="pickKey">{{ t('ssh_dialog.browse') }}</button>
           </div>
         </label>
         <label class="field">
@@ -120,8 +120,8 @@ function onBackdropClick(e: MouseEvent) {
           </label>
         </div>
         <div class="dialog-actions">
-          <button type="button" class="btn btn-cancel" @click="emit('close')">Cancel</button>
-          <button type="submit" class="btn btn-connect">Connect</button>
+          <button type="button" class="btn btn-cancel" @click="emit('close')">{{ t('ssh_dialog.cancel') }}</button>
+          <button type="submit" class="btn btn-connect">{{ t('ssh_dialog.connect') }}</button>
         </div>
       </form>
     </div>

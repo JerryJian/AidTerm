@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSessionStore } from '../../stores/sessionStore'
 import type { SavedSession } from '../../types'
+
+const { t } = useI18n()
 
 const store = useSessionStore()
 
@@ -38,10 +41,10 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
 <template>
   <div class="session-panel">
     <div class="panel-header">
-      <span class="panel-title">Sessions</span>
+      <span class="panel-title">{{ t('session_panel.title') }}</span>
       <div class="panel-actions">
-        <button class="panel-btn" title="New Session" @click="emit('newSession')">＋</button>
-        <button class="panel-btn" title="Close Panel" @click="emit('close')">✕</button>
+        <button class="panel-btn" :title="t('session_panel.connect')" @click="emit('newSession')">＋</button>
+        <button class="panel-btn" :title="t('sftp.close')" @click="emit('close')">✕</button>
       </div>
     </div>
 
@@ -62,16 +65,16 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
             <span class="sess-icon">{{ sessionTypeIcon(s.session_type) }}</span>
             <span class="sess-name">{{ s.name }}</span>
             <span class="sess-host">{{ s.host }}</span>
-            <button class="sess-edit" @click="(e) => onSessionEdit(e, s)" title="Edit">✎</button>
+            <button class="sess-edit" @click="(e) => onSessionEdit(e, s)" :title="t('common.edit')">✎</button>
           </div>
-          <div v-if="store.getSessionsByGroup(group.id).length === 0" class="empty-hint">(empty)</div>
+          <div v-if="store.getSessionsByGroup(group.id).length === 0" class="empty-hint">{{ t('session_panel.empty_group') }}</div>
         </div>
       </div>
 
       <div class="group-section" v-if="store.getUngroupedSessions().length > 0">
         <div class="group-header">
           <span class="group-arrow">▼</span>
-          <span class="group-name">Ungrouped</span>
+          <span class="group-name">{{ t('session_panel.ungrouped') }}</span>
         </div>
         <div class="group-sessions">
           <div
@@ -83,13 +86,13 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
             <span class="sess-icon">{{ sessionTypeIcon(s.session_type) }}</span>
             <span class="sess-name">{{ s.name }}</span>
             <span class="sess-host">{{ s.host }}</span>
-            <button class="sess-edit" @click="(e) => onSessionEdit(e, s)" title="Edit">✎</button>
+            <button class="sess-edit" @click="(e) => onSessionEdit(e, s)" :title="t('common.edit')">✎</button>
           </div>
         </div>
       </div>
 
       <div v-if="store.groups.length === 0 && store.getUngroupedSessions().length === 0" class="empty-state">
-        No saved sessions yet.
+        {{ t('session_panel.no_sessions') }}
       </div>
     </div>
   </div>

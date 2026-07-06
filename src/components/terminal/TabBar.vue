@@ -23,14 +23,14 @@ const batchFocused = ref(false)
 const availableShells = ref<string[]>([])
 const viewsMenuOpen = ref(false)
 
-const toolTabs: { id: ToolTab; label: string; icon: string }[] = [
-  { id: 'sftp', label: 'SFTP', icon: '\uD83D\uDCC2' },
-  { id: 'tunnel', label: 'Tunnel', icon: '\uD83D\uDD0C' },
-  { id: 'proxy', label: 'Proxy', icon: '\uD83C\uDF10' },
-  { id: 'snippet', label: 'Snippets', icon: '\u26A1' },
-  { id: 'trigger', label: 'Triggers', icon: '\uD83D\uDD2B' },
-  { id: 'key', label: 'Keys', icon: '\uD83D\uDD11' },
-  { id: 'knownHosts', label: 'Hosts', icon: '\uD83D\uDDC2' },
+const toolTabs: { id: ToolTab; icon: string }[] = [
+  { id: 'sftp', icon: '\uD83D\uDCC2' },
+  { id: 'tunnel', icon: '\uD83D\uDD0C' },
+  { id: 'proxy', icon: '\uD83C\uDF10' },
+  { id: 'snippet', icon: '\u26A1' },
+  { id: 'trigger', icon: '\uD83D\uDD2B' },
+  { id: 'key', icon: '\uD83D\uDD11' },
+  { id: 'knownHosts', icon: '\uD83D\uDDC2' },
 ]
 
 function openToolTab(tab: ToolTab) {
@@ -54,16 +54,16 @@ onMounted(async () => {
   } catch { /* ignore */ }
 })
 
-const shellDisplayNames: Record<string, string> = {
+const shellKeyMap: Record<string, string> = {
   'cmd.exe': 'cmd',
-  'powershell.exe': 'PowerShell 5.1',
-  'pwsh.exe': 'PowerShell 7',
-  'wsl.exe': 'WSL',
-  'bash.exe': 'Bash',
-  'bash': 'Bash',
-  'zsh': 'Zsh',
-  'sh': 'Sh',
-  'fish': 'Fish',
+  'powershell.exe': 'powershell',
+  'pwsh.exe': 'pwsh',
+  'wsl.exe': 'wsl',
+  'bash.exe': 'bash',
+  'bash': 'bash',
+  'zsh': 'zsh',
+  'sh': 'sh',
+  'fish': 'fish',
 }
 
 function openLocalShell(shell: string) {
@@ -157,23 +157,23 @@ defineExpose({ onKeydown })
       <div class="menu-wrapper">
         <button class="menu-btn" @click="menuOpen = !menuOpen; viewsMenuOpen = false" title="Menu">{{ '\u2630' }}</button>
         <div v-if="menuOpen" class="menu-dropdown">
-          <button @click="ui.settingsDialog = true; menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\u2699' }}</span><span>Settings</span></button>
-          <button @click="emit('lockClick'); menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>Lock</span></button>
-          <button @click="store.toggleBatch(); menuOpen = false" class="menu-item" :class="{ active: store.batchMode }"><span class="mi-icon">{{ '\uD83D\uDCE1' }}</span><span>Batch Mode</span></button>
+          <button @click="ui.settingsDialog = true; menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\u2699' }}</span><span>{{ $t('menu.settings') }}</span></button>
+          <button @click="emit('lockClick'); menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>{{ $t('menu.lock') }}</span></button>
+          <button @click="store.toggleBatch(); menuOpen = false" class="menu-item" :class="{ active: store.batchMode }"><span class="mi-icon">{{ '\uD83D\uDCE1' }}</span><span>{{ $t('menu.batch_mode') }}</span></button>
           <div class="menu-divider" />
           <button class="menu-item has-submenu" @click="viewsMenuOpen = !viewsMenuOpen">
-            <span class="mi-icon">{{ '\u25B6' }}</span><span>Views</span><span class="sub-arrow">{{ '\u25B6' }}</span>
+            <span class="mi-icon">{{ '\u25B6' }}</span><span>{{ $t('menu.views') }}</span><span class="sub-arrow">{{ '\u25B6' }}</span>
           </button>
           <div v-if="viewsMenuOpen" class="submenu-dropdown">
-            <button class="menu-item" @click="toggleSessions()"><span class="mi-icon">{{ '\uD83D\uDCCB' }}</span><span>Sessions</span></button>
+            <button class="menu-item" @click="toggleSessions()"><span class="mi-icon">{{ '\uD83D\uDCCB' }}</span><span>{{ $t('menu.sessions') }}</span></button>
             <div class="menu-divider" />
             <button v-for="t in toolTabs" :key="t.id" class="menu-item" @click="openToolTab(t.id)">
-              <span class="mi-icon">{{ t.icon }}</span><span>{{ t.label }}</span>
+              <span class="mi-icon">{{ t.icon }}</span><span>{{ $t('tool_panel.' + t.id) }}</span>
             </button>
           </div>
           <div class="menu-divider" />
-          <button @click="quickConnectVisible = !quickConnectVisible; menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\uD83D\uDD0C' }}</span><span>Quick Connect</span></button>
-          <button @click="ui.sshDialog = true; menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>New SSH...</span></button>
+          <button @click="quickConnectVisible = !quickConnectVisible; menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\uD83D\uDD0C' }}</span><span>{{ $t('menu.quick_connect') }}</span></button>
+          <button @click="ui.sshDialog = true; menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>{{ $t('menu.new_ssh') }}</span></button>
         </div>
       </div>
       <div
@@ -199,12 +199,12 @@ defineExpose({ onKeydown })
       <div class="new-tab-wrapper">
         <button class="tab-add" @click="onNewTabClick">+</button>
         <div v-if="newTabMenuOpen" class="new-tab-menu" @mousedown.prevent>
-          <div class="new-tab-section-title">Local Shell</div>
-          <button v-for="s in availableShells" :key="s" class="menu-item" @click="openLocalShell(s)">{{ shellDisplayNames[s] || s }}</button>
+          <div class="new-tab-section-title">{{ $t('menu.local_shell') }}</div>
+          <button v-for="s in availableShells" :key="s" class="menu-item" @click="openLocalShell(s)">{{ $t('shell.' + (shellKeyMap[s] || s)) || s }}</button>
           <div class="menu-divider" />
-          <div class="new-tab-section-title">Remote Connection</div>
-          <button class="menu-item" @click="openSsh()"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>SSH...</span></button>
-          <button class="menu-item" @click="openTelnet()"><span class="mi-icon">{{ '\uD83D\uDD0C' }}</span><span>Telnet...</span></button>
+          <div class="new-tab-section-title">{{ $t('menu.remote_connection') }}</div>
+          <button class="menu-item" @click="openSsh()"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>{{ $t('menu.ssh') }}</span></button>
+          <button class="menu-item" @click="openTelnet()"><span class="mi-icon">{{ '\uD83D\uDD0C' }}</span><span>{{ $t('menu.telnet') }}</span></button>
         </div>
       </div>
     </div>
@@ -221,12 +221,12 @@ defineExpose({ onKeydown })
     <input
       v-model="batchInput"
       class="batch-input"
-      placeholder="批量输入命令到选中终端..."
+      :placeholder="$t('batch.placeholder')"
       @keydown="onBatchInput"
       @focus="batchFocused = true"
       @blur="batchFocused = false"
     />
-    <button class="batch-select-btn" @click="selectAllBatch">全选</button>
+    <button class="batch-select-btn" @click="selectAllBatch">{{ $t('batch.select_all') }}</button>
     <span class="batch-count">{{ store.batchTabIds.size }} / {{ store.tabs.length }}</span>
   </div>
 </template>

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { open } from '@tauri-apps/plugin-dialog'
+import { useI18n } from 'vue-i18n'
 import { useTunnelStore } from '../../stores/tunnelStore'
 import type { TunnelCreateRequest } from '../../types'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
   close: []
@@ -81,10 +84,10 @@ onMounted(refresh)
 <template>
   <div class="tunnel-panel">
     <div class="panel-header">
-      <span class="panel-title">端口转发</span>
+      <span class="panel-title">{{ t('tunnel.title') }}</span>
       <div class="panel-actions">
         <button class="btn btn-sm" @click="showForm = !showForm">
-          {{ showForm ? '取消' : '新建' }}
+          {{ showForm ? t('tunnel.cancel_btn') : t('tunnel.new_btn') }}
         </button>
         <button class="btn btn-sm btn-close" @click="emit('close')">✕</button>
       </div>
@@ -92,74 +95,74 @@ onMounted(refresh)
 
     <div v-if="showForm" class="tunnel-form">
       <div class="form-group">
-        <label>SSH 服务器</label>
+        <label>{{ t('tunnel.ssh_server') }}</label>
         <div class="form-row">
-          <input v-model="form.host" placeholder="主机" class="input flex-1" />
+          <input v-model="form.host" :placeholder="t('common.host')" class="input flex-1" />
           <input v-model.number="form.port" type="number" class="input w-20" />
         </div>
       </div>
       <div class="form-group">
-        <label>认证</label>
-        <input v-model="form.username" placeholder="用户名" class="input" />
-        <input v-model="form.password" type="password" placeholder="密码（可选）" class="input" />
+        <label>{{ t('tunnel.authentication') }}</label>
+        <input v-model="form.username" :placeholder="t('common.username')" class="input" />
+        <input v-model="form.password" type="password" :placeholder="t('tunnel.password_optional')" class="input" />
         <div class="form-row">
-          <input v-model="form.privateKeyPath" placeholder="私钥路径（可选）" class="input flex-1" />
-          <button class="btn btn-sm" @click="pickKey">浏览</button>
+          <input v-model="form.privateKeyPath" :placeholder="t('tunnel.private_key_path')" class="input flex-1" />
+          <button class="btn btn-sm" @click="pickKey">{{ t('tunnel.browse') }}</button>
         </div>
       </div>
       <div class="form-group">
-        <label>转发类型</label>
+        <label>{{ t('tunnel.forward_type') }}</label>
         <select v-model="form.tunnelType" class="input">
-          <option value="Local">本地 (-L)</option>
-          <option value="Remote">远程 (-R)</option>
-          <option value="Dynamic">动态 (-D, SOCKS5)</option>
+          <option value="Local">{{ t('tunnel.local_label') }}</option>
+          <option value="Remote">{{ t('tunnel.remote_label') }}</option>
+          <option value="Dynamic">{{ t('tunnel.dynamic_label') }}</option>
         </select>
       </div>
       <div class="form-group">
-        <label>绑定地址</label>
+        <label>{{ t('tunnel.bind_address') }}</label>
         <div class="form-row">
           <input v-model="form.bindAddr" placeholder="127.0.0.1" class="input flex-1" />
-          <input v-model.number="form.bindPort" type="number" placeholder="端口" class="input w-24" />
+          <input v-model.number="form.bindPort" type="number" :placeholder="t('common.port')" class="input w-24" />
         </div>
       </div>
       <div v-if="form.tunnelType !== 'Dynamic'" class="form-group">
-        <label>目标地址</label>
+        <label>{{ t('tunnel.target') }}</label>
         <div class="form-row">
-          <input v-model="form.targetHost" placeholder="目标主机" class="input flex-1" />
-          <input v-model.number="form.targetPort" type="number" placeholder="端口" class="input w-24" />
+          <input v-model="form.targetHost" :placeholder="t('tunnel.dst_host')" class="input flex-1" />
+          <input v-model.number="form.targetPort" type="number" :placeholder="t('common.port')" class="input w-24" />
         </div>
       </div>
-      <button class="btn btn-primary btn-full" @click="handleCreate">创建转发</button>
+      <button class="btn btn-primary btn-full" @click="handleCreate">{{ t('tunnel.create_forward') }}</button>
     </div>
 
     <div class="tunnel-list">
       <div v-if="tunnels.length === 0" class="empty-hint">
-        暂无端口转发
+        {{ t('tunnel.no_tunnels') }}
       </div>
-      <div v-for="t in tunnels" :key="t.id" class="tunnel-item">
+      <div v-for="tn in tunnels" :key="tn.id" class="tunnel-item">
         <div class="tunnel-info">
-          <span class="tunnel-type-badge" :class="t.tunnel_type.toLowerCase()">
-            {{ t.tunnel_type === 'Local' ? 'L' : t.tunnel_type === 'Remote' ? 'R' : 'D' }}
+          <span class="tunnel-type-badge" :class="tn.tunnel_type.toLowerCase()">
+            {{ tn.tunnel_type === 'Local' ? 'L' : tn.tunnel_type === 'Remote' ? 'R' : 'D' }}
           </span>
           <div class="tunnel-desc">
             <div class="tunnel-endpoint">
-              <template v-if="t.tunnel_type === 'Local'">
-                {{ t.bind_addr }}:{{ t.bind_port }} → {{ t.target_host }}:{{ t.target_port }}
+              <template v-if="tn.tunnel_type === 'Local'">
+                {{ tn.bind_addr }}:{{ tn.bind_port }} → {{ tn.target_host }}:{{ tn.target_port }}
               </template>
-              <template v-else-if="t.tunnel_type === 'Remote'">
-                {{ t.bind_addr }}:{{ t.bind_port }} → {{ t.target_host }}:{{ t.target_port }}
+              <template v-else-if="tn.tunnel_type === 'Remote'">
+                {{ tn.bind_addr }}:{{ tn.bind_port }} → {{ tn.target_host }}:{{ tn.target_port }}
               </template>
               <template v-else>
-                SOCKS5 {{ t.bind_addr }}:{{ t.bind_port }}
+                SOCKS5 {{ tn.bind_addr }}:{{ tn.bind_port }}
               </template>
             </div>
-            <div class="tunnel-meta">{{ t.host }}:{{ t.port }}@{{ t.username }}</div>
+            <div class="tunnel-meta">{{ tn.host }}:{{ tn.port }}@{{ tn.username }}</div>
           </div>
         </div>
-        <div class="tunnel-status" :class="statusClass(t.status)">
-          {{ tunnelStatusText(t.status) }}
+        <div class="tunnel-status" :class="statusClass(tn.status)">
+          {{ tunnelStatusText(tn.status) }}
         </div>
-        <button class="btn btn-sm btn-danger" @click="handleRemove(t.id)">删除</button>
+        <button class="btn btn-sm btn-danger" @click="handleRemove(tn.id)">{{ t('common.delete') }}</button>
       </div>
     </div>
   </div>

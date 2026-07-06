@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { useI18n } from 'vue-i18n'
 import { useSnippetStore } from '../../stores/snippetStore'
 import { useTerminalStore } from '../../stores/terminal'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -89,12 +92,12 @@ function submitVariables() {
 <template>
   <div class="panel">
     <div class="panel-header">
-      <span>快捷命令</span>
+      <span>{{ t('snippet.title') }}</span>
       <button class="panel-close" @click="emit('close')">✕</button>
     </div>
 
     <div class="panel-body">
-      <button class="btn btn-add" @click="resetForm">+ 添加命令</button>
+      <button class="btn btn-add" @click="resetForm">+ {{ t('snippet.add') }}</button>
 
       <div v-for="s in store.snippets.value" :key="s.id" class="snippet-item">
         <div class="snippet-info" @click="sendSnippet(s.command)" :title="s.command">
@@ -102,13 +105,13 @@ function submitVariables() {
           <span class="snippet-cmd">{{ s.command }}</span>
         </div>
         <div class="snippet-actions">
-          <button class="btn-sm" @click="sendSnippet(s.command)" title="发送">▶</button>
+          <button class="btn-sm" @click="sendSnippet(s.command)" :title="t('snippet.send')">▶</button>
           <button class="btn-sm" @click="editSnippet(s)">✎</button>
-          <button class="btn-sm btn-danger" @click="store.remove(s.id)">✕</button>
+          <button class="btn-sm btn-danger" @click="store.remove(s.id)" :title="t('common.delete')">✕</button>
         </div>
       </div>
       <div v-if="store.snippets.value.length === 0 && !showForm" class="empty">
-        暂无快捷命令
+        {{ t('snippet.no_snippets') }}
       </div>
     </div>
 
@@ -116,22 +119,22 @@ function submitVariables() {
     <div v-if="showForm" class="form-overlay" @click.self="showForm = false">
       <div class="form-card">
         <div class="form-header">
-          <span>{{ editId ? '编辑命令' : '添加命令' }}</span>
+          <span>{{ editId ? t('snippet.edit') : t('snippet.add') }}</span>
           <button class="panel-close" @click="showForm = false">✕</button>
         </div>
         <form class="form-body" @submit.prevent="submitForm">
           <label class="field">
-            <span class="field-label">名称</span>
-            <input v-model="formName" type="text" class="input" placeholder="连接服务器" required />
+            <span class="field-label">{{ t('snippet.name') }}</span>
+            <input v-model="formName" type="text" class="input" required />
           </label>
           <label class="field">
-            <span class="field-label">命令</span>
+            <span class="field-label">{{ t('snippet.command') }}</span>
             <textarea v-model="formCommand" class="input textarea" rows="3" placeholder="ssh root@{{host}}" required />
-            <span class="field-hint" v-pre>使用 {{变量名}} 定义变量，发送时会提示输入</span>
+            <span class="field-hint">{{ t('snippet.variable_usage_hint') }}</span>
           </label>
           <div class="form-actions">
-            <button type="button" class="btn btn-cancel" @click="showForm = false">取消</button>
-            <button type="submit" class="btn btn-save">保存</button>
+            <button type="button" class="btn btn-cancel" @click="showForm = false">{{ t('snippet.cancel') }}</button>
+            <button type="submit" class="btn btn-save">{{ t('snippet.confirm') }}</button>
           </div>
         </form>
       </div>
@@ -141,7 +144,7 @@ function submitVariables() {
     <div v-if="varDialogVisible" class="form-overlay" @click.self="varDialogVisible = false">
       <div class="form-card">
         <div class="form-header">
-          <span>输入变量值</span>
+          <span>{{ t('snippet.variable_hint') }}</span>
           <button class="panel-close" @click="varDialogVisible = false">✕</button>
         </div>
         <div class="form-body">
@@ -150,8 +153,8 @@ function submitVariables() {
             <input v-model="varMap[k]" type="text" class="input" :placeholder="k" />
           </label>
           <div class="form-actions">
-            <button type="button" class="btn btn-cancel" @click="varDialogVisible = false">取消</button>
-            <button type="button" class="btn btn-save" @click="submitVariables">发送</button>
+            <button type="button" class="btn btn-cancel" @click="varDialogVisible = false">{{ t('snippet.cancel') }}</button>
+            <button type="button" class="btn btn-save" @click="submitVariables">{{ t('snippet.send') }}</button>
           </div>
         </div>
       </div>

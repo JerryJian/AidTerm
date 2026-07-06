@@ -437,7 +437,7 @@ function doAskAi() {
   closeContextMenu()
   const sel = terminal?.getSelection()
   if (!sel) return
-  aiConv.startConversation(`分析以下终端输出，解释其含义：\n${sel}`)
+  aiConv.startConversation(`${t('context_menu.ask_ai')}\n${sel}`)
 }
 
 function doNewTab() {
@@ -478,7 +478,7 @@ defineExpose({ focusSearch, doFit })
       <input
         v-model="searchQuery"
         class="search-input"
-        placeholder="Search..."
+        :placeholder="t('context_menu.search')"
         @keydown.enter="findNext"
         @keydown.shift.enter="findPrevious"
         @keydown.escape="closeSearch"

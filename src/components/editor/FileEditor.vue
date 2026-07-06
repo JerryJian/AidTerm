@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSftpStore } from '../../stores/sftpStore'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   connId: string
@@ -51,14 +54,14 @@ async function doSave() {
     <div class="editor-header">
       <span class="editor-title">📝 {{ fileName }}</span>
       <div class="editor-actions">
-        <span v-if="saved" class="editor-saved">已保存</span>
+        <span v-if="saved" class="editor-saved">{{ t('editor.saved') }}</span>
         <button class="btn btn-save" :disabled="saving || loading" @click="doSave">
-          {{ saving ? '保存中...' : '保存' }}
+          {{ saving ? t('editor.saving') : t('editor.save') }}
         </button>
         <button class="btn btn-close" @click="emit('close')">✕</button>
       </div>
     </div>
-    <div v-if="loading" class="editor-loading">加载中...</div>
+    <div v-if="loading" class="editor-loading">{{ t('editor.loading') }}</div>
     <div v-else-if="error" class="editor-error">{{ error }}</div>
     <textarea v-else v-model="content" class="editor-textarea" spellcheck="false"></textarea>
   </div>
