@@ -506,6 +506,7 @@ pub async fn ai_chat(
             role: "assistant".to_string(),
             content: response.text.clone().unwrap_or_default(),
             tool_call_id: None,
+            tool_calls: Some(response.tool_calls.clone()),
         });
         ai_state.save_history(&session_id, updated);
     }
@@ -533,6 +534,7 @@ pub async fn ai_continue(
         role: "tool".to_string(),
         content: tool_result,
         tool_call_id: Some(tool_call_id),
+        tool_calls: None,
     });
 
     ai_state.save_history(&session_id, history.clone());
@@ -546,6 +548,7 @@ pub async fn ai_continue(
             role: "assistant".to_string(),
             content: response.text.clone().unwrap_or_default(),
             tool_call_id: None,
+            tool_calls: Some(response.tool_calls.clone()),
         });
         ai_state.save_history(&session_id, updated);
     }

@@ -169,11 +169,6 @@ export function useAiConversation(
       const response = await ai.chat([...messages.value])
       if (cancelled.value) return
 
-      if (response.text) {
-        writeAI(response.text)
-        messages.value.push({ role: 'assistant', content: response.text })
-      }
-
       if (response.tool_calls && response.tool_calls.length > 0) {
         const tc = response.tool_calls[0]
         const args = JSON.parse(tc.function.arguments)
@@ -187,6 +182,10 @@ export function useAiConversation(
         })
 
         showConfirm.value = true
+      } else if (response.text) {
+        writeAI(response.text)
+        messages.value.push({ role: 'assistant', content: response.text })
+        endConversation()
       } else {
         endConversation()
       }

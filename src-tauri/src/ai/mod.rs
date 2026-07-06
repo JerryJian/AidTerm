@@ -35,6 +35,8 @@ pub struct ChatMessage {
     pub content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -72,6 +74,9 @@ fn build_request_body(messages: &[ChatMessage]) -> serde_json::Value {
         });
         if let Some(ref id) = m.tool_call_id {
             msg["tool_call_id"] = serde_json::json!(id);
+        }
+        if let Some(ref calls) = m.tool_calls {
+            msg["tool_calls"] = serde_json::to_value(calls).unwrap_or_default();
         }
         msg
     }).collect();
