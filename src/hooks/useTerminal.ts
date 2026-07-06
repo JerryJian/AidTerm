@@ -7,9 +7,9 @@ export function useTerminal() {
   const sessionId = ref<string | null>(null)
   const isConnected = ref(false)
 
-  async function createSession(rows = 24, cols = 80) {
+  async function createSession(rows = 24, cols = 80, shell?: string) {
     try {
-      const id = await invoke<string>('spawn_terminal', { rows, cols })
+      const id = await invoke<string>('spawn_terminal', { rows, cols, shell: shell ?? null })
       sessionId.value = id
       isConnected.value = true
       return id

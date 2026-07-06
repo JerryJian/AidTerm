@@ -32,6 +32,7 @@ export interface TerminalSession {
   title: string
   type: 'local' | 'ssh' | 'serial' | 'telnet'
   status: 'connecting' | 'connected' | 'disconnected'
+  subshell?: string
 }
 
 export interface SystemInfo {

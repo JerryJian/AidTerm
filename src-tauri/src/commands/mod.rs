@@ -15,9 +15,10 @@ pub async fn spawn_terminal(
     manager: State<'_, SessionManager>,
     rows: u16,
     cols: u16,
+    shell: Option<String>,
 ) -> Result<String, String> {
     let id = uuid::Uuid::new_v4().to_string();
-    manager.spawn_local(id.clone(), rows, cols, app)?;
+    manager.spawn_local(id.clone(), rows, cols, app, shell)?;
     Ok(id)
 }
 
@@ -559,4 +560,48 @@ pub fn ai_clear_history(
 ) -> Result<(), String> {
     ai_state.clear_history(&session_id);
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_platform() -> String {
+    std::env::consts::OS.to_string()
+}
+
+fn exe_in_path(name: &str) -> bool {
+    std::env::var_os("PATH")
+        .map(|path| {
+            std::env::split_paths(&path).any(|dir| {
+                let full = dir.join(name);
+                full.exists()
+            })
+        })
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+pub fn detect_shells() -> Vec<String> {
+    let mut shells = Vec::new();
+
+    if cfg!(target_os = "windows") {
+        shells.push("cmd.exe".into());
+        if std::path::Path::new(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe").exists() {
+            shells.push("powershell.exe".into());
+        }
+        if exe_in_path("pwsh.exe") {
+            shells.push("pwsh.exe".into());
+        }
+        if exe_in_path("wsl.exe") {
+            shells.push("wsl.exe".into());
+        }
+        if exe_in_path("bash.exe") {
+            shells.push("bash.exe".into());
+        }
+    } else {
+        shells.push("bash".into());
+        shells.push("sh".into());
+        if exe_in_path("zsh") { shells.push("zsh".into()); }
+        if exe_in_path("fish") { shells.push("fish".into()); }
+    }
+
+    shells
 }

@@ -28,8 +28,9 @@ impl SessionManager {
         rows: u16,
         cols: u16,
         app_handle: AppHandle,
+        shell: Option<String>,
     ) -> Result<(), String> {
-        let session = local::LocalSession::spawn(id.clone(), rows, cols, app_handle)?;
+        let session = local::LocalSession::spawn(id.clone(), rows, cols, app_handle, shell)?;
         let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
         sessions.insert(id, Session::Local(session));
         Ok(())

@@ -40,6 +40,7 @@ impl LocalSession {
         rows: u16,
         cols: u16,
         app_handle: AppHandle,
+        shell: Option<String>,
     ) -> Result<Self, String> {
         let native_pty = portable_pty::NativePtySystem::default();
         let pair: PtyPair = native_pty
@@ -47,7 +48,9 @@ impl LocalSession {
             .map_err(|e| format!("Failed to open PTY: {}", e))?;
 
         let master = pair.master;
-        let cmd = if cfg!(target_os = "windows") { "cmd.exe" } else { "bash" };
+        let cmd = shell.unwrap_or_else(|| {
+            if cfg!(target_os = "windows") { "cmd.exe".into() } else { "bash".into() }
+        });
 
         let child = pair
             .slave

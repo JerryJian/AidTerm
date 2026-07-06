@@ -18,9 +18,9 @@ export const useTerminalStore = defineStore('terminal', () => {
     return tabs.value.find(t => t.id === activeTabId.value) ?? null
   })
 
-  function addTab(type: TerminalSession['type'] = 'local', sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo) {
+  function addTab(type: TerminalSession['type'] = 'local', sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo, subshell?: string) {
     const id = generateId()
-    const title = type === 'local' ? 'Local' : type.toUpperCase()
+    const title = subshell ? subshell.replace(/\.exe$/, '') : (type === 'local' ? 'Local' : type.toUpperCase())
     const tab: TerminalTab = {
       id,
       title,
@@ -29,6 +29,7 @@ export const useTerminalStore = defineStore('terminal', () => {
         title,
         type,
         status: 'connecting',
+        subshell,
       },
       sshInfo,
       telnetInfo,

@@ -247,7 +247,7 @@ async function initTerminal() {
       )
     : props.telnetInfo
       ? await telnetConnect(props.telnetInfo.host, props.telnetInfo.port)
-      : await createSession(rows, cols)
+      : await createSession(rows, cols, store.activeTab?.session?.subshell)
 
   if (id) {
     store.updateSessionId(store.activeTabId ?? '', id)

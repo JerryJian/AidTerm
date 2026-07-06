@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useTerminalStore } from '../../stores/terminal'
 import { useUiStore } from '../../stores/uiStore'
@@ -16,8 +16,58 @@ const emit = defineEmits<{
 
 const menuOpen = ref(false)
 const quickConnectVisible = ref(false)
+const newTabMenuOpen = ref(false)
 const batchInput = ref('')
 const batchFocused = ref(false)
+
+const availableShells = ref<string[]>([])
+onMounted(async () => {
+  try {
+    const shells = await invoke<string[]>('detect_shells')
+    availableShells.value = shells
+  } catch { /* ignore */ }
+})
+
+const shellDisplayNames: Record<string, string> = {
+  'cmd.exe': 'cmd',
+  'powershell.exe': 'PowerShell 5.1',
+  'pwsh.exe': 'PowerShell 7',
+  'wsl.exe': 'WSL',
+  'bash.exe': 'Bash',
+  'bash': 'Bash',
+  'zsh': 'Zsh',
+  'sh': 'Sh',
+  'fish': 'Fish',
+}
+
+function openLocalShell(shell: string) {
+  newTabMenuOpen.value = false
+  store.addTab('local', undefined, undefined, shell)
+}
+
+function openSsh() {
+  newTabMenuOpen.value = false
+  ui.sshDialog = true
+}
+
+function openTelnet() {
+  newTabMenuOpen.value = false
+  quickConnectVisible.value = true
+}
+
+function onNewTabClick() {
+  newTabMenuOpen.value = !newTabMenuOpen.value
+}
+
+function onDocClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (!target.closest('.new-tab-wrapper') && !target.closest('.menu-wrapper')) {
+    newTabMenuOpen.value = false
+  }
+}
+
+onMounted(() => document.addEventListener('click', onDocClick, true))
+onUnmounted(() => document.removeEventListener('click', onDocClick, true))
 
 function onKeydown(e: KeyboardEvent) {
   if (e.ctrlKey && e.key === 't') {
@@ -107,7 +157,17 @@ defineExpose({ onKeydown })
         <span class="tab-title">{{ tab.title }}</span>
         <button class="tab-close" @click.stop="store.closeTab(tab.id)">{{ '\u2715' }}</button>
       </div>
-      <button class="tab-add" @click="store.addTab()" title="New Tab (Ctrl+T)">+</button>
+      <div class="new-tab-wrapper">
+        <button class="tab-add" @click="onNewTabClick">+</button>
+        <div v-if="newTabMenuOpen" class="new-tab-menu" @mousedown.prevent>
+          <div class="new-tab-section-title">Local Shell</div>
+          <button v-for="s in availableShells" :key="s" class="menu-item" @click="openLocalShell(s)">{{ shellDisplayNames[s] || s }}</button>
+          <div class="menu-divider" />
+          <div class="new-tab-section-title">Remote Connection</div>
+          <button class="menu-item" @click="openSsh()">{{ '\uD83D\uDD12' }} SSH...</button>
+          <button class="menu-item" @click="openTelnet()">{{ '\uD83D\uDD0C' }} Telnet...</button>
+        </div>
+      </div>
     </div>
     <div class="tab-bar-right">
       <button
@@ -161,7 +221,6 @@ defineExpose({ onKeydown })
   align-items: center;
   flex: 1;
   min-width: 0;
-  overflow: hidden;
 }
 
 .tab-bar-right {
@@ -391,5 +450,31 @@ defineExpose({ onKeydown })
 .batch-count {
   font-size: 11px;
   color: #a6adc8;
+}
+
+.new-tab-wrapper {
+  position: relative;
+}
+
+.new-tab-menu {
+  position: absolute;
+  top: 100%;
+  left: 2px;
+  z-index: 1000;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 6px;
+  min-width: 160px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.new-tab-section-title {
+  padding: 6px 10px 3px;
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #585b70;
+  font-weight: 600;
+  letter-spacing: 0.5px;
 }
 </style>
