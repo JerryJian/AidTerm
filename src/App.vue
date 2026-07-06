@@ -14,6 +14,7 @@ import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-sh
 import { Splitpanes, Pane } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import TabBar from './components/terminal/TabBar.vue'
+import TitleBar from './components/titlebar/TitleBar.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
 import SessionPanel from './components/session/SessionPanel.vue'
 import ToolPanel from './components/tools/ToolPanel.vue'
@@ -244,6 +245,7 @@ onUnmounted(() => {
   <LockScreen v-if="locked" @unlocked="unlockApp" />
 
   <div class="app" :style="appStyle">
+    <TitleBar />
     <TabBar
       @lock-click="lockApp"
       @quick-ssh="onQuickSsh"
