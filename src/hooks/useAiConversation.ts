@@ -61,6 +61,7 @@ export function useAiConversation(
   getTerminal: () => Terminal | null,
   writeToBackend?: (data: string) => void,
   executeInTerminal?: (cmd: string, prompt?: string, silent?: boolean) => Promise<string>,
+  setOutputSuppression?: (suppress: boolean) => void,
 ) {
   const ai = useAiStore()
   const showConfirm = ref(false)
@@ -168,8 +169,11 @@ export function useAiConversation(
       let result: string
 
       if (executeInTerminal) {
+        writeToBackend?.('\r')
+        await new Promise(r => setTimeout(r, 200))
         result = await executeInTerminal(cmd, savedPrompt.value)
         if (cancelled.value) return
+        setOutputSuppression?.(true)
 
         // Long output: ask user before sending to AI
         if (result.length > LONG_OUTPUT_THRESHOLD) {
@@ -251,6 +255,8 @@ export function useAiConversation(
     if (pendingConfirm.value) {
       pendingConfirm.value = null
     }
+    setOutputSuppression?.(false)
+    writeToBackend?.('\r')
   }
 
   /** Submit a complete line from the input bar (deprecated, kept for compat) */
@@ -336,10 +342,12 @@ export function useAiConversation(
             }
           }
         } catch {}
-        // Cancel any buffered text in shell before starting AI conversation
+        // Cancel buffered text in shell while suppressing the "^C" + new prompt output
+        setOutputSuppression?.(true)
         writeToBackend?.('\x03')
         t.write('\r\n')
         startConversation(line)
+        setTimeout(() => setOutputSuppression?.(false), 200)
         return true
       }
 

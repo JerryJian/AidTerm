@@ -110,52 +110,62 @@ async function executeInTerminal(cmd: string, prompt?: string, silent?: boolean)
     if (!silent) terminal?.write(`${cmd}\r\n`)
     writeInput(cmd + '\r')
 
-    let prevLen = 0
-    let stableCount = 0
+    const marker = `__CMD_DONE_${Date.now()}__`
+    writeInput(`echo ${marker}\r`)
+
     const t0 = Date.now()
+    const MAX_WAIT = 30000
 
     const poll = () => {
-      if (output.length !== prevLen) {
-        prevLen = output.length
-        stableCount = 0
-      } else {
-        stableCount++
-      }
-      if (stableCount >= 5 || Date.now() - t0 > 30000) {
+      const idx = output.lastIndexOf(marker)
+      if (idx >= 0) {
         unsub()
-
-        if (silent) {
-          suppressOutput.value = false
-          const raw = stripAnsi(output)
-          const lines = raw.split(/\r?\n/)
-          let startIdx = -1
-          for (let i = 0; i < lines.length; i++) {
-            if (lines[i].trim() === cmd) { startIdx = i; break }
-          }
-          const result = startIdx >= 0
-            ? lines.slice(startIdx + 1).filter(l => l.trim()).slice(0, -1).join('\n')
-            : lines.filter(l => l.trim()).slice(0, -1).join('\n')
-          const last = raw.split(/\r?\n/).filter(l => l.trim()).pop()
-          if (last && /[$#>]/.test(last)) terminal?.write(`\r\n${last}`)
-          resolve(result.trim())
-          return
-        }
-
-        let display = stripLeadingEcho(output, cmd)
-        display = stripTrailingPrompt(display, p)
-        terminal?.write(display)
-
-        suppressOutput.value = false
-        resolve(stripAnsi(output))
+        output = output.slice(0, idx)
+        output = output.split('\n').filter(l => !l.includes(`echo ${marker}`)).join('\n')
+        finish()
         return
       }
-      setTimeout(poll, 300)
+
+      if (Date.now() - t0 > MAX_WAIT) {
+        unsub()
+        writeInput('\x03')
+        finish()
+        return
+      }
+
+      setTimeout(poll, 50)
     }
-    setTimeout(poll, 800)
+    setTimeout(poll, 50)
+
+    function finish() {
+      if (silent) {
+        suppressOutput.value = false
+        const raw = stripAnsi(output)
+        const lines = raw.split(/\r?\n/)
+        let startIdx = -1
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].trim() === cmd) { startIdx = i; break }
+        }
+        const result = startIdx >= 0
+          ? lines.slice(startIdx + 1).filter(l => l.trim()).slice(0, -1).join('\n')
+          : lines.filter(l => l.trim()).slice(0, -1).join('\n')
+        const last = raw.split(/\r?\n/).filter(l => l.trim()).pop()
+        if (last && /[$#>]/.test(last)) terminal?.write(`\r\n${last}`)
+        resolve(result.trim())
+        return
+      }
+
+      let display = stripLeadingEcho(output, cmd)
+      display = stripTrailingPrompt(display, p)
+      terminal?.write(display)
+
+      suppressOutput.value = false
+      resolve(stripAnsi(output))
+    }
   })
 }
 
-const aiConv = useAiConversation(() => terminal, writeInput, executeInTerminal)
+const aiConv = useAiConversation(() => terminal, writeInput, executeInTerminal, (v) => suppressOutput.value = v)
 
 function handleTerminalData(data: string) {
   if (aiConv.interceptInput(data)) return
