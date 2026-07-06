@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useSftpStore } from '../../stores/sftpStore'
+import { useTerminalStore } from '../../stores/terminal'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
 import { useI18n } from 'vue-i18n'
@@ -8,6 +9,7 @@ import type { FileEntry } from '../../types'
 
 const { t } = useI18n()
 const store = useSftpStore()
+const terminalStore = useTerminalStore()
 
 const emit = defineEmits<{
   close: []
@@ -26,6 +28,54 @@ const renameTarget = ref<FileEntry | null>(null)
 const renameValue = ref('')
 const dragOver = ref(false)
 const unlistens: Array<() => void> = []
+const userDisconnected = ref(false)
+
+// Unique key representing the SSH session we should follow
+// Set to null when no SSH tab is active or tab changes
+let followKey: string | null = null
+
+// Watch tab switches + session status changes within the tab
+watch(
+  () => {
+    const tab = terminalStore.activeTab
+    if (!tab?.sshInfo || tab.session?.type !== 'ssh') return null
+    return `${tab.id}:${tab.session?.status}:${tab.sshInfo.host}:${tab.sshInfo.port}:${tab.sshInfo.username}`
+  },
+  async (key) => {
+    if (connecting.value) return
+
+    // Tab switch resets user-disconnected flag
+    if (key && followKey && key.split(':')[0] !== followKey.split(':')[0]) {
+      userDisconnected.value = false
+    }
+
+    // Same key? skip
+    if (key === followKey) return
+    followKey = key
+
+    // User manually disconnected — don't auto-reconnect (wait for tab switch)
+    if (userDisconnected.value) return
+
+    if (key && key.includes(':connected:')) {
+      const tab = terminalStore.activeTab
+      if (!tab?.sshInfo) return
+      if (store.connected) {
+        await store.disconnect()
+      }
+      host.value = tab.sshInfo.host
+      port.value = tab.sshInfo.port
+      username.value = tab.sshInfo.username
+      password.value = tab.sshInfo.password || ''
+      if (host.value.trim()) {
+        await doConnect()
+      }
+    } else if (store.connected) {
+      // No valid SSH session — disconnect
+      await store.disconnect()
+    }
+  },
+  { immediate: true },
+)
 
 const sortedEntries = computed(() => {
   const sorted = [...store.entries]
@@ -84,6 +134,11 @@ function breadcrumbParts(path: string): { name: string; full: string }[] {
     crumbs.push({ name: p, full: acc })
   }
   return crumbs
+}
+
+function handleDisconnect() {
+  userDisconnected.value = true
+  store.disconnect()
 }
 
 async function doConnect() {
@@ -205,7 +260,7 @@ function fileIcon(entry: FileEntry): string {
           <button class="tb-btn" :title="t('sftp.refresh')" @click="store.listDir(store.currentPath)">🔄</button>
           <button class="tb-btn" :title="t('sftp.mkdir')" @click="showNewDir = !showNewDir">📁+</button>
           <button class="tb-btn" :title="t('sftp.upload')" @click="doUpload">⬆</button>
-          <button class="tb-btn" :title="t('sftp.disconnect')" @click="store.disconnect">✕</button>
+          <button class="tb-btn" :title="t('sftp.disconnect')" @click="handleDisconnect">✕</button>
         </div>
       </div>
 
