@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useSessionStore } from '../../stores/sessionStore'
 import type { SavedSession } from '../../types'
 
@@ -7,17 +7,10 @@ const store = useSessionStore()
 
 const emit = defineEmits<{
   connectSession: [session: SavedSession]
+  newSession: []
+  editSession: [session: SavedSession]
   close: []
 }>()
-
-const newGroupName = ref('')
-const newSessionName = ref('')
-const newSessionType = ref<'ssh' | 'telnet'>('ssh')
-const newSessionHost = ref('')
-const newSessionPort = ref(22)
-const newSessionUsername = ref('')
-const showAddForm = ref(false)
-const showAddGroupInput = ref(false)
 
 onMounted(() => {
   if (!store.loaded) store.load()
@@ -32,35 +25,13 @@ const sessionTypeIcon = computed(() => (type: string) => {
   }
 })
 
-function addGroup() {
-  const name = newGroupName.value.trim()
-  if (!name) return
-  store.addGroup(name)
-  newGroupName.value = ''
-  showAddGroupInput.value = false
-}
-
-function addSession() {
-  const name = newSessionName.value.trim()
-  if (!name) return
-  store.addSession(
-    name,
-    newSessionType.value,
-    {
-      host: newSessionHost.value.trim() || undefined,
-      port: newSessionPort.value,
-      username: newSessionUsername.value.trim() || undefined,
-    },
-  )
-  newSessionName.value = ''
-  newSessionHost.value = ''
-  newSessionPort.value = 22
-  newSessionUsername.value = ''
-  showAddForm.value = false
-}
-
 function onSessionClick(session: SavedSession) {
   emit('connectSession', session)
+}
+
+function onSessionEdit(e: MouseEvent, session: SavedSession) {
+  e.stopPropagation()
+  emit('editSession', session)
 }
 </script>
 
@@ -69,27 +40,9 @@ function onSessionClick(session: SavedSession) {
     <div class="panel-header">
       <span class="panel-title">Sessions</span>
       <div class="panel-actions">
-        <button class="panel-btn" title="New Session" @click="showAddForm = !showAddForm">+</button>
-        <button class="panel-btn" title="New Group" @click="showAddGroupInput = !showAddGroupInput">📁</button>
+        <button class="panel-btn" title="New Session" @click="emit('newSession')">+</button>
         <button class="panel-btn" title="Close Panel" @click="emit('close')">✕</button>
       </div>
-    </div>
-
-    <div v-if="showAddGroupInput" class="inline-form">
-      <input v-model="newGroupName" placeholder="Group name" @keydown.enter="addGroup" @keydown.escape="showAddGroupInput = false" />
-      <button @click="addGroup">OK</button>
-    </div>
-
-    <div v-if="showAddForm" class="add-form">
-      <input v-model="newSessionName" placeholder="Session name" />
-      <select v-model="newSessionType">
-        <option value="ssh">SSH</option>
-        <option value="telnet">Telnet</option>
-      </select>
-      <input v-model="newSessionHost" placeholder="Host" />
-      <input v-model="newSessionPort" type="number" placeholder="Port" />
-      <input v-model="newSessionUsername" placeholder="Username (SSH)" />
-      <button @click="addSession">Save</button>
     </div>
 
     <div class="session-list">
@@ -109,6 +62,7 @@ function onSessionClick(session: SavedSession) {
             <span class="sess-icon">{{ sessionTypeIcon(s.session_type) }}</span>
             <span class="sess-name">{{ s.name }}</span>
             <span class="sess-host">{{ s.host }}</span>
+            <button class="sess-edit" @click="(e) => onSessionEdit(e, s)" title="Edit">✎</button>
           </div>
           <div v-if="store.getSessionsByGroup(group.id).length === 0" class="empty-hint">(empty)</div>
         </div>
@@ -129,6 +83,7 @@ function onSessionClick(session: SavedSession) {
             <span class="sess-icon">{{ sessionTypeIcon(s.session_type) }}</span>
             <span class="sess-name">{{ s.name }}</span>
             <span class="sess-host">{{ s.host }}</span>
+            <button class="sess-edit" @click="(e) => onSessionEdit(e, s)" title="Edit">✎</button>
           </div>
         </div>
       </div>
@@ -142,8 +97,8 @@ function onSessionClick(session: SavedSession) {
 
 <style scoped>
 .session-panel {
-  width: 240px;
-  min-width: 240px;
+  min-width: 180px;
+  height: 100%;
   background: #181825;
   border-right: 1px solid #313244;
   display: flex;
@@ -179,64 +134,9 @@ function onSessionClick(session: SavedSession) {
   border-radius: 4px;
   font-size: 13px;
 }
-
 .panel-btn:hover {
   background: #313244;
   color: #cdd6f4;
-}
-
-.inline-form {
-  display: flex;
-  gap: 4px;
-  padding: 6px 12px;
-  border-bottom: 1px solid #313244;
-}
-
-.inline-form input {
-  flex: 1;
-  background: #1e1e2e;
-  border: 1px solid #45475a;
-  color: #cdd6f4;
-  padding: 4px 8px;
-  font-size: 12px;
-  outline: none;
-}
-
-.inline-form button {
-  background: #313244;
-  border: 1px solid #45475a;
-  color: #cdd6f4;
-  cursor: pointer;
-  padding: 4px 8px;
-  font-size: 12px;
-}
-
-.add-form {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 12px;
-  border-bottom: 1px solid #313244;
-}
-
-.add-form input,
-.add-form select {
-  background: #1e1e2e;
-  border: 1px solid #45475a;
-  color: #cdd6f4;
-  padding: 4px 8px;
-  font-size: 12px;
-  outline: none;
-}
-
-.add-form button {
-  background: #89b4fa;
-  border: none;
-  color: #1e1e2e;
-  cursor: pointer;
-  padding: 6px;
-  font-weight: 600;
-  border-radius: 4px;
 }
 
 .session-list {
@@ -257,7 +157,6 @@ function onSessionClick(session: SavedSession) {
   user-select: none;
   font-size: 12px;
 }
-
 .group-header:hover {
   background: #1e1e2e;
 }
@@ -283,11 +182,9 @@ function onSessionClick(session: SavedSession) {
   padding: 2px;
   visibility: hidden;
 }
-
 .group-header:hover .group-del {
   visibility: visible;
 }
-
 .group-del:hover {
   color: #f38ba8;
 }
@@ -304,7 +201,6 @@ function onSessionClick(session: SavedSession) {
   cursor: pointer;
   font-size: 12px;
 }
-
 .session-item:hover {
   background: #1e1e2e;
 }
@@ -330,6 +226,24 @@ function onSessionClick(session: SavedSession) {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 80px;
+}
+
+.sess-edit {
+  background: none;
+  border: none;
+  color: #585b70;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  visibility: hidden;
+}
+.session-item:hover .sess-edit {
+  visibility: visible;
+}
+.sess-edit:hover {
+  background: #313244;
+  color: #89b4fa;
 }
 
 .empty-hint {

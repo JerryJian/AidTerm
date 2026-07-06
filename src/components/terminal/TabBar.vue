@@ -2,23 +2,20 @@
 import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useTerminalStore } from '../../stores/terminal'
+import { useUiStore } from '../../stores/uiStore'
+import QuickConnectBar from '../session/QuickConnectBar.vue'
 
 const store = useTerminalStore()
+const ui = useUiStore()
 
 const emit = defineEmits<{
-  sshClick: []
-  sessionsClick: []
-  sftpClick: []
-  tunnelClick: []
-  proxyClick: []
-  snippetClick: []
-  triggerClick: []
-  settingsClick: []
   lockClick: []
-  keyClick: []
-  knownHostsClick: []
+  quickSsh: [host: string, port: number, username: string]
+  quickTelnet: [host: string, port: number]
 }>()
 
+const menuOpen = ref(false)
+const quickConnectVisible = ref(false)
 const batchInput = ref('')
 const batchFocused = ref(false)
 
@@ -63,46 +60,77 @@ function selectAllBatch() {
   }
 }
 
+function onSshConnect(host: string, port: number, username: string) {
+  quickConnectVisible.value = false
+  emit('quickSsh', host, port, username)
+}
+
+function onTelnetConnect(host: string, port: number) {
+  quickConnectVisible.value = false
+  emit('quickTelnet', host, port)
+}
+
 defineExpose({ onKeydown })
 </script>
 
 <template>
   <div class="tab-bar" @keydown="onKeydown">
-    <div
-      v-for="tab in store.tabs"
-      :key="tab.id"
-      class="tab"
-      :class="{ active: tab.id === store.activeTabId }"
-      @click="store.setActiveTab(tab.id)"
-      @mouseup.middle="store.closeTab(tab.id)"
-    >
-      <input
-        v-if="store.batchMode"
-        type="checkbox"
-        class="tab-checkbox"
-        :checked="store.batchTabIds.has(tab.id)"
-        @click.stop
-        @change="(e: Event) => store.setBatchTabId(tab.id, (e.target as HTMLInputElement).checked)"
-      />
-      <span class="tab-status" :class="tab.session?.status" />
-      <span class="tab-title">{{ tab.title }}</span>
-      <button class="tab-close" @click.stop="store.closeTab(tab.id)">✕</button>
+    <div class="tab-bar-left">
+      <div class="menu-wrapper">
+        <button class="menu-btn" @click="menuOpen = !menuOpen" title="Menu" @blur="menuOpen = false">{{ '\u2630' }}</button>
+        <div v-if="menuOpen" class="menu-dropdown" @mousedown.prevent>
+          <button @click="ui.settingsDialog = true; menuOpen = false" class="menu-item">{{ '\u2699' }} Settings</button>
+          <button @click="emit('lockClick'); menuOpen = false" class="menu-item">{{ '\uD83D\uDD12' }} Lock</button>
+          <button @click="store.toggleBatch(); menuOpen = false" class="menu-item" :class="{ active: store.batchMode }">{{ '\uD83D\uDCE1' }} Batch Mode</button>
+          <div class="menu-divider" />
+          <button @click="quickConnectVisible = !quickConnectVisible; menuOpen = false" class="menu-item">{{ '\uD83D\uDD0C' }} Quick Connect</button>
+          <button @click="ui.sshDialog = true; menuOpen = false" class="menu-item">{{ '\uD83D\uDD12' }} New SSH...</button>
+        </div>
+      </div>
+      <div
+        v-for="tab in store.tabs"
+        :key="tab.id"
+        class="tab"
+        :class="{ active: tab.id === store.activeTabId }"
+        @click="store.setActiveTab(tab.id)"
+        @mouseup.middle="store.closeTab(tab.id)"
+      >
+        <input
+          v-if="store.batchMode"
+          type="checkbox"
+          class="tab-checkbox"
+          :checked="store.batchTabIds.has(tab.id)"
+          @click.stop
+          @change="(e: Event) => store.setBatchTabId(tab.id, (e.target as HTMLInputElement).checked)"
+        />
+        <span class="tab-status" :class="tab.session?.status" />
+        <span class="tab-title">{{ tab.title }}</span>
+        <button class="tab-close" @click.stop="store.closeTab(tab.id)">{{ '\u2715' }}</button>
+      </div>
+      <button class="tab-add" @click="store.addTab()" title="New Tab (Ctrl+T)">+</button>
     </div>
-    <button class="tab-add" @click="store.addTab()" title="New Tab (Ctrl+T)">+</button>
-    <button class="tab-btn" :class="{ active: store.batchMode }" @click="store.toggleBatch()" title="Batch Input">📡</button>
-    <button class="tab-btn" @click="emit('tunnelClick')" title="Port Forwarding">🔌</button>
-    <button class="tab-btn" @click="emit('proxyClick')" title="Proxy Settings">🌐</button>
-    <button class="tab-btn" @click="emit('snippetClick')" title="Quick Commands">⚡</button>
-    <button class="tab-btn" @click="emit('triggerClick')" title="Triggers">🔫</button>
-    <button class="tab-btn" @click="emit('sftpClick')" title="SFTP">📂</button>
-    <button class="tab-btn" @click="emit('keyClick')" title="Key Management">🔑</button>
-    <button class="tab-btn" @click="emit('knownHostsClick')" title="Known Hosts">🖂</button>
-    <button class="tab-btn" @click="emit('settingsClick')" title="Settings">⚙</button>
-    <button class="tab-btn" @click="emit('lockClick')" title="Lock">🔒</button>
-    <button class="tab-btn" @click="emit('sessionsClick')" title="Saved Sessions">📋</button>
-    <button class="tab-btn tab-ssh" @click="emit('sshClick')" title="SSH Connection">SSH</button>
+    <div class="tab-bar-right">
+      <button
+        class="tb-btn"
+        :class="{ active: ui.leftSidebar }"
+        @click="ui.leftSidebar = !ui.leftSidebar"
+        title="Sessions"
+      >{{ '\uD83D\uDCCB' }}</button>
+      <button
+        class="tb-btn"
+        :class="{ active: ui.rightSidebar }"
+        @click="ui.rightSidebar = !ui.rightSidebar"
+        title="Tools"
+      >{{ '\uD83D\uDD27' }}</button>
+    </div>
   </div>
-  <!-- Batch input bar -->
+  <!-- Quick connect / batch bars -->
+  <QuickConnectBar
+    :visible="quickConnectVisible"
+    @ssh-connect="onSshConnect"
+    @telnet-connect="onTelnetConnect"
+    @close="quickConnectVisible = false"
+  />
   <div v-if="store.batchMode" class="batch-bar">
     <input
       v-model="batchInput"
@@ -121,10 +149,90 @@ defineExpose({ onKeydown })
 .tab-bar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   background: #181825;
   border-bottom: 1px solid #313244;
   user-select: none;
   min-height: 32px;
+}
+
+.tab-bar-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tab-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 8px;
+  flex-shrink: 0;
+}
+
+.menu-wrapper {
+  position: relative;
+}
+
+.menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: #a6adc8;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  margin: 0 2px;
+}
+.menu-btn:hover {
+  background: #313244;
+  color: #cdd6f4;
+}
+
+.menu-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 2px;
+  z-index: 1000;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 6px;
+  min-width: 180px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: #cdd6f4;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.menu-item:hover {
+  background: #313244;
+  color: #89b4fa;
+}
+.menu-item.active {
+  color: #a6e3a1;
+}
+
+.menu-divider {
+  height: 1px;
+  background: #313244;
+  margin: 4px 8px;
 }
 
 .tab {
@@ -205,7 +313,7 @@ defineExpose({ onKeydown })
 }
 
 .tab-add,
-.tab-btn {
+.tb-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -221,6 +329,7 @@ defineExpose({ onKeydown })
   height: 28px;
   font-size: 16px;
   margin-left: 4px;
+  flex-shrink: 0;
 }
 
 .tab-add:hover {
@@ -228,34 +337,18 @@ defineExpose({ onKeydown })
   color: #cdd6f4;
 }
 
-.tab-btn {
-  padding: 4px 8px;
-  font-size: 13px;
-  margin-left: 2px;
+.tb-btn {
+  width: 30px;
+  height: 26px;
+  font-size: 14px;
 }
-
-.tab-btn:hover {
+.tb-btn:hover {
   background: #313244;
   color: #cdd6f4;
 }
-
-.tab-btn.active {
+.tb-btn.active {
   background: #313244;
-  color: #a6e3a1;
-  border: 1px solid #a6e3a1;
-}
-
-.tab-ssh {
-  font-size: 11px;
-  font-weight: 600;
-  border: 1px solid #45475a;
-  background: #1e1e2e;
   color: #89b4fa;
-}
-
-.tab-ssh:hover {
-  background: #313244;
-  color: #74c7ec;
 }
 
 .batch-bar {

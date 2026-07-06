@@ -3,52 +3,39 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useTerminalStore } from './stores/terminal'
 import { useSessionStore } from './stores/sessionStore'
 import { useSettingsStore } from './stores/settingsStore'
+import { useUiStore } from './stores/uiStore'
 import type { SshConnectionInfo, TelnetConnectionInfo, SavedSession } from './types'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { save } from '@tauri-apps/plugin-dialog'
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut'
+import { Splitpanes, Pane } from 'splitpanes'
+import 'splitpanes/dist/splitpanes.css'
 import TabBar from './components/terminal/TabBar.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
-import SshDialog from './components/session/SshDialog.vue'
-import QuickConnectBar from './components/session/QuickConnectBar.vue'
 import SessionPanel from './components/session/SessionPanel.vue'
-import SftpPanel from './components/sftp/SftpPanel.vue'
-import TunnelPanel from './components/tunnel/TunnelPanel.vue'
-import ProxyPanel from './components/proxy/ProxyPanel.vue'
-import SnippetPanel from './components/snippet/SnippetPanel.vue'
-import TriggerPanel from './components/trigger/TriggerPanel.vue'
+import ToolPanel from './components/tools/ToolPanel.vue'
+import StatusBar from './components/status/StatusBar.vue'
+import SshDialog from './components/session/SshDialog.vue'
+import SessionDialog from './components/session/SessionDialog.vue'
+import SettingsDialog from './components/settings/SettingsDialog.vue'
 import FileEditor from './components/editor/FileEditor.vue'
-import SettingsPanel from './components/settings/SettingsPanel.vue'
 import LockScreen from './components/lock/LockScreen.vue'
-import KeyManagerPanel from './components/keychain/KeyManagerPanel.vue'
-import KnownHostsPanel from './components/keychain/KnownHostsPanel.vue'
 import { useTriggerWatcher } from './hooks/useTriggerWatcher'
 
 const store = useTerminalStore()
 const sessionStore = useSessionStore()
 const settings = useSettingsStore()
+const ui = useUiStore()
 
-// Panel visibility
-const sshDialogVisible = ref(false)
-const quickConnectVisible = ref(false)
-const sessionPanelVisible = ref(false)
-const sftpPanelVisible = ref(false)
-const tunnelPanelVisible = ref(false)
-const proxyPanelVisible = ref(false)
-const snippetPanelVisible = ref(false)
-const triggerPanelVisible = ref(false)
-const settingsPanelVisible = ref(false)
-const keyPanelVisible = ref(false)
-const knownHostsPanelVisible = ref(false)
 const sshDialogPrefill = ref<{ host: string; port: number; username: string }>()
+const showSessionDialog = ref(false)
+const editingSession = ref<SavedSession | undefined>()
 const editorFile = ref<{ connId: string; remotePath: string } | null>(null)
-
-// Lock screen state
 const locked = ref(false)
+const isFullscreen = ref(false)
 
-// Transparency & background style
 const appStyle = computed(() => {
   const style: Record<string, string> = {}
   if (settings.transparency < 1) {
@@ -63,9 +50,6 @@ const appStyle = computed(() => {
   return style
 })
 
-// Fullscreen state
-const isFullscreen = ref(false)
-
 useTriggerWatcher()
 
 if (store.tabs.length === 0) {
@@ -73,17 +57,16 @@ if (store.tabs.length === 0) {
 }
 
 function onSshConnect(info: SshConnectionInfo) {
-  sshDialogVisible.value = false
+  ui.sshDialog = false
   store.addTab('ssh', info)
 }
 
 function onQuickSsh(host: string, port: number, username: string) {
   sshDialogPrefill.value = { host, port, username }
-  sshDialogVisible.value = true
+  ui.sshDialog = true
 }
 
 function onQuickTelnet(host: string, port: number) {
-  quickConnectVisible.value = false
   const info: TelnetConnectionInfo = { host, port }
   store.addTab('telnet', undefined, info)
 }
@@ -99,7 +82,7 @@ function onConnectSession(session: SavedSession) {
       port: session.port ?? 22,
       username: session.username ?? '',
     }
-    sshDialogVisible.value = true
+    ui.sshDialog = true
     sessionStore.updateLastConnected(session.id)
   } else if (session.session_type === 'telnet') {
     const info: TelnetConnectionInfo = {
@@ -111,13 +94,41 @@ function onConnectSession(session: SavedSession) {
   }
 }
 
-function lockApp() {
-  locked.value = true
+function onNewSession() {
+  editingSession.value = undefined
+  showSessionDialog.value = true
 }
 
-function unlockApp() {
-  locked.value = false
+function onEditSession(session: SavedSession) {
+  editingSession.value = session
+  showSessionDialog.value = true
 }
+
+function onSaveSession(data: { name: string; type: 'ssh' | 'telnet'; host: string; port: number; username: string; groupName: string }) {
+  const existing = editingSession.value
+  const groupId = sessionStore.ensureGroup(data.groupName)
+  if (existing) {
+    sessionStore.updateSession(existing.id, {
+      name: data.name,
+      session_type: data.type,
+      host: data.host,
+      port: data.port,
+      username: data.username,
+      group_id: groupId,
+    })
+  } else {
+    sessionStore.addSession(data.name, data.type, {
+      host: data.host,
+      port: data.port,
+      username: data.username,
+    }, groupId)
+  }
+  showSessionDialog.value = false
+  editingSession.value = undefined
+}
+
+function lockApp() { locked.value = true }
+function unlockApp() { locked.value = false }
 
 async function toggleFullscreen() {
   const win = getCurrentWindow()
@@ -127,7 +138,6 @@ async function toggleFullscreen() {
 }
 
 async function handleDeepLink(payload: string) {
-  // ssh://user@host:port
   try {
     const url = new URL(payload)
     if (url.protocol === 'ssh:') {
@@ -135,7 +145,7 @@ async function handleDeepLink(payload: string) {
       const host = url.hostname
       const port = parseInt(url.port, 10) || 22
       sshDialogPrefill.value = { host, port, username }
-      sshDialogVisible.value = true
+      ui.sshDialog = true
     }
   } catch {
     // ignore invalid urls
@@ -157,10 +167,10 @@ async function handleCliArgs() {
               port: portStr ? parseInt(portStr, 10) : 22,
               username: user || 'root',
             }
-            sshDialogVisible.value = true
+            ui.sshDialog = true
           } else {
             sshDialogPrefill.value = { host: val, port: 22, username: 'root' }
-            sshDialogVisible.value = true
+            ui.sshDialog = true
           }
         }
       }
@@ -173,7 +183,6 @@ async function handleCliArgs() {
 const unlisteners: Array<() => void> = []
 
 onMounted(async () => {
-  // Guake mode - global shortcut
   try {
     if (!(await isRegistered('Ctrl+2'))) {
       await register('Ctrl+2', async () => {
@@ -187,10 +196,9 @@ onMounted(async () => {
       })
     }
   } catch {
-    // ignore registration errors in dev
+    // ignore
   }
 
-  // Fullscreen F11 handler
   const f11Handler = (e: KeyboardEvent) => {
     if (e.key === 'F11') {
       e.preventDefault()
@@ -200,7 +208,6 @@ onMounted(async () => {
   document.addEventListener('keydown', f11Handler)
   unlisteners.push(() => document.removeEventListener('keydown', f11Handler))
 
-  // Zmodem events
   const un1 = await listen<{ session_id: string }>('zmodem-start', async (event) => {
     const path = await save({ title: 'Save Zmodem file' })
     await invoke('zmodem_respond', {
@@ -217,24 +224,17 @@ onMounted(async () => {
   })
   unlisteners.push(un2)
 
-  // Deep link
   const un3 = await listen<string>('deep-link', (event) => {
     handleDeepLink(event.payload)
   })
   unlisteners.push(un3)
 
-  // CLI args
   await handleCliArgs()
 })
 
 onUnmounted(() => {
   unlisteners.forEach(fn => fn())
-  // Unregister global shortcut
-  try {
-    unregister('Ctrl+2')
-  } catch {
-    // ignore
-  }
+  try { unregister('Ctrl+2') } catch { /* ignore */ }
 })
 </script>
 
@@ -243,86 +243,63 @@ onUnmounted(() => {
 
   <div class="app" :style="appStyle">
     <TabBar
-      @ssh-click="quickConnectVisible = !quickConnectVisible"
-      @sessions-click="sessionPanelVisible = !sessionPanelVisible"
-      @sftp-click="sftpPanelVisible = !sftpPanelVisible"
-      @tunnel-click="tunnelPanelVisible = !tunnelPanelVisible"
-      @proxy-click="proxyPanelVisible = !proxyPanelVisible"
-      @snippet-click="snippetPanelVisible = !snippetPanelVisible"
-      @trigger-click="triggerPanelVisible = !triggerPanelVisible"
-      @settings-click="settingsPanelVisible = !settingsPanelVisible"
-      @key-click="keyPanelVisible = !keyPanelVisible"
-      @known-hosts-click="knownHostsPanelVisible = !knownHostsPanelVisible"
       @lock-click="lockApp"
-    />
-    <QuickConnectBar
-      :visible="quickConnectVisible"
-      @ssh-connect="onQuickSsh"
-      @telnet-connect="onQuickTelnet"
-      @close="quickConnectVisible = false"
+      @quick-ssh="onQuickSsh"
+      @quick-telnet="onQuickTelnet"
     />
     <div class="content-area">
-      <SessionPanel
-        v-if="sessionPanelVisible"
-        @connect-session="onConnectSession"
-        @close="sessionPanelVisible = false"
-      />
-      <div class="terminal-area">
-        <FileEditor
-          v-if="editorFile"
-          :conn-id="editorFile.connId"
-          :remote-path="editorFile.remotePath"
-          @close="editorFile = null"
-        />
-        <TerminalPane
-          v-else-if="store.activeTab"
-          :key="store.activeTab.id"
-          :tab="store.activeTab"
-          @newSsh="sshDialogVisible = true"
-        />
-      </div>
-      <TriggerPanel
-        v-if="triggerPanelVisible"
-        @close="triggerPanelVisible = false"
-      />
-      <SnippetPanel
-        v-if="snippetPanelVisible"
-        @close="snippetPanelVisible = false"
-      />
-      <ProxyPanel
-        v-if="proxyPanelVisible"
-        @close="proxyPanelVisible = false"
-      />
-      <TunnelPanel
-        v-if="tunnelPanelVisible"
-        @close="tunnelPanelVisible = false"
-      />
-      <KeyManagerPanel
-        v-if="keyPanelVisible"
-        @close="keyPanelVisible = false"
-      />
-      <KnownHostsPanel
-        v-if="knownHostsPanelVisible"
-        @close="knownHostsPanelVisible = false"
-      />
-      <SettingsPanel
-        v-if="settingsPanelVisible"
-        @close="settingsPanelVisible = false"
-      />
-      <SftpPanel
-        v-if="sftpPanelVisible"
-        @edit-file="onEditFile"
-        @close="sftpPanelVisible = false"
-      />
+      <Splitpanes>
+        <Pane v-if="ui.leftSidebar" :size="ui.leftSidebarPct" :min-size="15" :max-size="50">
+          <SessionPanel
+            @connect-session="onConnectSession"
+            @new-session="onNewSession"
+            @edit-session="onEditSession"
+            @close="ui.leftSidebar = false"
+          />
+        </Pane>
+        <Pane>
+          <div class="terminal-area">
+            <FileEditor
+              v-if="editorFile"
+              :conn-id="editorFile.connId"
+              :remote-path="editorFile.remotePath"
+              @close="editorFile = null"
+            />
+            <TerminalPane
+              v-else-if="store.activeTab"
+              :key="store.activeTab.id"
+              :tab="store.activeTab"
+              @newSsh="ui.sshDialog = true"
+            />
+          </div>
+        </Pane>
+        <Pane v-if="ui.rightSidebar" :size="ui.rightSidebarPct" :min-size="17" :max-size="50">
+          <ToolPanel
+            @edit-file="onEditFile"
+          />
+        </Pane>
+      </Splitpanes>
     </div>
+    <StatusBar />
   </div>
+
   <SshDialog
-    v-if="sshDialogVisible"
+    v-if="ui.sshDialog"
     :initial-host="sshDialogPrefill?.host"
     :initial-port="sshDialogPrefill?.port"
     :initial-username="sshDialogPrefill?.username"
     @connect="onSshConnect"
-    @close="sshDialogVisible = false"
+    @close="ui.sshDialog = false"
+  />
+  <SettingsDialog
+    v-if="ui.settingsDialog"
+    @close="ui.settingsDialog = false"
+  />
+  <SessionDialog
+    v-if="showSessionDialog"
+    :session="editingSession"
+    @save="onSaveSession"
+    @close="showSessionDialog = false; editingSession = undefined"
   />
 </template>
 
@@ -360,6 +337,31 @@ body,
 
 ::-webkit-scrollbar-thumb:hover {
   background: #585b70;
+}
+
+.splitpanes--vertical > .splitpanes__splitter {
+  background: transparent;
+  border: none;
+  min-width: 6px;
+}
+.splitpanes--vertical > .splitpanes__splitter:hover {
+  background: rgba(137, 180, 250, 0.15);
+}
+.splitpanes__splitter {
+  position: relative;
+}
+.splitpanes--vertical > .splitpanes__splitter::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #313244;
+  pointer-events: none;
+}
+.splitpanes--vertical > .splitpanes__splitter:hover::before {
+  background: #89b4fa;
 }
 </style>
 

@@ -60,7 +60,7 @@ export const useSessionStore = defineStore('sessions', () => {
     name: string,
     type: SavedSession['session_type'],
     config: { host?: string; port?: number; username?: string; privateKeyPath?: string },
-    groupId?: string,
+    groupId?: string | null,
   ) {
     const session: SavedSession = {
       id: genId(),
@@ -97,6 +97,14 @@ export const useSessionStore = defineStore('sessions', () => {
     updateSession(id, { last_connected: new Date().toISOString() })
   }
 
+  function ensureGroup(name: string): string | null {
+    if (!name) return null
+    const existing = groups.value.find(g => g.name === name)
+    if (existing) return existing.id
+    const g = addGroup(name)
+    return g.id
+  }
+
   function getSessionsByGroup(groupId: string | null): SavedSession[] {
     return sessions.value.filter(s => s.group_id === groupId)
   }
@@ -120,5 +128,6 @@ export const useSessionStore = defineStore('sessions', () => {
     updateLastConnected,
     getSessionsByGroup,
     getUngroupedSessions,
+    ensureGroup,
   }
 })
