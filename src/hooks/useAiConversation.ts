@@ -21,44 +21,6 @@ function sanitizeForTerminal(text: string): string {
   return text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
 }
 
-/** Display width of a character in a terminal (1 = narrow, 2 = CJK wide) */
-function charWidth(ch: string): number {
-  const code = ch.codePointAt(0)
-  if (code === undefined) return 1
-  if (code < 0x1100) return 1
-  if (code <= 0x115F) return 2
-  if (code >= 0x2329 && code <= 0x232A) return 2
-  if (code >= 0x2E80 && code <= 0xA4CF) return 2
-  if (code >= 0xAC00 && code <= 0xD7AF) return 2
-  if (code >= 0xF900 && code <= 0xFAFF) return 2
-  if (code >= 0xFE10 && code <= 0xFE19) return 2
-  if (code >= 0xFE30 && code <= 0xFE6F) return 2
-  if (code >= 0xFF01 && code <= 0xFF60) return 2
-  if (code >= 0xFFE0 && code <= 0xFFE6) return 2
-  if (code >= 0x1F300 && code <= 0x1F64F) return 2
-  if (code >= 0x1F900 && code <= 0x1F9FF) return 2
-  if (code >= 0x20000 && code <= 0x2FFFD) return 2
-  if (code >= 0x30000 && code <= 0x3FFFD) return 2
-  return 1
-}
-
-/** Erase the last character of inputBuffer from the terminal display */
-function eraseLastChar(inputBuffer: string, t: Terminal): string {
-  if (!inputBuffer) return inputBuffer
-  const last = inputBuffer.slice(-1)
-  const w = charWidth(last)
-  t.write('\b \b'.repeat(w))
-  return inputBuffer.slice(0, -1)
-}
-
-/** Erase the entire inputBuffer from the terminal display */
-function eraseLine(inputBuffer: string, t: Terminal): void {
-  for (let i = inputBuffer.length - 1; i >= 0; i--) {
-    const w = charWidth(inputBuffer[i])
-    t.write('\b \b'.repeat(w))
-  }
-}
-
 function buildSystemPrompt(systemInfo: SystemInfo, history: CommandRecord[]): string {
   const lines: string[] = [
     '你是 TndTerm 终端 AI 助手。你可以通过 execute_command 工具在用户当前的终端中执行命令。',
@@ -334,7 +296,6 @@ export function useAiConversation(
       if (data === '\x03') {
         const resolve = pendingConfirm.value
         pendingConfirm.value = null
-        // Send Ctrl+C to shell immediately so prompt resets right away
         writeToBackend?.('\x03')
         resolve(false)
         return true
@@ -373,45 +334,37 @@ export function useAiConversation(
         return true
       }
 
-      eraseLine(line, t)
-      writeToBackend?.(line + '\r')
+      // Normal command: send Enter to backend (characters already sent individually)
+      writeToBackend?.('\r')
       return true
     }
 
     if (data === '\x7f') {
       if (inputBuffer.value.length > 0) {
-        inputBuffer.value = eraseLastChar(inputBuffer.value, t)
+        inputBuffer.value = inputBuffer.value.slice(0, -1)
       }
-      return true
+      return false
     }
 
     if (data === '\t') {
-      const line = inputBuffer.value
-      if (line) {
-        eraseLine(line, t)
-        inputBuffer.value = ''
-        writeToBackend?.(line + '\t')
-        passthrough = true
-      } else {
-        writeToBackend?.('\t')
-      }
+      inputBuffer.value = ''
+      passthrough = true
+      writeToBackend?.('\t')
       return true
     }
 
     // Ctrl+C during AI conversation → cancel
     if (data === '\x03' && busy.value) {
       cancelled.value = true
-      t.write(`\r\n\x1b[35m━━━ AI 对话已取消 ━━━\x1b[0m`)
-      // Send Ctrl+C to shell immediately
       writeToBackend?.('\x03')
       endConversation()
       return true
     }
 
-    // Capture printable text (IME may commit multiple chars at once)
+    // Forward printable text to backend AND buffer for AI detection
     if (/^[\x20-\x7e\u00a0-\uffff]+$/.test(data)) {
       inputBuffer.value += data
-      t.write(data)
+      writeToBackend?.(data)
       return true
     }
 
@@ -421,7 +374,7 @@ export function useAiConversation(
       return false
     }
 
-    inputBuffer.value = ''
+    // Escape sequences (arrow keys etc.) and other data → pass through, keep buffer
     return false
   }
 
