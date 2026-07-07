@@ -250,6 +250,7 @@ onUnmounted(() => {
       @lock-click="lockApp"
       @quick-ssh="onQuickSsh"
       @quick-telnet="onQuickTelnet"
+      @connect-session="onConnectSession"
     />
     <div class="content-area">
       <Splitpanes>

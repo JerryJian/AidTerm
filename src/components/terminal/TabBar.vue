@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useTerminalStore } from '../../stores/terminal'
+import { useSessionStore } from '../../stores/sessionStore'
 import { useUiStore, type ToolTab } from '../../stores/uiStore'
+import type { SavedSession } from '../../types'
 import QuickConnectBar from '../session/QuickConnectBar.vue'
 
 const store = useTerminalStore()
+const sessionStore = useSessionStore()
 const ui = useUiStore()
 
 const emit = defineEmits<{
   lockClick: []
   quickSsh: [host: string, port: number, username: string]
   quickTelnet: [host: string, port: number]
+  connectSession: [session: SavedSession]
 }>()
 
 const menuOpen = ref(false)
@@ -54,7 +58,15 @@ function toggleSessions() {
   menuOpen.value = false
 }
 
+const savedSessions = computed(() => sessionStore.sessions)
+
+function onSavedSessionClick(session: SavedSession) {
+  newTabMenuOpen.value = false
+  emit('connectSession', session)
+}
+
 onMounted(async () => {
+  if (!sessionStore.loaded) await sessionStore.load()
   try {
     const shells = await invoke<string[]>('detect_shells')
     availableShells.value = shells
@@ -212,6 +224,25 @@ defineExpose({ onKeydown })
           <div class="new-tab-section-title">{{ $t('menu.remote_connection') }}</div>
           <button class="menu-item" @click="openSsh()"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>{{ $t('menu.ssh') }}</span></button>
           <button class="menu-item" @click="openTelnet()"><span class="mi-icon">{{ '\uD83D\uDD0C' }}</span><span>{{ $t('menu.telnet') }}</span></button>
+          <div v-if="savedSessions.length > 0" class="menu-divider" />
+          <div v-if="savedSessions.length > 0" class="saved-sessions-list">
+            <template v-for="group in sessionStore.groups" :key="group.id">
+              <div class="saved-group-label">{{ group.name }}</div>
+              <button v-for="s in sessionStore.getSessionsByGroup(group.id)" :key="s.id" class="menu-item" @click="onSavedSessionClick(s)">
+                <span class="mi-icon">{{ s.session_type === 'ssh' ? '\uD83D\uDD12' : '\uD83D\uDD0C' }}</span>
+                <span class="saved-session-name">{{ s.name }}</span>
+                <span class="saved-session-meta">{{ s.username ? s.username + '@' : '' }}{{ s.host }}</span>
+              </button>
+            </template>
+            <template v-if="sessionStore.getUngroupedSessions().length > 0">
+              <div class="saved-group-label">{{ $t('session_panel.ungrouped') }}</div>
+              <button v-for="s in sessionStore.getUngroupedSessions()" :key="s.id" class="menu-item" @click="onSavedSessionClick(s)">
+                <span class="mi-icon">{{ s.session_type === 'ssh' ? '\uD83D\uDD12' : '\uD83D\uDD0C' }}</span>
+                <span class="saved-session-name">{{ s.name }}</span>
+                <span class="saved-session-meta">{{ s.username ? s.username + '@' : '' }}{{ s.host }}</span>
+              </button>
+            </template>
+          </div>
         </div>
       </div>
     </div>
@@ -619,6 +650,37 @@ defineExpose({ onKeydown })
 }
 
 .new-tab-section-title {
+  padding: 6px 10px 3px;
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-overlay0);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.saved-sessions-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.saved-session-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.saved-session-meta {
+  font-size: 10px;
+  color: var(--text-overlay0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+  flex-shrink: 0;
+}
+
+.saved-group-label {
   padding: 6px 10px 3px;
   font-size: 10px;
   text-transform: uppercase;
