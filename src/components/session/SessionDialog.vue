@@ -23,6 +23,8 @@ const host = ref(props.session?.host || '')
 const port = ref(props.session?.port || 22)
 const username = ref(props.session?.username || '')
 const groupName = ref('')
+const showNewGroup = ref(false)
+const groupSelect = ref('')
 
 const existingGroupNames = computed(() => store.groups.map(g => g.name))
 const isEditing = computed(() => !!props.session)
@@ -33,9 +35,22 @@ onMounted(() => {
   firstInput.value?.focus()
   if (props.session?.group_id) {
     const g = store.groups.find(gg => gg.id === props.session!.group_id)
-    if (g) groupName.value = g.name
+    if (g) {
+      groupName.value = g.name
+      groupSelect.value = g.name
+    }
   }
 })
+
+function onGroupChange() {
+  if (groupSelect.value === '__new__') {
+    showNewGroup.value = true
+    groupName.value = ''
+  } else {
+    showNewGroup.value = false
+    groupName.value = groupSelect.value
+  }
+}
 
 function onSubmit() {
   if (!name.value.trim() || !host.value.trim()) return
@@ -87,10 +102,12 @@ function onBackdropClick(e: MouseEvent) {
         </label>
         <label class="field">
           <span class="field-label">{{ t('session_dialog.group') }}</span>
-          <input v-model="groupName" type="text" class="input" placeholder="Select or type new group name" list="group-list" />
-          <datalist id="group-list">
-            <option v-for="g in existingGroupNames" :key="g" :value="g" />
-          </datalist>
+          <select v-model="groupSelect" class="input" @change="onGroupChange">
+            <option value="">{{ t('session_dialog.no_group') }}</option>
+            <option v-for="g in existingGroupNames" :key="g" :value="g">{{ g }}</option>
+            <option value="__new__">{{ t('session_dialog.new_group') }}</option>
+          </select>
+          <input v-if="showNewGroup" v-model="groupName" type="text" class="input" :placeholder="t('session_dialog.new_group_placeholder')" style="margin-top: 4px" />
         </label>
         <div class="dialog-actions">
           <button type="button" class="btn btn-cancel" @click="emit('close')">{{ t('session_dialog.cancel') }}</button>
@@ -173,6 +190,14 @@ function onBackdropClick(e: MouseEvent) {
 }
 .input:focus {
   border-color: var(--accent);
+}
+select.input {
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23808080' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 28px;
 }
 
 .dialog-actions {
