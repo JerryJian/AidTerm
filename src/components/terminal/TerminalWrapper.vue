@@ -99,7 +99,8 @@ function stripTrailingPrompt(output: string, prompt: string): string {
 
 function stripMarkerFromOutput(text: string, marker: string): string {
   const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const re = new RegExp(`^.*?echo\\s+${escaped}.*$`, 'gm')
+  // Consume the trailing \r?\n so the line removal doesn't orphan a blank line
+  const re = new RegExp(`^.*?echo\\s+${escaped}.*\\r?\\n`, 'gm')
   return text.replace(re, '').replace(new RegExp(escaped, 'g'), '')
 }
 
