@@ -13,6 +13,12 @@ export default {
     ssh: 'SSH',
     telnet: 'Telnet',
   },
+  titlebar: {
+    minimize: 'Minimize',
+    maximize: 'Maximize',
+    restore: 'Restore',
+    close: 'Close',
+  },
   context_menu: {
     copy: 'Copy',
     paste: 'Paste',
