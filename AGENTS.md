@@ -1,11 +1,11 @@
-# AidTerm — Tauri + Vue3 复刻 WindTerm 开发规划
+# AidTerm — Tauri + Vue3 跨平台终端开发规划
 
 ## 项目概述
-使用 **Tauri 2.x** + **Vue 3 (Composition API + TypeScript)** + **Rust** 后端，构建跨平台终端模拟器，对标 WindTerm 核心功能。
+使用 **Tauri 2.x** + **Vue 3 (Composition API + TypeScript)** + **Rust** 后端，构建跨平台终端模拟器。
 
 ---
 
-## WindTerm 功能清单
+## 功能清单
 
 ### 1. 会话协议支持
 - [x] **SSH2** — 密码、密钥认证；端口转发（本地/远程/动态）
