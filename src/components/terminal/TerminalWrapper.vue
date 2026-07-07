@@ -278,9 +278,7 @@ async function initTerminal() {
     store.updateSessionId(store.activeTabId ?? '', id)
     store.updateSessionStatus(store.activeTabId ?? '', 'connected')
     const unsub = await onOutput((data: string) => {
-      if (suppressOutput.value) return
-      const cleaned = data.replace(/__CMD_DONE_\d+__/g, '')
-      if (cleaned) terminal?.write(cleaned)
+      if (!suppressOutput.value) terminal?.write(data)
     })
     if (unsub) unlisten = unsub
 
