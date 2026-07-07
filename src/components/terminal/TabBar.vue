@@ -21,6 +21,7 @@ const batchInput = ref('')
 const batchFocused = ref(false)
 
 const availableShells = ref<string[]>([])
+const toolsMenuOpen = ref(false)
 const viewsMenuOpen = ref(false)
 
 const toolTabs: { id: ToolTab; icon: string }[] = [
@@ -33,13 +34,19 @@ const toolTabs: { id: ToolTab; icon: string }[] = [
   { id: 'knownHosts', icon: '\uD83D\uDDC2' },
 ]
 
-function openToolTab(tab: ToolTab) {
-  if (!ui.openToolTabs.includes(tab)) {
-    ui.openToolTabs.push(tab)
-  }
-  ui.activeToolTab = tab
-  ui.rightSidebar = true
+function toggleToolsMenu() {
+  toolsMenuOpen.value = !toolsMenuOpen.value
   menuOpen.value = false
+}
+
+function openToolTab(tab: ToolTab) {
+  ui.addToolTab(tab)
+  menuOpen.value = false
+  toolsMenuOpen.value = false
+}
+
+function isToolOpen(tab: ToolTab): boolean {
+  return ui.openToolTabs.includes(tab)
 }
 
 function toggleSessions() {
@@ -205,6 +212,18 @@ defineExpose({ onKeydown })
           <div class="new-tab-section-title">{{ $t('menu.remote_connection') }}</div>
           <button class="menu-item" @click="openSsh()"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>{{ $t('menu.ssh') }}</span></button>
           <button class="menu-item" @click="openTelnet()"><span class="mi-icon">{{ '\uD83D\uDD0C' }}</span><span>{{ $t('menu.telnet') }}</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="tab-bar-right">
+      <div class="tools-wrapper">
+        <button class="tools-btn" :class="{ active: toolsMenuOpen }" @click="toggleToolsMenu" title="Tools">&#x2699;</button>
+        <div v-if="toolsMenuOpen" class="tools-backdrop" @click="toolsMenuOpen = false" />
+        <div v-if="toolsMenuOpen" class="tools-dropdown">
+          <button v-for="t in toolTabs" :key="t.id" class="tools-item" :class="{ active: isToolOpen(t.id) }" @click="openToolTab(t.id)">
+            <span class="ti-icon">{{ t.icon }}</span>
+            <span>{{ $t('tool_panel.' + t.id) }}</span>
+          </button>
         </div>
       </div>
     </div>
@@ -458,6 +477,88 @@ defineExpose({ onKeydown })
   background: var(--bg-surface0);
   color: var(--text);
 }
+.tab-bar-right {
+  display: flex;
+  align-items: center;
+  padding-right: 6px;
+  flex-shrink: 0;
+}
+
+.tools-wrapper {
+  position: relative;
+}
+
+.tools-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--text-sub0);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.tools-btn:hover {
+  background: var(--bg-surface0);
+  color: var(--text);
+}
+.tools-btn.active {
+  background: var(--accent-glass);
+  color: var(--accent);
+}
+
+.tools-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: transparent;
+}
+
+.tools-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1000;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface0);
+  border-radius: 6px;
+  min-width: 150px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.tools-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.tools-item:hover {
+  background: var(--bg-surface0);
+  color: var(--accent);
+}
+.tools-item.active {
+  color: var(--success);
+}
+
+.ti-icon {
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 .batch-bar {
   display: flex;
   align-items: center;
