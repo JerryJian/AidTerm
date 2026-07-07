@@ -544,6 +544,7 @@ defineExpose({ focusSearch, doFit })
   min-height: 0;
   min-width: 0;
   position: relative;
+  padding: 4px;
 }
 
 .search-bar {
