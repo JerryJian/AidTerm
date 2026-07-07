@@ -97,6 +97,12 @@ function stripTrailingPrompt(output: string, prompt: string): string {
   return output
 }
 
+function stripMarkerFromOutput(text: string, marker: string): string {
+  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`^.*?echo\\s+${escaped}.*$`, 'gm')
+  return text.replace(re, '').replace(new RegExp(escaped, 'g'), '')
+}
+
 async function executeInTerminal(cmd: string, prompt?: string, silent?: boolean): Promise<string> {
   const p = prompt || '$ '
   return new Promise(async (resolve) => {
@@ -108,10 +114,9 @@ async function executeInTerminal(cmd: string, prompt?: string, silent?: boolean)
     })) ?? (() => {})
 
     if (!silent) terminal?.write(`${cmd}\r\n`)
-    writeInput(cmd + '\r')
 
     const marker = `__CMD_DONE_${Date.now()}__`
-    writeInput(`echo ${marker}\r`)
+    writeInput(`${cmd}\recho ${marker}\r`)
 
     const t0 = Date.now()
     const MAX_WAIT = 30000
@@ -121,7 +126,6 @@ async function executeInTerminal(cmd: string, prompt?: string, silent?: boolean)
       if (idx >= 0) {
         unsub()
         output = output.slice(0, idx)
-        output = output.split('\n').filter(l => !l.includes(`echo ${marker}`)).join('\n')
         finish()
         return
       }
@@ -138,9 +142,11 @@ async function executeInTerminal(cmd: string, prompt?: string, silent?: boolean)
     setTimeout(poll, 50)
 
     function finish() {
+      const clean = stripMarkerFromOutput(output, marker)
+
       if (silent) {
         suppressOutput.value = false
-        const raw = stripAnsi(output)
+        const raw = stripAnsi(clean)
         const lines = raw.split(/\r?\n/)
         let startIdx = -1
         for (let i = 0; i < lines.length; i++) {
@@ -155,12 +161,12 @@ async function executeInTerminal(cmd: string, prompt?: string, silent?: boolean)
         return
       }
 
-      let display = stripLeadingEcho(output, cmd)
+      let display = stripLeadingEcho(clean, cmd)
       display = stripTrailingPrompt(display, p)
       terminal?.write(display)
 
       suppressOutput.value = false
-      resolve(stripAnsi(output))
+      resolve(stripAnsi(clean))
     }
   })
 }
@@ -272,7 +278,9 @@ async function initTerminal() {
     store.updateSessionId(store.activeTabId ?? '', id)
     store.updateSessionStatus(store.activeTabId ?? '', 'connected')
     const unsub = await onOutput((data: string) => {
-      if (!suppressOutput.value) terminal?.write(data)
+      if (suppressOutput.value) return
+      const cleaned = data.replace(/__CMD_DONE_\d+__/g, '')
+      if (cleaned) terminal?.write(cleaned)
     })
     if (unsub) unlisten = unsub
 
