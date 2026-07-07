@@ -258,24 +258,24 @@ async function initTerminal() {
   const rows = terminal.rows
   const cols = terminal.cols
 
-  const id = props.sshInfo
-    ? await sshConnect(
-        props.sshInfo.host,
-        props.sshInfo.port,
-        props.sshInfo.username,
-        props.sshInfo.password,
-        props.sshInfo.privateKeyPath,
-        props.sshInfo.proxyId,
-        props.sshInfo.agentForwarding,
-        props.sshInfo.x11Forwarding,
-        rows,
-        cols,
-      )
-    : props.telnetInfo
-      ? await telnetConnect(props.telnetInfo.host, props.telnetInfo.port)
-      : await createSession(rows, cols, store.activeTab?.session?.subshell)
+  try {
+    const id = props.sshInfo
+      ? await sshConnect(
+          props.sshInfo.host,
+          props.sshInfo.port,
+          props.sshInfo.username,
+          props.sshInfo.password,
+          props.sshInfo.privateKeyPath,
+          props.sshInfo.proxyId,
+          props.sshInfo.agentForwarding,
+          props.sshInfo.x11Forwarding,
+          rows,
+          cols,
+        )
+      : props.telnetInfo
+        ? await telnetConnect(props.telnetInfo.host, props.telnetInfo.port)
+        : await createSession(rows, cols, store.activeTab?.session?.subshell)
 
-  if (id) {
     store.updateSessionId(store.activeTabId ?? '', id)
     store.updateSessionStatus(store.activeTabId ?? '', 'connected')
     const unsub = await onOutput((data: string) => {
@@ -299,6 +299,10 @@ async function initTerminal() {
         }
       }
     }
+  } catch (e) {
+    const errMsg = typeof e === 'string' ? e : e instanceof Error ? e.message : 'Connection failed'
+    terminal?.writeln(`\r\n\x1b[1;31mError:\x1b[0m ${errMsg}`)
+    store.updateSessionStatus(store.activeTabId ?? '', 'disconnected')
   }
 }
 

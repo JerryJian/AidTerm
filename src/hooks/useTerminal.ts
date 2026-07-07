@@ -8,27 +8,17 @@ export function useTerminal() {
   const isConnected = ref(false)
 
   async function createSession(rows = 24, cols = 80, shell?: string) {
-    try {
-      const id = await invoke<string>('spawn_terminal', { rows, cols, shell: shell ?? null })
-      sessionId.value = id
-      isConnected.value = true
-      return id
-    } catch (e) {
-      console.error('Failed to create terminal session:', e)
-      return null
-    }
+    const id = await invoke<string>('spawn_terminal', { rows, cols, shell: shell ?? null })
+    sessionId.value = id
+    isConnected.value = true
+    return id
   }
 
   async function telnetConnect(host: string, port: number) {
-    try {
-      const id = await invoke<string>('telnet_connect', { host, port })
-      sessionId.value = id
-      isConnected.value = true
-      return id
-    } catch (e) {
-      console.error('Failed to connect Telnet:', e)
-      return null
-    }
+    const id = await invoke<string>('telnet_connect', { host, port })
+    sessionId.value = id
+    isConnected.value = true
+    return id
   }
 
   async function sshConnect(
@@ -43,26 +33,21 @@ export function useTerminal() {
     rows = 24,
     cols = 80,
   ) {
-    try {
-      const id = await invoke<string>('ssh_connect', {
-        host,
-        port,
-        username,
-        password,
-        privateKeyPath: privateKeyPath ?? null,
-        proxyId: proxyId ?? null,
-        agentForwarding: agentForwarding ?? false,
-        x11Forwarding: x11Forwarding ?? false,
-        rows,
-        cols,
-      })
-      sessionId.value = id
-      isConnected.value = true
-      return id
-    } catch (e) {
-      console.error('Failed to connect SSH:', e)
-      return null
-    }
+    const id = await invoke<string>('ssh_connect', {
+      host,
+      port,
+      username,
+      password,
+      privateKeyPath: privateKeyPath ?? null,
+      proxyId: proxyId ?? null,
+      agentForwarding: agentForwarding ?? false,
+      x11Forwarding: x11Forwarding ?? false,
+      rows,
+      cols,
+    })
+    sessionId.value = id
+    isConnected.value = true
+    return id
   }
 
   async function writeInput(data: string) {
