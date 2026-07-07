@@ -1,12 +1,12 @@
 [package]
-name = "tndterm"
+name = "aidterm"
 version = "0.1.0"
 description = "A cross-platform terminal emulator"
 authors = ["you"]
 edition = "2021"
 
 [lib]
-name = "tndterm_lib"
+name = "aidterm_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

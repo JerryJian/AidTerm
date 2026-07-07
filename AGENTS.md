@@ -1,4 +1,4 @@
-# TndTerm — Tauri + Vue3 复刻 WindTerm 开发规划
+# AidTerm — Tauri + Vue3 复刻 WindTerm 开发规划
 
 ## 项目概述
 使用 **Tauri 2.x** + **Vue 3 (Composition API + TypeScript)** + **Rust** 后端，构建跨平台终端模拟器，对标 WindTerm 核心功能。
@@ -210,7 +210,7 @@
 ## 目录结构
 
 ```
-TndTerm/
+AidTerm/
 ├── src/                    # Vue 前端
 │   ├── assets/
 │   ├── components/

@@ -1,6 +1,6 @@
 export default {
   app: {
-    title: 'TndTerm',
+    title: 'AidTerm',
     lock: 'Lock',
     unlock: 'Unlock',
     quit: 'Quit',

@@ -136,7 +136,7 @@ impl SftpConnection {
                         let result = (|| {
                             let tmp = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
                             std::fs::write(&tmp, &content).map_err(|e| format!("Temp write: {}", e))?;
-                            let r = Self::scp_upload(&mut session, tmp.to_str().unwrap_or("/tmp/tndterm"), &remote);
+                            let r = Self::scp_upload(&mut session, tmp.to_str().unwrap_or("/tmp/aidterm"), &remote);
                             let _ = std::fs::remove_file(&tmp);
                             r
                         })();

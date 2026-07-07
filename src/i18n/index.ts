@@ -2,7 +2,7 @@ import { createI18n } from 'vue-i18n'
 import zhCN from './zh-CN'
 import enUS from './en-US'
 
-const savedLang = localStorage.getItem('tndterm_language') || 'zh-CN'
+const savedLang = localStorage.getItem('aidterm_language') || 'zh-CN'
 
 export const i18n = createI18n({
   legacy: true,
@@ -16,5 +16,5 @@ export const i18n = createI18n({
 
 export function setLanguage(lang: string) {
   i18n.global.locale = lang as 'zh-CN' | 'en-US'
-  localStorage.setItem('tndterm_language', lang)
+  localStorage.setItem('aidterm_language', lang)
 }

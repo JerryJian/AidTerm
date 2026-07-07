@@ -39,7 +39,7 @@ export const useAiStore = defineStore('ai', () => {
 
   function loadConfig(): AiConfig {
     try {
-      return JSON.parse(localStorage.getItem('tndterm_ai_config') || '{}')
+      return JSON.parse(localStorage.getItem('aidterm_ai_config') || '{}')
     } catch {
       return {
         provider: 'openai',
@@ -51,7 +51,7 @@ export const useAiStore = defineStore('ai', () => {
   }
 
   function saveConfig() {
-    localStorage.setItem('tndterm_ai_config', JSON.stringify(config.value))
+    localStorage.setItem('aidterm_ai_config', JSON.stringify(config.value))
     enabled.value = !!config.value.api_key
   }
 

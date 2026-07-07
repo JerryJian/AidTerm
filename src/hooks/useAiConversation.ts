@@ -23,7 +23,7 @@ function sanitizeForTerminal(text: string): string {
 
 function buildSystemPrompt(systemInfo: SystemInfo, history: CommandRecord[]): string {
   const lines: string[] = [
-    '你是 TndTerm 终端 AI 助手。你可以通过 execute_command 工具在用户当前的终端中执行命令。',
+    '你是 AidTerm 终端 AI 助手。你可以通过 execute_command 工具在用户当前的终端中执行命令。',
     '请根据用户的请求，分析问题并执行适当的命令。每次执行命令前，请先解释你要做什么。',
     '',
     '注意：命令会直接在用户的终端 shell 中执行，拥有与用户相同的环境变量、PATH 和权限。',

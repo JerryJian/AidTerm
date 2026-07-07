@@ -66,7 +66,7 @@ impl KeychainManager {
         let priv_path = self.keys_dir.join(format!("{}_{}", &name, "id_rsa"));
         let priv_str = priv_path.to_string_lossy().to_string();
         let bits_str = bits.to_string();
-        let comment = format!("tndterm-{}", name);
+        let comment = format!("aidterm-{}", name);
 
         let mut args = vec![
             "-t", "rsa",
@@ -114,7 +114,7 @@ impl KeychainManager {
         let id = uuid::Uuid::new_v4().to_string();
         let priv_path = self.keys_dir.join(format!("{}_{}", &name, "id_ed25519"));
         let priv_str = priv_path.to_string_lossy().to_string();
-        let comment = format!("tndterm-{}", name);
+        let comment = format!("aidterm-{}", name);
 
         let mut args = vec![
             "-t", "ed25519",

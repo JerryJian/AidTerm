@@ -1,6 +1,6 @@
 export default {
   app: {
-    title: 'TndTerm',
+    title: 'AidTerm',
     lock: '锁屏',
     unlock: '解锁',
     quit: '退出',

@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue'
 import type { Snippet } from '../types'
 
-const STORAGE_KEY = 'tndterm_snippets'
+const STORAGE_KEY = 'aidterm_snippets'
 
 const snippets = ref<Snippet[]>([])
 

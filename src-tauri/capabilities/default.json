@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Default capabilities for TndTerm",
+  "description": "Default capabilities for AidTerm",
   "windows": ["main"],
   "permissions": [
     "core:default",

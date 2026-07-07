@@ -15,7 +15,7 @@ const isSettingPassword = ref(false)
 const error = ref('')
 const hasPassword = ref(false)
 
-const STORAGE_KEY = 'tndterm_lock_password'
+const STORAGE_KEY = 'aidterm_lock_password'
 
 onMounted(() => {
   hasPassword.value = !!localStorage.getItem(STORAGE_KEY)

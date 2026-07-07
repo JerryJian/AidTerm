@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue'
 import type { Trigger } from '../types'
 
-const STORAGE_KEY = 'tndterm_triggers'
+const STORAGE_KEY = 'aidterm_triggers'
 
 const triggers = ref<Trigger[]>([])
 

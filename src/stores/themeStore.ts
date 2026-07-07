@@ -4,12 +4,12 @@ import { ref, watch } from 'vue'
 export type ThemeMode = 'dark' | 'light'
 
 export const useThemeStore = defineStore('theme', () => {
-  const saved = localStorage.getItem('tndterm_theme')
+  const saved = localStorage.getItem('aidterm_theme')
   const mode = ref<ThemeMode>((saved as ThemeMode) || 'dark')
 
   function setMode(m: ThemeMode) {
     mode.value = m
-    localStorage.setItem('tndterm_theme', m)
+    localStorage.setItem('aidterm_theme', m)
   }
 
   function toggle() {

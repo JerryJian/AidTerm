@@ -1,4 +1,4 @@
-# TndTerm
+# AidTerm
 
 A cross-platform terminal emulator built with Tauri 2.x + Vue 3 (TypeScript).
 
