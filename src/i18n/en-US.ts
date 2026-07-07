@@ -135,6 +135,8 @@ export default {
     host: 'Host',
     port: 'Port',
     username: 'Username',
+    password: 'Password',
+    remember_password: 'Remember Password',
     group: 'Group',
     no_group: 'No Group',
     new_group: 'New Group...',

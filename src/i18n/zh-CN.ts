@@ -135,6 +135,8 @@ export default {
     host: '主机',
     port: '端口',
     username: '用户名',
+    password: '密码',
+    remember_password: '记住密码',
     group: '分组',
     no_group: '无分组',
     new_group: '新建分组...',

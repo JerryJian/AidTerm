@@ -11,7 +11,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  save: [data: { name: string; type: 'ssh' | 'telnet'; host: string; port: number; username: string; groupName: string }]
+  save: [data: { name: string; type: 'ssh' | 'telnet'; host: string; port: number; username: string; password: string; savePassword: boolean; groupName: string }]
   close: []
 }>()
 
@@ -22,6 +22,8 @@ const sessionType = ref<'ssh' | 'telnet'>(props.session?.session_type === 'telne
 const host = ref(props.session?.host || '')
 const port = ref(props.session?.port || 22)
 const username = ref(props.session?.username || '')
+const password = ref(props.session?.password || '')
+const savePassword = ref(!!props.session?.password)
 const groupName = ref('')
 const showNewGroup = ref(false)
 const groupSelect = ref('')
@@ -60,6 +62,8 @@ function onSubmit() {
     host: host.value.trim(),
     port: port.value,
     username: username.value.trim(),
+    password: password.value,
+    savePassword: savePassword.value,
     groupName: groupName.value.trim(),
   })
 }
@@ -100,6 +104,16 @@ function onBackdropClick(e: MouseEvent) {
           <span class="field-label">{{ t('session_dialog.username') }}</span>
           <input v-model="username" type="text" class="input" placeholder="root" />
         </label>
+        <template v-if="sessionType === 'ssh'">
+          <label class="field">
+            <span class="field-label">{{ t('session_dialog.password') }}</span>
+            <input v-model="password" type="password" class="input" placeholder="password" />
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="savePassword" />
+            {{ t('session_dialog.remember_password') }}
+          </label>
+        </template>
         <label class="field">
           <span class="field-label">{{ t('session_dialog.group') }}</span>
           <select v-model="groupSelect" class="input" @change="onGroupChange">
@@ -230,5 +244,17 @@ select.input {
 }
 .btn-save:hover {
   background: var(--accent-hover);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.checkbox-label input[type="checkbox"] {
+  accent-color: var(--accent);
 }
 </style>

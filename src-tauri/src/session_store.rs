@@ -11,6 +11,7 @@ pub struct SavedSession {
     pub host: Option<String>,
     pub port: Option<u16>,
     pub username: Option<String>,
+    pub password: Option<String>,
     pub private_key_path: Option<String>,
     pub last_connected: Option<String>,
     pub created_at: String,

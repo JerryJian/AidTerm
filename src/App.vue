@@ -32,7 +32,7 @@ const settings = useSettingsStore()
 const ui = useUiStore()
 useThemeStore()
 
-const sshDialogPrefill = ref<{ host: string; port: number; username: string }>()
+const sshDialogPrefill = ref<{ host: string; port: number; username: string; password?: string }>()
 const showSessionDialog = ref(false)
 const editingSession = ref<SavedSession | undefined>()
 const editorFile = ref<{ connId: string; remotePath: string } | null>(null)
@@ -84,6 +84,7 @@ function onConnectSession(session: SavedSession) {
       host: session.host ?? '',
       port: session.port ?? 22,
       username: session.username ?? '',
+      password: session.password ?? undefined,
     }
     ui.sshDialog = true
     sessionStore.updateLastConnected(session.id)
@@ -107,7 +108,7 @@ function onEditSession(session: SavedSession) {
   showSessionDialog.value = true
 }
 
-function onSaveSession(data: { name: string; type: 'ssh' | 'telnet'; host: string; port: number; username: string; groupName: string }) {
+function onSaveSession(data: { name: string; type: 'ssh' | 'telnet'; host: string; port: number; username: string; password: string; savePassword: boolean; groupName: string }) {
   const existing = editingSession.value
   const groupId = sessionStore.ensureGroup(data.groupName)
   if (existing) {
@@ -117,6 +118,7 @@ function onSaveSession(data: { name: string; type: 'ssh' | 'telnet'; host: strin
       host: data.host,
       port: data.port,
       username: data.username,
+      password: data.savePassword ? data.password : null,
       group_id: groupId,
     })
   } else {
@@ -124,6 +126,7 @@ function onSaveSession(data: { name: string; type: 'ssh' | 'telnet'; host: strin
       host: data.host,
       port: data.port,
       username: data.username,
+      password: data.savePassword ? data.password : undefined,
     }, groupId)
   }
   showSessionDialog.value = false
@@ -294,6 +297,7 @@ onUnmounted(() => {
     :initial-host="sshDialogPrefill?.host"
     :initial-port="sshDialogPrefill?.port"
     :initial-username="sshDialogPrefill?.username"
+    :initial-password="sshDialogPrefill?.password"
     @connect="onSshConnect"
     @close="ui.sshDialog = false"
   />

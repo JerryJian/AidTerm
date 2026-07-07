@@ -9,6 +9,7 @@ const props = withDefaults(defineProps<{
   initialHost?: string
   initialPort?: number
   initialUsername?: string
+  initialPassword?: string
 }>(), {
   initialPort: 22,
 })
@@ -24,7 +25,7 @@ const proxyStore = useProxyStore()
 const host = ref(props.initialHost || '')
 const port = ref(props.initialPort || 22)
 const username = ref(props.initialUsername || '')
-const password = ref('')
+const password = ref(props.initialPassword || '')
 const privateKeyPath = ref('')
 const selectedProxyId = ref<string>('')
 const agentForwarding = ref(false)
@@ -33,9 +34,6 @@ const x11Forwarding = ref(false)
 const firstInput = ref<HTMLInputElement>()
 
 onMounted(async () => {
-  if (host.value) {
-    password.value = ''
-  }
   firstInput.value?.focus()
   await proxyStore.refresh()
 })

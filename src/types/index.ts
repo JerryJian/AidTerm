@@ -7,6 +7,7 @@ export interface SshConnectionInfo {
   proxyId?: string
   agentForwarding?: boolean
   x11Forwarding?: boolean
+  savePassword?: boolean
 }
 
 export type ProxyType = 'Http' | 'Socks5' | 'JumpHost'
@@ -73,6 +74,7 @@ export interface SavedSession {
   host: string | null
   port: number | null
   username: string | null
+  password: string | null
   private_key_path: string | null
   proxy_id: string | null
   last_connected: string | null

@@ -59,7 +59,7 @@ export const useSessionStore = defineStore('sessions', () => {
   function addSession(
     name: string,
     type: SavedSession['session_type'],
-    config: { host?: string; port?: number; username?: string; privateKeyPath?: string },
+    config: { host?: string; port?: number; username?: string; password?: string; privateKeyPath?: string },
     groupId?: string | null,
   ) {
     const session: SavedSession = {
@@ -70,6 +70,7 @@ export const useSessionStore = defineStore('sessions', () => {
       host: config.host ?? null,
       port: config.port ?? null,
       username: config.username ?? null,
+      password: config.password ?? null,
       private_key_path: config.privateKeyPath ?? null,
       proxy_id: null,
       last_connected: null,
