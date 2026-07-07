@@ -1,5 +1,6 @@
 mod ai;
 mod commands;
+mod crypto;
 mod keychain;
 mod known_hosts;
 mod proxy;

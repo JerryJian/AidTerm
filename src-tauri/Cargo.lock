@@ -32,9 +32,11 @@ dependencies = [
 name = "aidterm"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "encoding_rs",
  "portable-pty",
  "reqwest 0.12.28",
+ "ring 0.17.14",
  "serde",
  "serde_json",
  "ssh-rs",
