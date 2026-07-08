@@ -51,6 +51,14 @@ const uploadTasks = ref<UploadTask[]>([])
 const ctxEntry = ref<FileEntry | null>(null)
 const ctxPos = ref<{ x: number; y: number } | null>(null)
 const deleteConfirm = ref<FileEntry | null>(null)
+const pathInput = ref('')
+
+watch(() => store.currentPath, (p) => { pathInput.value = p }, { immediate: true })
+
+function onPathSubmit() {
+  const p = pathInput.value.trim() || '/'
+  store.listDir(p)
+}
 
 let autoConnecting = false
 
@@ -141,17 +149,6 @@ function parentDir(path: string): string {
   const p = path.replace(/\/$/, '')
   const idx = p.lastIndexOf('/')
   return idx <= 0 ? '/' : p.slice(0, idx)
-}
-
-function breadcrumbParts(path: string): { name: string; full: string }[] {
-  const parts = path.replace(/\/$/, '').split('/').filter(Boolean)
-  const crumbs = [{ name: '~', full: '/' }]
-  let acc = ''
-  for (const p of parts) {
-    acc += '/' + p
-    crumbs.push({ name: p, full: acc })
-  }
-  return crumbs
 }
 
 function handleDisconnect() {
@@ -289,11 +286,7 @@ function fileIcon(entry: FileEntry): string {
     <div v-else class="file-browser">
       <!-- Toolbar -->
       <div class="toolbar">
-        <span class="breadcrumb">
-          <span v-for="(crumb, i) in breadcrumbParts(store.currentPath)" :key="i" class="crumb" @click="navigateTo(crumb.full)">
-            {{ crumb.name }}<span v-if="i < breadcrumbParts(store.currentPath).length - 1" class="crumb-sep">/</span>
-          </span>
-        </span>
+        <input v-model="pathInput" class="path-input" @keydown.enter="onPathSubmit" @blur="onPathSubmit" />
         <div class="toolbar-actions">
           <button class="tb-btn" :title="t('sftp.go_up')" @click="goUp" v-html="icons.up" />
           <button class="tb-btn" :title="t('sftp.refresh')" @click="store.listDir(store.currentPath)" v-html="icons.refresh" />
@@ -507,28 +500,20 @@ function fileIcon(entry: FileEntry): string {
   gap: 8px;
 }
 
-.breadcrumb {
+.path-input {
   flex: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
+  background: var(--bg-surface0);
+  border: 1px solid var(--bg-surface1);
+  border-radius: 3px;
+  padding: 3px 8px;
   font-size: 12px;
-  overflow: hidden;
+  font-family: var(--font-mono, 'Consolas', 'Cascadia Code', monospace);
+  color: var(--text);
+  outline: none;
+  min-width: 0;
 }
-
-.crumb {
-  color: var(--accent);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.crumb:hover {
-  color: var(--accent-hover);
-}
-
-.crumb-sep {
-  color: var(--text-overlay0);
-  margin: 0 1px;
+.path-input:focus {
+  border-color: var(--accent);
 }
 
 .toolbar-actions {
