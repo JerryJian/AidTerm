@@ -96,6 +96,7 @@ export interface UploadTask {
   name: string
   status: 'uploading' | 'done' | 'error'
   error?: string
+  type: 'upload' | 'download'
 }
 
 export interface FileEntry {

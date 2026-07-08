@@ -49,11 +49,14 @@ const dragOver = ref(false)
 const unlistens: Array<() => void> = []
 const userDisconnected = ref(false)
 const uploadTasks = ref<UploadTask[]>([])
+const downloadTasks = ref<UploadTask[]>([])
 const ctxEntry = ref<FileEntry | null>(null)
 const ctxPos = ref<{ x: number; y: number } | null>(null)
 const deleteConfirm = ref<FileEntry | null>(null)
 const pathInput = ref('')
 const rowMenuEntry = ref<FileEntry | null>(null)
+
+const allTasks = computed(() => [...uploadTasks.value, ...downloadTasks.value])
 const rowMenuPos = ref({ x: 0, y: 0 })
 
 function closeRowMenu() {
@@ -209,7 +212,7 @@ async function doUpload() {
   for (const file of files) {
     const name = file.split('\\').pop()?.split('/').pop() || 'file'
     const remotePath = store.currentPath.replace(/\/?$/, '/') + name
-    const task: UploadTask = { name, status: 'uploading' }
+    const task: UploadTask = { name, status: 'uploading', type: 'upload' }
     uploadTasks.value.push(task)
     try {
       await store.upload(file, remotePath)
@@ -229,7 +232,18 @@ async function doDownload(entry: FileEntry) {
   const remotePath = store.currentPath.replace(/\/?$/, '/') + entry.name
   const dest = await save({ defaultPath: entry.name })
   if (!dest) return
-  await store.download(remotePath, dest)
+  const task: UploadTask = { name: entry.name, status: 'uploading', type: 'download' }
+  downloadTasks.value.push(task)
+  try {
+    await store.download(remotePath, dest)
+    task.status = 'done'
+  } catch (e: any) {
+    task.status = 'error'
+    task.error = String(e)
+  }
+  setTimeout(() => {
+    downloadTasks.value = downloadTasks.value.filter(t => t.status === 'uploading')
+  }, 5000)
 }
 
 function confirmDelete(entry: FileEntry) {
@@ -410,16 +424,17 @@ function fileIcon(entry: FileEntry): string {
         </div>
       </Teleport>
 
-      <!-- Upload progress -->
-      <div v-if="uploadTasks.length" class="upload-progress">
-        <div v-for="(task, i) in uploadTasks" :key="i" class="upload-task" :class="task.status">
+      <!-- Transfer progress -->
+      <div v-if="allTasks.length" class="upload-progress">
+        <div v-for="(task, i) in allTasks" :key="i" class="upload-task" :class="task.status">
           <span class="task-icon">
             <span v-if="task.status === 'uploading'" class="spinner" v-html="icons.spinner" />
             <span v-else-if="task.status === 'done'" class="check">&#10003;</span>
             <span v-else class="cross">&#10007;</span>
           </span>
+          <span class="task-dir">{{ task.type === 'upload' ? '↑' : '↓' }}</span>
           <span class="task-name">{{ task.name }}</span>
-          <span v-if="task.status === 'uploading'" class="task-status">{{ t('sftp.uploading') }}</span>
+          <span v-if="task.status === 'uploading'" class="task-status">{{ task.type === 'upload' ? t('sftp.uploading') : t('sftp.downloading') }}</span>
           <span v-else-if="task.status === 'error'" class="task-error" :title="task.error">{{ t('sftp.upload_failed') }}</span>
           <span v-else class="task-done">{{ t('sftp.upload_done') }}</span>
         </div>
@@ -794,6 +809,12 @@ function fileIcon(entry: FileEntry): string {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+}
+.upload-task .task-dir {
+  width: 12px;
+  text-align: center;
+  color: var(--text-sub0);
   flex-shrink: 0;
 }
 .upload-task .spinner {

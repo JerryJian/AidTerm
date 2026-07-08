@@ -181,6 +181,7 @@ export default {
     disconnected: '已断开',
     drop_to_upload: '拖拽文件到此处上传',
     uploading: '上传中...',
+    downloading: '下载中...',
     upload_done: '完成',
     upload_failed: '失败',
     confirm_delete: '确认删除 {name}？',

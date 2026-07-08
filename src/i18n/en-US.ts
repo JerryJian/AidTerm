@@ -181,6 +181,7 @@ export default {
     disconnected: 'Disconnected',
     drop_to_upload: 'Drop files here to upload',
     uploading: 'Uploading...',
+    downloading: 'Downloading...',
     upload_done: 'Done',
     upload_failed: 'Failed',
     confirm_delete: 'Delete {name}?',
