@@ -67,7 +67,7 @@ function toggleRowMenu(entry: FileEntry, e: MouseEvent) {
   }
   rowMenuEntry.value = entry
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-  rowMenuPos.value = { x: rect.right, y: rect.bottom }
+  rowMenuPos.value = { x: window.innerWidth - rect.right, y: rect.bottom }
 }
 
 watch(() => store.currentPath, (p) => { pathInput.value = p }, { immediate: true })
@@ -363,7 +363,7 @@ function fileIcon(entry: FileEntry): string {
           <span class="col-actions">
             <button class="row-menu-btn" @click.stop="(e) => toggleRowMenu(entry, e)" v-html="icons.more" />
             <Teleport to="body">
-              <div v-if="rowMenuEntry === entry" class="row-menu" :style="{ left: rowMenuPos.x + 'px', top: rowMenuPos.y + 'px' }" @click.stop>
+              <div v-if="rowMenuEntry === entry" class="row-menu" :style="{ right: rowMenuPos.x + 'px', top: rowMenuPos.y + 'px' }" @click.stop>
                 <button v-if="!entry.is_dir" class="row-menu-item" @click="closeRowMenu(); onEntryDblClick(entry)"><span v-html="icons.edit" />{{ t('sftp.edit') }}</button>
                 <button class="row-menu-item" @click="closeRowMenu(); doDownload(entry)"><span v-html="icons.download" />{{ t('sftp.download') }}</button>
                 <button class="row-menu-item" @click="closeRowMenu(); startRename(entry)"><span v-html="icons.rename" />{{ t('sftp.rename') }}</button>
