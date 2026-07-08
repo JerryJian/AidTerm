@@ -28,9 +28,9 @@ pub struct FileEntry {
     pub permissions: String,
 }
 
-type Resp<T> = Sender<Result<T, String>>;
+pub(crate) type Resp<T> = Sender<Result<T, String>>;
 
-enum SftpCmd {
+pub(crate) enum SftpCmd {
     ListDir { path: String, resp: Resp<Vec<FileEntry>> },
     Download { remote: String, local: String, resp: Resp<()> },
     Upload { local: String, remote: String, resp: Resp<()> },
@@ -326,6 +326,10 @@ impl SftpConnection {
             .send(SftpCmd::WriteFile { remote: remote.to_string(), content: content.to_string(), resp: tx })
             .map_err(|e| format!("Send error: {}", e))?;
         rx.recv().map_err(|e| format!("Receive error: {}", e))?
+    }
+
+    pub fn cmd_tx(&self) -> Sender<SftpCmd> {
+        self.cmd_tx.clone()
     }
 
     pub fn kill(&mut self) {
