@@ -1,12 +1,15 @@
+use russh::client;
+use russh::keys::*;
+use russh::ChannelMsg;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::Path;
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream as TokioTcpStream;
+use tokio::sync::mpsc as tokio_mpsc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TunnelType {
@@ -53,12 +56,12 @@ pub struct TunnelInfo {
 
 struct Tunnel {
     info: TunnelInfo,
-    kill_tx: Sender<()>,
+    kill_tx: tokio_mpsc::UnboundedSender<()>,
     handle: Option<JoinHandle<()>>,
 }
 
 impl Tunnel {
-    fn new(info: TunnelInfo, kill_tx: Sender<()>, handle: JoinHandle<()>) -> Self {
+    fn new(info: TunnelInfo, kill_tx: tokio_mpsc::UnboundedSender<()>, handle: JoinHandle<()>) -> Self {
         Self { info, kill_tx, handle: Some(handle) }
     }
 
@@ -79,37 +82,121 @@ struct SshAuth {
     private_key_path: Option<String>,
 }
 
-impl SshAuth {
-    fn connect(&self) -> Result<ssh2::Session, String> {
-        let addr = format!("{}:{}", self.host, self.port);
-        let tcp = TcpStream::connect_timeout(
-            &addr.parse().map_err(|_| format!("Invalid address: {}", addr))?,
-            Duration::from_secs(10),
-        )
+struct TunnelHandler;
+impl client::Handler for TunnelHandler {
+    type Error = anyhow::Error;
+
+    async fn check_server_key(&mut self, _server_public_key: &PublicKey) -> Result<bool, Self::Error> {
+        Ok(true)
+    }
+}
+
+struct RemoteTunnelHandler {
+    incoming_tx: tokio_mpsc::UnboundedSender<(russh::Channel<russh::client::Msg>, String, u32, String, u32)>,
+}
+
+impl client::Handler for RemoteTunnelHandler {
+    type Error = anyhow::Error;
+
+    async fn check_server_key(&mut self, _server_public_key: &PublicKey) -> Result<bool, Self::Error> {
+        Ok(true)
+    }
+
+    async fn server_channel_open_forwarded_tcpip(
+        &mut self,
+        channel: russh::Channel<russh::client::Msg>,
+        connected_address: &str,
+        connected_port: u32,
+        originator_address: &str,
+        originator_port: u32,
+        _handle: russh::client::ChannelOpenHandle,
+        _session: &mut russh::client::Session,
+    ) -> Result<(), Self::Error> {
+        let _ = self.incoming_tx.send((
+            channel,
+            connected_address.to_string(),
+            connected_port,
+            originator_address.to_string(),
+            originator_port,
+        ));
+        Ok(())
+    }
+}
+
+async fn authenticate_on<H: client::Handler<Error = anyhow::Error>>(
+    handle: &mut client::Handle<H>,
+    auth: &SshAuth,
+) -> Result<(), String> {
+    if let Some(ref key_path) = auth.private_key_path {
+        let key = load_secret_key(key_path, None)
+            .map_err(|e| format!("Key load: {}", e))?;
+        let key_with_alg = PrivateKeyWithHashAlg::new(Arc::new(key), None);
+        let result = handle
+            .authenticate_publickey(&auth.username, key_with_alg)
+            .await
+            .map_err(|e| format!("Key auth: {}", e))?;
+        if !result.success() {
+            return Err("Key auth rejected".to_string());
+        }
+    } else if let Some(ref pass) = auth.password {
+        let result = handle
+            .authenticate_password(&auth.username, pass)
+            .await
+            .map_err(|e| format!("Password auth: {}", e))?;
+        if !result.success() {
+            return Err("Password auth rejected".to_string());
+        }
+    } else {
+        return Err("No auth method".to_string());
+    }
+    Ok(())
+}
+
+async fn connect_and_auth<H: client::Handler<Error = anyhow::Error> + 'static>(
+    auth: &SshAuth,
+    handler: H,
+) -> Result<client::Handle<H>, String> {
+    let addr = format!("{}:{}", auth.host, auth.port);
+    let config = Arc::new(client::Config::default());
+    let mut handle = client::connect(config, &addr, handler)
+        .await
         .map_err(|e| format!("TCP connect: {}", e))?;
 
-        let mut sess = ssh2::Session::new()
-            .map_err(|e| format!("Session create: {}", e))?;
-        sess.set_tcp_stream(tcp);
-        sess.handshake().map_err(|e| format!("Handshake: {}", e))?;
+    authenticate_on(&mut handle, auth).await?;
+    Ok(handle)
+}
 
-        if let Some(ref key_path) = self.private_key_path {
-            sess.userauth_pubkey_file(&self.username, None, Path::new(key_path), None)
-                .map_err(|e| format!("Key auth: {}", e))?;
-        } else if let Some(ref pass) = self.password {
-            sess.userauth_password(&self.username, pass)
-                .map_err(|e| format!("Password auth: {}", e))?;
-        } else {
-            return Err("No auth method".to_string());
+async fn relay_between(
+    tcp: std::net::TcpStream,
+    mut channel: russh::Channel<russh::client::Msg>,
+) {
+    let mut tcp = match TokioTcpStream::from_std(tcp) {
+        Ok(t) => t,
+        Err(_) => return,
+    };
+
+    let mut buf = [0u8; 65536];
+    loop {
+        tokio::select! {
+            n = tcp.read(&mut buf) => {
+                match n {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        if channel.data(&buf[..n]).await.is_err() { break; }
+                    }
+                }
+            }
+            msg = channel.wait() => {
+                match msg {
+                    Some(ChannelMsg::Data { data }) => {
+                        if tcp.write_all(&data).await.is_err() { break; }
+                        if tcp.flush().await.is_err() { break; }
+                    }
+                    Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+                    _ => {}
+                }
+            }
         }
-
-        if !sess.authenticated() {
-            return Err("Auth failed".to_string());
-        }
-
-        // 100ms timeout so channel reads don't block forever
-        sess.set_timeout(100);
-        Ok(sess)
     }
 }
 
@@ -124,7 +211,7 @@ impl TunnelManager {
 
     pub fn create(&self, req: TunnelCreateRequest) -> Result<TunnelInfo, String> {
         let tunnel_id = uuid::Uuid::new_v4().to_string();
-        let (kill_tx, kill_rx) = mpsc::channel::<()>();
+        let (kill_tx, kill_rx) = tokio_mpsc::unbounded_channel::<()>();
         let auth = SshAuth {
             host: req.host.clone(),
             port: req.port,
@@ -150,21 +237,35 @@ impl TunnelManager {
         let spawn_id = tunnel_id.clone();
 
         let handle = std::thread::spawn(move || {
-            let result = match req.tunnel_type {
-                TunnelType::Local => run_local_tunnel(
-                    &auth, &req.bind_addr, req.bind_port,
-                    &req.target_host.unwrap_or_default(),
-                    req.target_port.unwrap_or(0), &kill_rx,
-                ),
-                TunnelType::Remote => run_remote_tunnel(
-                    &auth, &req.bind_addr, req.bind_port,
-                    &req.target_host.unwrap_or_default(),
-                    req.target_port.unwrap_or(0), &kill_rx,
-                ),
-                TunnelType::Dynamic => run_dynamic_tunnel(
-                    &auth, &req.bind_addr, req.bind_port, &kill_rx,
-                ),
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    let mut tunnels = report.lock().unwrap();
+                    if let Some(t) = tunnels.get_mut(&spawn_id) {
+                        t.info.status = TunnelStatus::Error(format!("Runtime: {}", e));
+                    }
+                    return;
+                }
             };
+
+            let result = rt.block_on(async {
+                let mut kill_rx = kill_rx;
+                match req.tunnel_type {
+                    TunnelType::Local => run_local_tunnel(
+                        &auth, &req.bind_addr, req.bind_port,
+                        &req.target_host.unwrap_or_default(),
+                        req.target_port.unwrap_or(0), &mut kill_rx,
+                    ).await,
+                    TunnelType::Remote => run_remote_tunnel(
+                        &auth, &req.bind_addr, req.bind_port,
+                        &req.target_host.unwrap_or_default(),
+                        req.target_port.unwrap_or(0), &mut kill_rx,
+                    ).await,
+                    TunnelType::Dynamic => run_dynamic_tunnel(
+                        &auth, &req.bind_addr, req.bind_port, &mut kill_rx,
+                    ).await,
+                }
+            });
 
             let mut tunnels = report.lock().unwrap();
             if let Some(t) = tunnels.get_mut(&spawn_id) {
@@ -199,58 +300,23 @@ impl TunnelManager {
     }
 }
 
-fn forward_one_connection(
-    mut tcp: TcpStream,
-    auth: &SshAuth,
-    target_host: &str,
-    target_port: u16,
-) {
-    let sess = match auth.connect() {
-        Ok(s) => s,
-        Err(_) => return,
-    };
-    let mut channel = match sess.channel_direct_tcpip(target_host, target_port, None) {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-
-    let mut buf = [0u8; 65536];
-    loop {
-        match tcp.read(&mut buf) {
-            Ok(0) => break,
-            Ok(n) => {
-                if channel.write_all(&buf[..n]).is_err() { break; }
-                if channel.flush().is_err() { break; }
-            }
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock
-                || e.kind() == std::io::ErrorKind::TimedOut => {}
-            Err(_) => break,
-        }
-        match channel.read(&mut buf) {
-            Ok(0) => break,
-            Ok(n) => {
-                if tcp.write_all(&buf[..n]).is_err() { break; }
-                if tcp.flush().is_err() { break; }
-            }
-            Err(_) => break,
-        }
-    }
-}
-
-fn run_local_tunnel(
+async fn run_local_tunnel(
     auth: &SshAuth,
     bind_addr: &str,
     bind_port: u16,
     target_host: &str,
     target_port: u16,
-    kill_rx: &Receiver<()>,
+    kill_rx: &mut tokio_mpsc::UnboundedReceiver<()>,
 ) -> Result<(), String> {
+    let handle = Arc::new(tokio::sync::Mutex::new(
+        connect_and_auth(auth, TunnelHandler).await?,
+    ));
+
     let listener = TcpListener::bind(format!("{}:{}", bind_addr, bind_port))
         .map_err(|e| format!("Bind {}:{}: {}", bind_addr, bind_port, e))?;
     listener.set_nonblocking(true)
         .map_err(|e| format!("Set nonblocking: {}", e))?;
 
-    let auth = auth.clone();
     let target_host = target_host.to_string();
 
     loop {
@@ -259,76 +325,71 @@ fn run_local_tunnel(
         }
         match listener.accept() {
             Ok((incoming, _)) => {
-                let auth = auth.clone();
                 let th = target_host.clone();
-                std::thread::spawn(move || {
-                    forward_one_connection(incoming, &auth, &th, target_port);
-                });
+                let mut h = handle.lock().await;
+                match h.channel_open_direct_tcpip(&th, target_port as u32, "", 0).await {
+                    Ok(ch) => {
+                        tokio::spawn(async move {
+                            relay_between(incoming, ch).await;
+                        });
+                    }
+                    Err(_) => continue,
+                }
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                std::thread::sleep(Duration::from_millis(100));
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
             Err(e) => return Err(format!("Accept: {}", e)),
         }
     }
 }
 
-fn run_remote_tunnel(
+async fn run_remote_tunnel(
     auth: &SshAuth,
     bind_addr: &str,
     bind_port: u16,
     target_host: &str,
     target_port: u16,
-    kill_rx: &Receiver<()>,
+    kill_rx: &mut tokio_mpsc::UnboundedReceiver<()>,
 ) -> Result<(), String> {
-    let sess = auth.connect()?;
-    let (mut listener, _actual_port) = sess.channel_forward_listen(bind_port, Some(bind_addr), None)
+    let (incoming_tx, mut incoming_rx) = tokio_mpsc::unbounded_channel();
+
+    let mut handle = connect_and_auth(auth, RemoteTunnelHandler { incoming_tx }).await?;
+
+    handle.tcpip_forward(bind_addr, bind_port as u32).await
         .map_err(|e| format!("Remote listen on {}:{}: {}", bind_addr, bind_port, e))?;
 
     loop {
-        if kill_rx.try_recv().is_ok() {
-            return Ok(());
-        }
-        match listener.accept() {
-            Ok(mut channel) => {
-                let mut remote = match TcpStream::connect(format!("{}:{}", target_host, target_port)) {
+        tokio::select! {
+            _ = kill_rx.recv() => {
+                return Ok(());
+            }
+            Some((channel, _connected_addr, _connected_port, _originator_addr, _originator_port)) = incoming_rx.recv() => {
+                let remote = match TcpStream::connect(format!("{}:{}", target_host, target_port)) {
                     Ok(s) => s,
                     Err(e) => {
-                        eprintln!("Connect to target {}:{}: {}", target_host, target_port, e);
+                        log::error!("Connect to target {}:{}: {}", target_host, target_port, e);
                         continue;
                     }
                 };
-                let mut buf = [0u8; 65536];
-                loop {
-                    match channel.read(&mut buf) {
-                        Ok(0) => break,
-                        Ok(n) => {
-                            if remote.write_all(&buf[..n]).is_err() { break; }
-                            if remote.flush().is_err() { break; }
-                        }
-                        Err(_) => break,
-                    }
-                    match remote.read(&mut buf) {
-                        Ok(0) => break,
-                        Ok(n) => {
-                            if channel.write_all(&buf[..n]).is_err() { break; }
-                            if channel.flush().is_err() { break; }
-                        }
-                        Err(_) => break,
-                    }
-                }
+                tokio::spawn(async move {
+                    relay_between(remote, channel).await;
+                });
             }
-            Err(e) => return Err(format!("Accept remote: {}", e)),
         }
     }
 }
 
-fn run_dynamic_tunnel(
+async fn run_dynamic_tunnel(
     auth: &SshAuth,
     bind_addr: &str,
     bind_port: u16,
-    kill_rx: &Receiver<()>,
+    kill_rx: &mut tokio_mpsc::UnboundedReceiver<()>,
 ) -> Result<(), String> {
+    let handle = Arc::new(tokio::sync::Mutex::new(
+        connect_and_auth(auth, TunnelHandler).await?,
+    ));
+
     let listener = TcpListener::bind(format!("{}:{}", bind_addr, bind_port))
         .map_err(|e| format!("Bind {}:{}: {}", bind_addr, bind_port, e))?;
     listener.set_nonblocking(true)
@@ -340,17 +401,22 @@ fn run_dynamic_tunnel(
         }
         match listener.accept() {
             Ok((mut incoming, _)) => {
-                let auth = auth.clone();
-                std::thread::spawn(move || {
-                    let (target_host, target_port) = match socks5_handshake(&mut incoming) {
-                        Ok(r) => r,
-                        Err(_) => return,
-                    };
-                    forward_one_connection(incoming, &auth, &target_host, target_port);
-                });
+                let (target_host, target_port) = match socks5_handshake(&mut incoming) {
+                    Ok(r) => r,
+                    Err(_) => continue,
+                };
+                let mut h = handle.lock().await;
+                match h.channel_open_direct_tcpip(&target_host, target_port as u32, "", 0).await {
+                    Ok(ch) => {
+                        tokio::spawn(async move {
+                            relay_between(incoming, ch).await;
+                        });
+                    }
+                    Err(_) => continue,
+                }
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                std::thread::sleep(Duration::from_millis(100));
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
             Err(e) => return Err(format!("Accept: {}", e)),
         }
@@ -360,21 +426,21 @@ fn run_dynamic_tunnel(
 fn socks5_handshake(stream: &mut TcpStream) -> Result<(String, u16), String> {
     let mut buf = [0u8; 512];
 
-    let n = stream.read(&mut buf)
+    let n = std::io::Read::read(stream, &mut buf)
         .map_err(|e| format!("Read greeting: {}", e))?;
     if n < 3 || buf[0] != 0x05 {
         return Err("Not SOCKS5".to_string());
     }
-    stream.write_all(&[0x05, 0x00])
+    std::io::Write::write_all(stream, &[0x05, 0x00])
         .map_err(|e| format!("Write greeting: {}", e))?;
 
-    let n = stream.read(&mut buf)
+    let n = std::io::Read::read(stream, &mut buf)
         .map_err(|e| format!("Read request: {}", e))?;
     if n < 7 || buf[0] != 0x05 {
         return Err("Invalid request".to_string());
     }
     if buf[1] != 0x01 {
-        let _ = stream.write_all(&[0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
+        let _ = std::io::Write::write_all(stream, &[0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
         return Err("Unsupported cmd".to_string());
     }
 
@@ -397,12 +463,12 @@ fn socks5_handshake(stream: &mut TcpStream) -> Result<(String, u16), String> {
             (h.join(":"), u16::from_be_bytes([buf[20], buf[21]]))
         }
         at => {
-            let _ = stream.write_all(&[0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
+            let _ = std::io::Write::write_all(stream, &[0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
             return Err(format!("Unsupported addr type {}", at));
         }
     };
 
-    stream.write_all(&[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+    std::io::Write::write_all(stream, &[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
         .map_err(|e| format!("Write response: {}", e))?;
 
     Ok((host, port))

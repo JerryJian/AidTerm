@@ -1,9 +1,15 @@
+use russh::client;
+use russh::keys::*;
+use russh::ChannelMsg;
 use serde::{Deserialize, Serialize};
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
-use std::path::Path;
+use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Duration;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::net::TcpStream as TokioTcpStream;
+use tokio_socks::tcp::socks5::Socks5Stream;
+
+pub trait ProxyStream: AsyncRead + AsyncWrite + Send + Unpin {}
+impl<T: AsyncRead + AsyncWrite + Send + Unpin> ProxyStream for T {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ProxyType {
@@ -58,20 +64,48 @@ impl ProxyManager {
     }
 }
 
-fn http_connect(
+
+
+struct JumpHostHandler;
+impl client::Handler for JumpHostHandler {
+    type Error = anyhow::Error;
+
+    async fn check_server_key(
+        &mut self,
+        _server_public_key: &PublicKey,
+    ) -> Result<bool, Self::Error> {
+        Ok(true)
+    }
+}
+
+pub async fn connect_async(
+    proxy: &ProxyConfig,
+    target_host: &str,
+    target_port: u16,
+) -> Result<    Box<dyn ProxyStream>, String> {
+    match proxy.proxy_type {
+        ProxyType::Http => {
+            http_connect_async(&proxy.host, proxy.port, target_host, target_port).await
+        }
+        ProxyType::Socks5 => {
+            socks5_connect_async(&proxy.host, proxy.port, target_host, target_port).await
+        }
+        ProxyType::JumpHost => {
+            connect_via_jump_host_async(proxy, target_host, target_port).await
+        }
+    }
+}
+
+async fn http_connect_async(
     proxy_host: &str,
     proxy_port: u16,
     target_host: &str,
     target_port: u16,
-) -> Result<TcpStream, String> {
+) -> Result<    Box<dyn ProxyStream>, String> {
     let addr = format!("{}:{}", proxy_host, proxy_port);
-    let mut stream = TcpStream::connect_timeout(
-        &addr.parse().map_err(|_| format!("Invalid proxy addr: {}", addr))?,
-        Duration::from_secs(10),
-    )
-    .map_err(|e| format!("Proxy TCP connect: {}", e))?;
-    stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
-    stream.set_write_timeout(Some(Duration::from_secs(5))).ok();
+    let mut stream = TokioTcpStream::connect(&addr)
+        .await
+        .map_err(|e| format!("Proxy TCP connect: {}", e))?;
 
     let connect_req = format!(
         "CONNECT {}:{} HTTP/1.1\r\nHost: {}:{}\r\n\r\n",
@@ -79,259 +113,109 @@ fn http_connect(
     );
     stream
         .write_all(connect_req.as_bytes())
+        .await
         .map_err(|e| format!("Proxy CONNECT write: {}", e))?;
 
-    let mut buf = [0u8; 4096];
+    let mut buf = vec![0u8; 4096];
     let n = stream
         .read(&mut buf)
+        .await
         .map_err(|e| format!("Proxy CONNECT read: {}", e))?;
     let response = String::from_utf8_lossy(&buf[..n]);
     if !response.contains("200 Connection established") {
-        return Err(format!("Proxy CONNECT failed: {}", response.lines().next().unwrap_or("?")));
+        return Err(format!(
+            "Proxy CONNECT failed: {}",
+            response.lines().next().unwrap_or("?")
+        ));
     }
 
-    stream.set_read_timeout(None).ok();
-    stream.set_write_timeout(None).ok();
-    Ok(stream)
+    Ok(Box::new(stream))
 }
 
-fn socks5_connect(
+async fn socks5_connect_async(
     proxy_host: &str,
     proxy_port: u16,
     target_host: &str,
     target_port: u16,
-) -> Result<TcpStream, String> {
+) -> Result<    Box<dyn ProxyStream>, String> {
     let addr = format!("{}:{}", proxy_host, proxy_port);
-    let mut stream = TcpStream::connect_timeout(
-        &addr.parse().map_err(|_| format!("Invalid proxy addr: {}", addr))?,
-        Duration::from_secs(10),
-    )
-    .map_err(|e| format!("SOCKS5 TCP connect: {}", e))?;
-    stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
+    let stream = TokioTcpStream::connect(&addr)
+        .await
+        .map_err(|e| format!("SOCKS5 TCP connect: {}", e))?;
 
-    // No auth
-    stream
-        .write_all(&[0x05, 0x01, 0x00])
-        .map_err(|e| format!("SOCKS5 handshake write: {}", e))?;
-    let mut buf = [0u8; 2];
-    stream
-        .read_exact(&mut buf)
-        .map_err(|e| format!("SOCKS5 handshake read: {}", e))?;
-    if buf[0] != 0x05 || buf[1] != 0x00 {
-        return Err(format!("SOCKS5 handshake failed: {:02x?}", &buf[..]));
-    }
+    let socks_stream = Socks5Stream::connect_with_socket(stream, (target_host, target_port))
+        .await
+        .map_err(|e| format!("SOCKS5 connect: {}", e))?;
 
-    // CONNECT command
-    let target_is_ipv4 = target_host
-        .chars()
-        .all(|c| c == '.' || c.is_ascii_digit());
-    let (atyp, addr_bytes): (u8, Vec<u8>) = if target_is_ipv4 {
-        let parts: Vec<u8> = target_host
-            .split('.')
-            .filter_map(|s| s.parse().ok())
-            .collect();
-        if parts.len() != 4 {
-            return Err("Invalid IPv4 address".to_string());
-        }
-        (0x01, parts)
-    } else {
-        let domain = target_host.as_bytes();
-        if domain.len() > 255 {
-            return Err("Domain too long".to_string());
-        }
-        let mut v = vec![domain.len() as u8];
-        v.extend_from_slice(domain);
-        (0x03, v)
-    };
-
-    let mut msg = vec![0x05, 0x01, 0x00, atyp];
-    msg.extend_from_slice(&addr_bytes);
-    msg.extend_from_slice(&target_port.to_be_bytes());
-    stream
-        .write_all(&msg)
-        .map_err(|e| format!("SOCKS5 connect write: {}", e))?;
-
-    // Read response: ver, rep, rsv, atyp, bind.addr, bind.port
-    let mut resp_hdr = [0u8; 4];
-    stream
-        .read_exact(&mut resp_hdr)
-        .map_err(|e| format!("SOCKS5 connect read header: {}", e))?;
-    if resp_hdr[0] != 0x05 || resp_hdr[1] != 0x00 {
-        let rep = resp_hdr[1];
-        let err_msg = match rep {
-            0x01 => "general SOCKS server failure",
-            0x02 => "connection not allowed by ruleset",
-            0x03 => "network unreachable",
-            0x04 => "host unreachable",
-            0x05 => "connection refused by destination",
-            0x06 => "TTL expired",
-            0x07 => "command not supported / protocol error",
-            0x08 => "address type not supported",
-            _ => "unknown error",
-        };
-        return Err(format!("SOCKS5 connect failed: {}", err_msg));
-    }
-
-    // Consume remaining bind address
-    let atyp = resp_hdr[3];
-    let addr_len: usize = match atyp {
-        0x01 => 4,
-        0x04 => 16,
-        0x03 => {
-            let mut len = [0u8; 1];
-            stream.read_exact(&mut len).ok();
-            len[0] as usize
-        }
-        _ => return Err("Unknown SOCKS5 address type".to_string()),
-    };
-    let mut _bind_addr = vec![0u8; addr_len + 2]; // addr + port
-    stream.read_exact(&mut _bind_addr).ok();
-
-    stream.set_read_timeout(None).ok();
-    stream.set_write_timeout(None).ok();
-    Ok(stream)
+    Ok(Box::new(socks_stream))
 }
 
-fn connect_via_jump_host(
+async fn connect_via_jump_host_async(
     jump: &ProxyConfig,
     target_host: &str,
     target_port: u16,
-) -> Result<TcpStream, String> {
+) -> Result<    Box<dyn ProxyStream>, String> {
     let addr = format!("{}:{}", jump.host, jump.port);
-    let tcp = TcpStream::connect_timeout(
-        &addr.parse().map_err(|_| format!("Invalid jump host: {}", addr))?,
-        Duration::from_secs(10),
-    )
-    .map_err(|e| format!("Jump host TCP connect: {}", e))?;
-
-    let mut sess = ssh2::Session::new().map_err(|e| format!("SSH session: {}", e))?;
-    sess.set_tcp_stream(tcp);
-    sess.handshake().map_err(|e| format!("Jump host handshake: {}", e))?;
+    let config = Arc::new(client::Config::default());
+    let mut handle = client::connect(config, &addr, JumpHostHandler)
+        .await
+        .map_err(|e| format!("Jump host connect: {}", e))?;
 
     let jump_user = jump.username.as_deref().unwrap_or("root");
     if let Some(ref key_path) = jump.private_key_path {
-        sess.userauth_pubkey_file(jump_user, None, Path::new(key_path), None)
+        let key = load_secret_key(key_path, None)
+            .map_err(|e| format!("Jump host key load: {}", e))?;
+        let key_with_alg = PrivateKeyWithHashAlg::new(Arc::new(key), None);
+        let auth = handle
+            .authenticate_publickey(jump_user, key_with_alg)
+            .await
             .map_err(|e| format!("Jump host key auth: {}", e))?;
+        if !auth.success() {
+            return Err("Jump host key auth rejected".to_string());
+        }
     } else {
-        sess.userauth_password(jump_user, jump.password.as_deref().unwrap_or(""))
+        let auth = handle
+            .authenticate_password(jump_user, jump.password.as_deref().unwrap_or(""))
+            .await
             .map_err(|e| format!("Jump host password auth: {}", e))?;
+        if !auth.success() {
+            return Err("Jump host password auth rejected".to_string());
+        }
     }
 
-    if !sess.authenticated() {
-        return Err("Jump host auth failed".to_string());
-    }
+    let mut channel = handle
+        .channel_open_direct_tcpip(target_host, target_port as u32, "", 0)
+        .await
+        .map_err(|e| format!("Direct TCP/IP channel: {}", e))?;
 
-    sess.set_timeout(5000);
+    let (mut user_end, mut relay_end) = tokio::io::duplex(65536);
 
-    let listener =
-        TcpListener::bind("127.0.0.1:0").map_err(|e| format!("Local listener: {}", e))?;
-    let local_port = listener.local_addr().map_err(|e| e.to_string())?.port();
-
-    let target_host_owned = target_host.to_string();
-    let jump_host_addr = addr.clone();
-    let jump_username = jump.username.clone();
-    let jump_password = jump.password.clone();
-    let jump_key_path = jump.private_key_path.clone();
-
-    std::thread::spawn(move || {
-        let (mut accepted, _) = match listener.accept() {
-            Ok(a) => a,
-            Err(_) => return,
-        };
-
-        let tcp2 = match TcpStream::connect_timeout(
-            &jump_host_addr.parse().unwrap(),
-            Duration::from_secs(10),
-        ) {
-            Ok(t) => t,
-            Err(_) => return,
-        };
-        let mut sess2 = match ssh2::Session::new() {
-            Ok(s) => s,
-            Err(_) => return,
-        };
-        sess2.set_tcp_stream(tcp2);
-        if sess2.handshake().is_err() {
-            return;
-        }
-        let ju = jump_username.as_deref().unwrap_or("root");
-        if let Some(ref kp) = jump_key_path {
-            if sess2
-                .userauth_pubkey_file(ju, None, Path::new(kp), None)
-                .is_err()
-            {
-                return;
-            }
-        } else {
-            if sess2
-                .userauth_password(ju, jump_password.as_deref().unwrap_or(""))
-                .is_err()
-            {
-                return;
-            }
-        }
-        if !sess2.authenticated() {
-            return;
-        }
-
-        sess2.set_timeout(100);
-        let mut channel = match sess2.channel_direct_tcpip(&target_host_owned, target_port, None) {
-            Ok(c) => c,
-            Err(_) => return,
-        };
-
-        let mut buf = [0u8; 65536];
+    tokio::spawn(async move {
+        let mut buf = vec![0u8; 65536];
         loop {
-            match accepted.read(&mut buf) {
-                Ok(0) => break,
-                Ok(n) => {
-                    if channel.write_all(&buf[..n]).is_err() {
-                        break;
-                    }
-                    if channel.flush().is_err() {
-                        break;
-                    }
-                }
-                Err(_) => break,
-            }
-            match channel.read(&mut buf) {
-                Ok(0) => break,
-                Ok(n) => {
-                    if accepted.write_all(&buf[..n]).is_err() {
-                        break;
-                    }
-                    if accepted.flush().is_err() {
-                        break;
+            tokio::select! {
+                result = relay_end.read(&mut buf) => {
+                    match result {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            if channel.data(&buf[..n]).await.is_err() { break; }
+                        }
                     }
                 }
-                Err(_) => break,
+                msg = channel.wait() => {
+                    match msg {
+                        Some(ChannelMsg::Data { data }) => {
+                            if relay_end.write_all(&data).await.is_err() { break; }
+                        }
+                        Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+                        _ => {}
+                    }
+                }
             }
         }
     });
 
-    // Give relay thread time to start accepting
-    std::thread::sleep(Duration::from_millis(50));
-
-    let target = TcpStream::connect(("127.0.0.1", local_port))
-        .map_err(|e| format!("Local connect to relay: {}", e))?;
-
-    Ok(target)
+    Ok(Box::new(user_end))
 }
 
-pub fn connect(
-    proxy: &ProxyConfig,
-    target_host: &str,
-    target_port: u16,
-) -> Result<TcpStream, String> {
-    match proxy.proxy_type {
-        ProxyType::Http => {
-            http_connect(&proxy.host, proxy.port, target_host, target_port)
-        }
-        ProxyType::Socks5 => {
-            socks5_connect(&proxy.host, proxy.port, target_host, target_port)
-        }
-        ProxyType::JumpHost => {
-            connect_via_jump_host(proxy, target_host, target_port)
-        }
-    }
-}
+

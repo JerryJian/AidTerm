@@ -21,13 +21,13 @@ portable-pty = "0.8"
 uuid = { version = "1", features = ["v4"] }
 russh = { version = "0.62", default-features = false, features = ["ring", "rsa", "flate2"] }
 anyhow = "1"
-tokio = { version = "1", features = ["rt", "macros", "sync", "time", "io-util"] }
+tokio = { version = "1", features = ["rt", "macros", "sync", "time", "io-util", "net"] }
 tauri-plugin-dialog = "2.7.1"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-deep-link = "2"
 telnet = "0.2"
-ssh2 = "0.9"
+tokio-socks = "0.5"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 encoding_rs = "0.8"
 log = "0.4"

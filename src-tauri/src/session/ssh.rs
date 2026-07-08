@@ -1,6 +1,4 @@
-use std::cell::RefCell;
-use std::io::{Read, Write};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -141,17 +139,7 @@ impl SshConnection {
         let session_id = id.clone();
 
         if let Some(proxy_config) = proxy_config {
-            // Proxy path — keep using ssh2 (sync, unchanged)
-            let (sync_write_tx, sync_write_rx): (Sender<String>, _) = mpsc::channel();
-            let (sync_resize_tx, sync_resize_rx): (Sender<(u16, u16)>, _) = mpsc::channel();
-            let (sync_kill_tx, sync_kill_rx): (Sender<()>, _) = mpsc::channel();
-            let (sync_exec_tx, sync_exec_rx): (Sender<(String, oneshot::Sender<Result<String, String>>)>, _) = mpsc::channel();
-
-            // Bridge the tokio channels to std channels
-            let write_tx2 = write_tx.clone();
-            let resize_tx2 = resize_tx.clone();
-            let exec_tx2 = exec_tx.clone();
-            std::thread::spawn(move || {
+            let handle = std::thread::spawn(move || {
                 let rt = match Runtime::new() {
                     Ok(rt) => rt,
                     Err(e) => {
@@ -160,51 +148,27 @@ impl SshConnection {
                     }
                 };
                 rt.block_on(async {
-                    let mut write_rx = write_rx;
-                    let mut resize_rx = resize_rx;
-                    let mut kill_rx = kill_rx;
-                    let mut exec_rx = exec_rx;
-                    loop {
-                        tokio::select! {
-                            Some(data) = write_rx.recv() => {
-                                let _ = sync_write_tx.send(data);
-                            }
-                            Some((r, c)) = resize_rx.recv() => {
-                                let _ = sync_resize_tx.send((r, c));
-                            }
-                            Some((cmd, resp)) = exec_rx.recv() => {
-                                let _ = sync_exec_tx.send((cmd, resp));
-                            }
-                            _ = kill_rx.recv() => {
-                                let _ = sync_kill_tx.send(());
-                                break;
-                            }
-                            else => break,
-                        }
+                    let result = Self::run_session_via_proxy_async(
+                        &addr, &username, &password, private_key_path,
+                        &proxy_config, rows, cols,
+                        write_rx, resize_rx, kill_rx, exec_rx,
+                        &app_handle, &session_id,
+                    ).await;
+                    if let Err(e) = result {
+                        log::error!("[ssh] Session error ({}): {}", session_id, e);
+                        let _ = app_handle.emit("terminal-output", serde_json::json!({
+                            "session_id": session_id, "data": format!("\r\n[SSH Error: {}]\r\n", e),
+                        }));
+                        let _ = app_handle.emit("session-status", serde_json::json!({
+                            "session_id": session_id, "status": "disconnected", "error": e,
+                        }));
                     }
                 });
             });
 
-            let handle = std::thread::spawn(move || {
-                let result = Self::run_session_via_proxy(
-                    &addr, &username, &password, private_key_path,
-                    &proxy_config, rows, cols, agent_forwarding, x11_forwarding,
-                    sync_write_rx, sync_resize_rx, sync_kill_rx, sync_exec_rx,
-                    &app_handle, &session_id,
-                );
-                if let Err(e) = result {
-                    let _ = app_handle.emit("terminal-output", serde_json::json!({
-                        "session_id": session_id, "data": format!("\r\n[SSH Error: {}]\r\n", e),
-                    }));
-                    let _ = app_handle.emit("session-status", serde_json::json!({
-                        "session_id": session_id, "status": "disconnected", "error": e,
-                    }));
-                }
-            });
-
             Ok(Self {
-                write_tx: write_tx2, resize_tx: resize_tx2,
-                kill_tx: Some(kill_tx), exec_tx: Some(exec_tx2),
+                write_tx, resize_tx,
+                kill_tx: Some(kill_tx), exec_tx: Some(exec_tx),
                 handle: Some(handle),
             })
         } else {
@@ -300,6 +264,98 @@ impl SshConnection {
             "session_id": session_id, "status": "connected",
         }));
 
+        Self::run_event_loop(
+            write_rx, resize_rx, kill_rx, exec_rx,
+            &mut channel, &handle, app_handle, session_id,
+        ).await?;
+
+        let _ = channel.close().await;
+        Ok(())
+    }
+
+    async fn exec_on_handle(
+        handle: &client::Handle<SshHandler>,
+        command: &str,
+    ) -> Result<String, String> {
+        let mut channel = handle.channel_open_session().await
+            .map_err(|e| format!("Failed to open exec channel: {}", e))?;
+        channel.exec(true, command).await
+            .map_err(|e| format!("Exec request failed: {}", e))?;
+
+        let mut output = Vec::new();
+        loop {
+            match channel.wait().await {
+                Some(ChannelMsg::Data { data }) => output.extend_from_slice(&data),
+                Some(ChannelMsg::ExtendedData { ext: 1, data }) => output.extend_from_slice(&data),
+                Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+                _ => {}
+            }
+        }
+        let _ = channel.close().await;
+        String::from_utf8(output).map_err(|e| format!("UTF-8 error: {}", e))
+    }
+
+    async fn run_session_via_proxy_async(
+        addr: &str,
+        username: &str,
+        password: &str,
+        private_key_path: Option<String>,
+        proxy_config: &proxy::ProxyConfig,
+        rows: u16,
+        cols: u16,
+        write_rx: UnboundedReceiver<String>,
+        resize_rx: UnboundedReceiver<(u16, u16)>,
+        kill_rx: UnboundedReceiver<()>,
+        exec_rx: UnboundedReceiver<(String, ExecResponse)>,
+        app_handle: &AppHandle,
+        session_id: &str,
+    ) -> Result<(), String> {
+        let target_host = addr.rsplitn(2, ':').nth(1).unwrap_or(addr);
+        let target_port: u16 = addr.rsplitn(2, ':').next().unwrap_or("22").parse().unwrap_or(22);
+
+        let stream = proxy::connect_async(proxy_config, target_host, target_port).await?;
+
+        let config = Arc::new(client::Config::default());
+        let mut handle = client::connect_stream(config, stream, SshHandler).await
+            .map_err(|e| format!("SSH connect via proxy failed: {}", e))?;
+
+        Self::authenticate(&mut handle, username, password, private_key_path.as_deref()).await?;
+
+        let mut channel = handle.channel_open_session().await
+            .map_err(|e| format!("Failed to open session channel: {}", e))?;
+
+        channel.request_pty(true, "xterm-256color", cols as u32, rows as u32, 0, 0, &[]).await
+            .map_err(|e| format!("PTY request failed: {}", e))?;
+
+        channel.request_shell(true).await
+            .map_err(|e| format!("Shell request failed: {}", e))?;
+
+        // Reuse the same event loop code as run_session_async
+        let _ = app_handle.emit("session-status", serde_json::json!({
+            "session_id": session_id, "status": "connected",
+        }));
+
+        Self::run_event_loop(
+            write_rx, resize_rx, kill_rx, exec_rx,
+            &mut channel, &handle, app_handle, session_id,
+        ).await?;
+
+        let _ = channel.close().await;
+        Ok(())
+    }
+
+    async fn run_event_loop(
+        mut write_rx: UnboundedReceiver<String>,
+        mut resize_rx: UnboundedReceiver<(u16, u16)>,
+        mut kill_rx: UnboundedReceiver<()>,
+        mut exec_rx: UnboundedReceiver<(String, ExecResponse)>,
+        channel: &mut russh::Channel<russh::client::Msg>,
+        handle: &client::Handle<SshHandler>,
+        app_handle: &AppHandle,
+        session_id: &str,
+    ) -> Result<(), String> {
+        use russh::ChannelMsg;
+
         let mut emit_count = 0u64;
         let mut emit_bytes = 0u64;
 
@@ -312,7 +368,7 @@ impl SshConnection {
                     let _ = channel.window_change(c as u32, r as u32, 0, 0).await;
                 }
                 Some((cmd, resp)) = exec_rx.recv() => {
-                    let result = Self::exec_on_handle(&handle, &cmd).await;
+                    let result = Self::exec_on_handle(handle, &cmd).await;
                     let _ = resp.send(result);
                 }
                 _ = kill_rx.recv() => {
@@ -328,7 +384,6 @@ impl SshConnection {
                                 log::info!("[ssh-event-loop] emit #{} {}B (total {}B) session={}", emit_count, raw.len(), emit_bytes, session_id);
                             }
 
-                            // Zmodem detection — async path: skip zmodem_loop for now
                             if zmodem::detect_init(&raw) {
                                 let _ = app_handle.emit("zmodem-start", serde_json::json!({
                                     "session_id": session_id,
@@ -363,224 +418,7 @@ impl SshConnection {
             }
         }
 
-        let _ = channel.close().await;
         Ok(())
-    }
-
-    async fn exec_on_handle(
-        handle: &client::Handle<SshHandler>,
-        command: &str,
-    ) -> Result<String, String> {
-        let mut channel = handle.channel_open_session().await
-            .map_err(|e| format!("Failed to open exec channel: {}", e))?;
-        channel.exec(true, command).await
-            .map_err(|e| format!("Exec request failed: {}", e))?;
-
-        let mut output = Vec::new();
-        loop {
-            match channel.wait().await {
-                Some(ChannelMsg::Data { data }) => output.extend_from_slice(&data),
-                Some(ChannelMsg::ExtendedData { ext: 1, data }) => output.extend_from_slice(&data),
-                Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
-                _ => {}
-            }
-        }
-        let _ = channel.close().await;
-        String::from_utf8(output).map_err(|e| format!("UTF-8 error: {}", e))
-    }
-
-    fn run_session_via_proxy(
-        addr: &str,
-        username: &str,
-        password: &str,
-        private_key_path: Option<String>,
-        proxy_config: &proxy::ProxyConfig,
-        rows: u16,
-        cols: u16,
-        agent_forwarding: bool,
-        x11_forwarding: bool,
-        write_rx: Receiver<String>,
-        resize_rx: Receiver<(u16, u16)>,
-        kill_rx: Receiver<()>,
-        exec_rx: Receiver<(String, oneshot::Sender<Result<String, String>>)>,
-        app_handle: &AppHandle,
-        session_id: &str,
-    ) -> Result<(), String> {
-        let target_host = addr.rsplitn(2, ':').nth(1).unwrap_or(addr);
-        let target_port: u16 = addr.rsplitn(2, ':').next().unwrap_or("22").parse().unwrap_or(22);
-
-        let stream = proxy::connect(proxy_config, target_host, target_port)?;
-
-        let mut sess = ssh2::Session::new().map_err(|e| format!("SSH2 session: {}", e))?;
-        sess.set_tcp_stream(stream);
-        sess.handshake().map_err(|e| format!("SSH2 handshake: {}", e))?;
-
-        let _ = agent_forwarding;
-
-        if let Some(ref key_path) = private_key_path {
-            sess.userauth_pubkey_file(username, None, std::path::Path::new(key_path), None)
-                .map_err(|e| format!("SSH2 key auth: {}", e))?;
-        } else {
-            sess.userauth_password(username, password)
-                .map_err(|e| format!("SSH2 password auth: {}", e))?;
-        }
-
-        if !sess.authenticated() {
-            return Err("SSH2 authentication failed".to_string());
-        }
-
-        let mut channel = sess.channel_session()
-            .map_err(|e| format!("SSH2 channel: {}", e))?;
-
-        let _ = x11_forwarding;
-
-        channel.request_pty_size(cols as u32, rows as u32, None, None)
-            .map_err(|e| format!("SSH2 PTY: {}", e))?;
-        channel.shell()
-            .map_err(|e| format!("SSH2 shell: {}", e))?;
-
-        sess.set_blocking(false);
-
-        let channel_ref = RefCell::new(channel);
-
-        let write_channel = |data: &[u8]| -> Result<(), String> {
-            channel_ref.borrow_mut().write_all(data).map_err(|e| format!("SSH2 write: {}", e))
-        };
-        let read_channel = || -> Result<Vec<u8>, String> {
-            let mut buf = vec![0u8; 65536];
-            match channel_ref.borrow_mut().read(&mut buf) {
-                Ok(0) => Ok(Vec::new()),
-                Ok(n) => {
-                    buf.truncate(n);
-                    Ok(buf)
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(Vec::new()),
-                Err(e) => Err(e.to_string()),
-            }
-        };
-        let do_resize = |r: u16, c: u16| -> Result<(), String> {
-            channel_ref.borrow_mut().request_pty_size(c as u32, r as u32, None, None)
-                .map_err(|e| format!("SSH2 resize: {}", e))
-        };
-
-        let _ = app_handle.emit("session-status", serde_json::json!({
-            "session_id": session_id, "status": "connected",
-        }));
-
-        let result = Self::event_loop(
-            &write_rx, &resize_rx, &kill_rx, &exec_rx, &sess,
-            app_handle, session_id, &write_channel, &read_channel, &do_resize,
-        );
-
-        let mut channel = channel_ref.into_inner();
-        let _ = channel.close();
-        let _ = channel.wait_close();
-        result
-    }
-
-    fn event_loop(
-        write_rx: &Receiver<String>,
-        resize_rx: &Receiver<(u16, u16)>,
-        kill_rx: &Receiver<()>,
-        exec_rx: &Receiver<(String, oneshot::Sender<Result<String, String>>)>,
-        sess: &ssh2::Session,
-        app_handle: &AppHandle,
-        session_id: &str,
-        write_shell: impl Fn(&[u8]) -> Result<(), String>,
-        read_shell: impl Fn() -> Result<Vec<u8>, String>,
-        do_resize: impl Fn(u16, u16) -> Result<(), String>,
-    ) -> Result<(), String> {
-        let write_shell = write_shell;
-        let read_shell = read_shell;
-        let do_resize = do_resize;
-        let mut emit_count = 0u64;
-        let mut emit_bytes = 0u64;
-        loop {
-            if kill_rx.try_recv().is_ok() {
-                break;
-            }
-
-            // Handle exec requests
-            while let Ok((cmd, resp)) = exec_rx.try_recv() {
-                let result = Self::exec_on_session(sess, &cmd);
-                let _ = resp.send(result);
-            }
-
-            while let Ok((r, c)) = resize_rx.try_recv() {
-                do_resize(r, c)?;
-            }
-
-            while let Ok(data) = write_rx.try_recv() {
-                write_shell(data.as_bytes())?;
-            }
-
-            match read_shell() {
-                Ok(data) => {
-                    if data.is_empty() {
-                        std::thread::sleep(Duration::from_millis(10));
-                        continue;
-                    }
-
-                    emit_count += 1;
-                    emit_bytes += data.len() as u64;
-                    if emit_count <= 5 || emit_count % 100 == 0 {
-                        log::info!("[ssh-event-loop] emit #{} {}B (total {}B) session={}", emit_count, data.len(), emit_bytes, session_id);
-                    }
-
-                    if zmodem::detect_init(&data) {
-                        let _ = app_handle.emit("zmodem-start", serde_json::json!({
-                            "session_id": session_id,
-                        }));
-
-                        let mut buf: Vec<u8> = data.to_vec();
-
-                        let mut z_write = |d: &[u8]| write_shell(d);
-                        let mut z_read = || read_shell();
-
-                        let _ = zmodem_loop(
-                            write_rx, kill_rx, app_handle, session_id,
-                            &mut buf, &mut z_write, &mut z_read,
-                        );
-
-                        continue;
-                    }
-
-                    let _ = app_handle.emit("terminal-output", serde_json::json!({
-                        "session_id": session_id, "data": String::from_utf8_lossy(&data),
-                    }));
-                }
-                Err(e) => return Err(e),
-            }
-        }
-
-        Ok(())
-    }
-
-    fn exec_on_session(
-        sess: &ssh2::Session,
-        command: &str,
-    ) -> Result<String, String> {
-        let mut channel = sess.channel_session()
-            .map_err(|e| format!("SSH2 exec channel: {}", e))?;
-        channel.exec(command)
-            .map_err(|e| format!("SSH2 exec: {}", e))?;
-
-        let mut output = Vec::new();
-        let mut buf = [0u8; 65536];
-        loop {
-            match channel.read(&mut buf) {
-                Ok(0) => break,
-                Ok(n) => output.extend_from_slice(&buf[..n]),
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    std::thread::sleep(Duration::from_millis(10));
-                    continue;
-                }
-                Err(e) => return Err(format!("SSH2 read: {}", e)),
-            }
-        }
-        let _ = channel.close();
-        let _ = channel.wait_close();
-        String::from_utf8(output).map_err(|e| format!("UTF-8 error: {}", e))
     }
 
     pub fn exec_tx(&self) -> Option<UnboundedSender<(String, ExecResponse)>> {
