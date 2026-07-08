@@ -4,7 +4,7 @@ import { useSftpStore } from '../../stores/sftpStore'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
 import { useI18n } from 'vue-i18n'
-import type { FileEntry, TerminalTab, UploadTask } from '../../types'
+import type { FileEntry, TerminalTab, UploadTask, SftpProgress } from '../../types'
 
 const svg = (d: string) => `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
 
@@ -55,6 +55,7 @@ const ctxPos = ref<{ x: number; y: number } | null>(null)
 const deleteConfirm = ref<FileEntry | null>(null)
 const pathInput = ref('')
 const rowMenuEntry = ref<FileEntry | null>(null)
+const speedTracker = new Map<string, { time: number; bytes: number }>()
 
 const allTasks = computed(() => [...uploadTasks.value, ...downloadTasks.value])
 const rowMenuPos = ref({ x: 0, y: 0 })
@@ -133,7 +134,7 @@ const sortedEntries = computed(() => {
 })
 
 onMounted(async () => {
-  const un = await listen<{ type: string; paths?: string[]; position?: { x: number; y: number } }>('tauri://drag-drop', (event) => {
+  const un1 = await listen<{ type: string; paths?: string[]; position?: { x: number; y: number } }>('tauri://drag-drop', (event) => {
     const { type, paths } = event.payload
     if (type === 'over' || type === 'enter') {
       dragOver.value = true
@@ -152,7 +153,30 @@ onMounted(async () => {
       dragOver.value = false
     }
   })
-  unlistens.push(un)
+  unlistens.push(un1)
+
+  const un2 = await listen<SftpProgress>('sftp-progress', (event) => {
+    const p = event.payload
+    const tasks = p.type === 'download' ? downloadTasks : uploadTasks
+    const name = p.remote.split('/').pop() || p.remote
+    const task = tasks.value.find(t => t.name === name)
+    if (task) {
+      task.percent = Math.round((p.bytes_transferred / p.total_size) * 100)
+      task.bytes_transferred = p.bytes_transferred
+      task.total_size = p.total_size
+      const now = performance.now()
+      const prev = speedTracker.get(name)
+      if (prev && prev.bytes > 0) {
+        const dt = (now - prev.time) / 1000
+        if (dt > 0) {
+          const db = p.bytes_transferred - prev.bytes
+          task.speed = Math.round(db / dt)
+        }
+      }
+      speedTracker.set(name, { time: now, bytes: p.bytes_transferred })
+    }
+  })
+  unlistens.push(un2)
 })
 
 onUnmounted(() => {
@@ -160,9 +184,15 @@ onUnmounted(() => {
 })
 
 function formatSize(size: number): string {
-  if (size < 1024) return `${size}`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)}K`
-  return `${(size / (1024 * 1024)).toFixed(1)}M`
+  if (size < 1024) return `${size}B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)}KB`
+  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)}MB`
+  return `${(size / (1024 * 1024 * 1024)).toFixed(1)}GB`
+}
+function formatSpeed(bytesPerSec: number): string {
+  if (bytesPerSec < 1024) return `${bytesPerSec}B/s`
+  if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)}KB/s`
+  return `${(bytesPerSec / (1024 * 1024)).toFixed(1)}MB/s`
 }
 
 function parentDir(path: string): string {
@@ -434,7 +464,14 @@ function fileIcon(entry: FileEntry): string {
           </span>
           <span class="task-dir">{{ task.type === 'upload' ? '↑' : '↓' }}</span>
           <span class="task-name">{{ task.name }}</span>
-          <span v-if="task.status === 'uploading'" class="task-status">{{ task.type === 'upload' ? t('sftp.uploading') : t('sftp.downloading') }}</span>
+          <span v-if="task.status === 'uploading'" class="task-status">
+            {{ task.type === 'upload' ? t('sftp.uploading') : t('sftp.downloading') }}
+            <span v-if="task.total_size !== undefined" class="task-progress-detail">
+              {{ formatSize(task.bytes_transferred ?? 0) }}/{{ formatSize(task.total_size) }}
+              ({{ task.percent }}%)
+            </span>
+            <span v-if="task.speed" class="task-speed">{{ formatSpeed(task.speed) }}</span>
+          </span>
           <span v-else-if="task.status === 'error'" class="task-error" :title="task.error">{{ t('sftp.upload_failed') }}</span>
           <span v-else class="task-done">{{ t('sftp.upload_done') }}</span>
         </div>

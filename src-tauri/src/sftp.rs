@@ -3,11 +3,14 @@ use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 use russh::client;
 use russh::keys::*;
-use russh::ChannelMsg;
+use russh_sftp::client::SftpSession;
+use tauri::AppHandle;
+use tauri::Emitter;
 use tokio::runtime::Runtime;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub struct SftpManager {
     pub connections: Mutex<HashMap<String, SftpConnection>>,
@@ -17,6 +20,15 @@ impl SftpManager {
     pub fn new() -> Self {
         Self { connections: Mutex::new(HashMap::new()) }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SftpProgress {
+    pub remote: String,
+    pub local: String,
+    pub r#type: String,
+    pub bytes_transferred: u64,
+    pub total_size: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +72,68 @@ pub struct SftpConnection {
     handle: Option<JoinHandle<()>>,
 }
 
+fn format_mode(attrs: &russh_sftp::protocol::FileAttributes) -> String {
+    let ft = attrs.file_type();
+    let ty = match ft {
+        russh_sftp::protocol::FileType::Dir => 'd',
+        russh_sftp::protocol::FileType::Symlink => 'l',
+        russh_sftp::protocol::FileType::File => '-',
+        _ => '-',
+    };
+    let perm = attrs.permissions();
+    let rwx = |r: bool, w: bool, x: bool| -> String {
+        let rch = if r { 'r' } else { '-' };
+        let wch = if w { 'w' } else { '-' };
+        let xch = if x { 'x' } else { '-' };
+        format!("{rch}{wch}{xch}")
+    };
+    format!("{}{}{}{}", ty, rwx(perm.owner_read, perm.owner_write, perm.owner_exec), rwx(perm.group_read, perm.group_write, perm.group_exec), rwx(perm.other_read, perm.other_write, perm.other_exec))
+}
+
+fn format_mtime(attrs: &russh_sftp::protocol::FileAttributes) -> String {
+    if let Ok(t) = attrs.modified() {
+        let secs = t.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        // Format like "Jan 15 10:30" or "Jan 15  2024" depending on age
+        let months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        let now_days = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH).map(|d| d.as_secs() / 86400).unwrap_or(0);
+        let tm = secs % 86400;
+        let h = tm / 3600;
+        let m = (tm % 3600) / 60;
+
+        // Better: use a simple approach
+        let total_days = secs / 86400;
+        let month_days = [31,28,31,30,31,30,31,31,30,31,30,31];
+        let mut remaining = total_days;
+        let mut year = 1970i64;
+        loop {
+            let days_in_year = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) { 366 } else { 365 };
+            if remaining < days_in_year { break; }
+            remaining -= days_in_year;
+            year += 1;
+        }
+        let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+        let mut month = 0usize;
+        let mut day_of_month = remaining;
+        for (i, &md) in month_days.iter().enumerate() {
+            let dim = if i == 1 && leap { 29 } else { md };
+            if day_of_month < dim { month = i; break; }
+            day_of_month -= dim;
+        }
+        day_of_month += 1;
+        let month_name = months[month];
+        let current_year = 1970 + (now_days / 365) as u64;
+        if year == current_year as i64 {
+            format!("{} {:2} {:02}:{:02}", month_name, day_of_month, h, m)
+        } else {
+            format!("{} {:2}  {}", month_name, day_of_month, year)
+        }
+    } else {
+        String::new()
+    }
+}
+
+#[allow(dead_code)]
 impl SftpConnection {
     pub fn connect(
         host: String,
@@ -67,6 +141,7 @@ impl SftpConnection {
         username: String,
         password: String,
         private_key_path: Option<String>,
+        app: AppHandle,
     ) -> Result<Self, String> {
         let (cmd_tx, cmd_rx) = mpsc::channel();
         let (kill_tx, kill_rx) = mpsc::channel();
@@ -80,7 +155,7 @@ impl SftpConnection {
                     return;
                 }
             };
-            if let Err(e) = rt.block_on(Self::run_async(&addr, &username, &password, private_key_path, cmd_rx, kill_rx)) {
+            if let Err(e) = rt.block_on(Self::run_async(&addr, &username, &password, private_key_path, cmd_rx, kill_rx, app)) {
                 eprintln!("SFTP session error: {}", e);
             }
         });
@@ -113,50 +188,6 @@ impl SftpConnection {
         Ok(())
     }
 
-    async fn exec_cmd(
-        handle: &mut client::Handle<SftpHandler>,
-        cmd: &str,
-    ) -> Result<Vec<u8>, String> {
-        let mut channel = handle.channel_open_session().await
-            .map_err(|e| format!("Failed to open channel: {}", e))?;
-        channel.exec(true, cmd).await
-            .map_err(|e| format!("Exec failed: {}", e))?;
-
-        let mut output = Vec::new();
-        loop {
-            match channel.wait().await {
-                Some(ChannelMsg::Data { data }) => output.extend_from_slice(&data),
-                Some(ChannelMsg::ExtendedData { ext: 1, data }) => output.extend_from_slice(&data),
-                Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
-                _ => {}
-            }
-        }
-        let _ = channel.close().await;
-        Ok(output)
-    }
-
-    async fn write_file_remote(
-        handle: &mut client::Handle<SftpHandler>,
-        remote: &str,
-        content: &[u8],
-    ) -> Result<(), String> {
-        let mut channel = handle.channel_open_session().await
-            .map_err(|e| format!("Failed to open channel: {}", e))?;
-        channel.exec(true, format!("cat > {}", shell_escape(remote))).await
-            .map_err(|e| format!("Exec failed: {}", e))?;
-        let _ = channel.data(content).await;
-        let _ = channel.eof().await;
-
-        loop {
-            match channel.wait().await {
-                Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
-                _ => {}
-            }
-        }
-        let _ = channel.close().await;
-        Ok(())
-    }
-
     async fn run_async(
         addr: &str,
         username: &str,
@@ -164,12 +195,22 @@ impl SftpConnection {
         private_key_path: Option<String>,
         cmd_rx: Receiver<SftpCmd>,
         kill_rx: Receiver<()>,
+        app: AppHandle,
     ) -> Result<(), String> {
         let config = Arc::new(client::Config::default());
         let mut handle = client::connect(config, addr, SftpHandler).await
             .map_err(|e| format!("SFTP SSH connect failed: {}", e))?;
 
         Self::authenticate(&mut handle, username, password, private_key_path.as_deref()).await?;
+
+        let channel = handle.channel_open_session().await
+            .map_err(|e| format!("Failed to open channel: {}", e))?;
+        channel.request_subsystem(true, "sftp").await
+            .map_err(|e| format!("Failed to start SFTP subsystem: {}", e))?;
+        let stream = channel.into_stream();
+        let session = SftpSession::new(stream).await
+            .map_err(|e| format!("Failed to initialize SFTP session: {}", e))?;
+        let session = Arc::new(session);
 
         loop {
             if kill_rx.try_recv().is_ok() {
@@ -179,50 +220,45 @@ impl SftpConnection {
             match cmd_rx.recv_timeout(Duration::from_millis(500)) {
                 Ok(cmd) => match cmd {
                     SftpCmd::ListDir { path, resp } => {
-                        let result = Self::exec_cmd(&mut handle, &format!("ls -la {}", shell_escape(&path))).await
-                            .and_then(|out| String::from_utf8(out).map_err(|e| format!("UTF-8: {}", e)))
-                            .and_then(|out| Self::parse_ls_output(&out, &path));
+                        let s = session.clone();
+                        let result = Self::do_list_dir(&s, &path).await;
                         let _ = resp.send(result);
                     }
                     SftpCmd::Download { remote, local, resp } => {
-                        let result = Self::exec_cmd(&mut handle, &format!("cat {}", shell_escape(&remote))).await
-                            .and_then(|content| {
-                                std::fs::write(&local, &content).map_err(|e| format!("Local write: {}", e))
-                            });
+                        let s = session.clone();
+                        let a = app.clone();
+                        let result = Self::do_download(&s, &remote, &local, &remote, &local, &a).await;
                         let _ = resp.send(result);
                     }
                     SftpCmd::Upload { local, remote, resp } => {
-                        let content = std::fs::read(&local).map_err(|e| format!("Local read: {}", e));
-                        let result = match content {
-                            Ok(c) => Self::write_file_remote(&mut handle, &remote, &c).await,
-                            Err(e) => Err(e),
-                        };
+                        let s = session.clone();
+                        let a = app.clone();
+                        let result = Self::do_upload(&s, &local, &remote, &remote, &local, &a).await;
                         let _ = resp.send(result);
                     }
                     SftpCmd::Remove { path, resp } => {
-                        let result = Self::exec_cmd(&mut handle, &format!("rm -rf {}", shell_escape(&path))).await
-                            .map(|_| ());
+                        let s = session.clone();
+                        let result = Self::do_remove(&s, &path).await;
                         let _ = resp.send(result);
                     }
                     SftpCmd::Rename { old, new, resp } => {
-                        let result = Self::exec_cmd(
-                            &mut handle,
-                            &format!("mv {} {}", shell_escape(&old), shell_escape(&new)),
-                        ).await.map(|_| ());
+                        let s = session.clone();
+                        let result = Self::do_rename(&s, &old, &new).await;
                         let _ = resp.send(result);
                     }
                     SftpCmd::Mkdir { path, resp } => {
-                        let result = Self::exec_cmd(&mut handle, &format!("mkdir -p {}", shell_escape(&path))).await
-                            .map(|_| ());
+                        let s = session.clone();
+                        let result = Self::do_mkdir(&s, &path).await;
                         let _ = resp.send(result);
                     }
                     SftpCmd::ReadFile { remote, resp } => {
-                        let result = Self::exec_cmd(&mut handle, &format!("cat {}", shell_escape(&remote))).await
-                            .and_then(|out| String::from_utf8(out).map_err(|e| format!("UTF-8: {}", e)));
+                        let s = session.clone();
+                        let result = Self::do_read_file(&s, &remote).await;
                         let _ = resp.send(result);
                     }
                     SftpCmd::WriteFile { remote, content, resp } => {
-                        let result = Self::write_file_remote(&mut handle, &remote, content.as_bytes()).await;
+                        let s = session.clone();
+                        let result = Self::do_write_file(&s, &remote, &content).await;
                         let _ = resp.send(result);
                     }
                 },
@@ -231,37 +267,131 @@ impl SftpConnection {
             }
         }
 
-        tokio::spawn(handle);
+        let _ = session.close().await;
         Ok(())
     }
 
-    fn parse_ls_output(output: &str, _base_path: &str) -> Result<Vec<FileEntry>, String> {
+    async fn do_list_dir(session: &SftpSession, path: &str) -> Result<Vec<FileEntry>, String> {
+        let mut rd = session.read_dir(path).await
+            .map_err(|e| format!("read_dir failed: {}", e))?;
         let mut entries = Vec::new();
-        for line in output.lines() {
-            if line.starts_with("total ") || line.is_empty() {
-                continue;
-            }
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() < 9 {
-                continue;
-            }
-            let perms = parts[0];
-            let is_dir = perms.starts_with('d');
-            let size: u64 = parts[4].parse().unwrap_or(0);
-            let modified = format!("{} {} {}", parts[5], parts[6], parts[7]);
-            let name = parts[8..].join(" ");
+        while let Some(entry) = rd.next() {
+            let name = entry.file_name();
             if name == "." || name == ".." {
                 continue;
             }
-            entries.push(FileEntry {
-                name,
-                is_dir,
-                size,
-                modified,
-                permissions: perms.to_string(),
-            });
+            let attrs = entry.metadata();
+            let is_dir = attrs.is_dir();
+            let size = attrs.len();
+            let permissions = format_mode(&attrs);
+            let modified = format_mtime(&attrs);
+            entries.push(FileEntry { name, is_dir, size, modified, permissions });
         }
         Ok(entries)
+    }
+
+    async fn do_download(session: &SftpSession, remote: &str, local: &str, remote_ident: &str, local_ident: &str, app: &AppHandle) -> Result<(), String> {
+        let attrs = session.metadata(remote).await
+            .map_err(|e| format!("stat failed: {}", e))?;
+        let total = attrs.len();
+
+        let mut remote_file = session.open(remote).await
+            .map_err(|e| format!("open remote failed: {}", e))?;
+        let mut local_file = tokio::fs::File::create(local).await
+            .map_err(|e| format!("local create: {}", e))?;
+
+        let mut buf = vec![0u8; 65536];
+        let mut transferred = 0u64;
+
+        loop {
+            let n = remote_file.read(&mut buf).await
+                .map_err(|e| format!("read remote: {}", e))?;
+            if n == 0 { break; }
+            local_file.write_all(&buf[..n]).await
+                .map_err(|e| format!("local write: {}", e))?;
+            transferred += n as u64;
+            if total > 0 {
+                let _ = app.emit("sftp-progress", SftpProgress {
+                    remote: remote_ident.to_string(),
+                    local: local_ident.to_string(),
+                    r#type: "download".to_string(),
+                    bytes_transferred: transferred,
+                    total_size: total,
+                });
+            }
+        }
+
+        local_file.flush().await.map_err(|e| format!("local flush: {}", e))?;
+        Ok(())
+    }
+
+    async fn do_upload(session: &SftpSession, local: &str, remote: &str, remote_ident: &str, local_ident: &str, app: &AppHandle) -> Result<(), String> {
+        let local_metadata = std::fs::metadata(local)
+            .map_err(|e| format!("local stat: {}", e))?;
+        let total = local_metadata.len();
+
+        let mut local_file = tokio::fs::File::open(local).await
+            .map_err(|e| format!("local open: {}", e))?;
+        let mut remote_file = session.create(remote).await
+            .map_err(|e| format!("create remote: {}", e))?;
+
+        let mut buf = vec![0u8; 65536];
+        let mut transferred = 0u64;
+
+        loop {
+            let n = local_file.read(&mut buf).await
+                .map_err(|e| format!("local read: {}", e))?;
+            if n == 0 { break; }
+            remote_file.write_all(&buf[..n]).await
+                .map_err(|e| format!("write remote: {}", e))?;
+            transferred += n as u64;
+            if total > 0 {
+                let _ = app.emit("sftp-progress", SftpProgress {
+                    remote: remote_ident.to_string(),
+                    local: local_ident.to_string(),
+                    r#type: "upload".to_string(),
+                    bytes_transferred: transferred,
+                    total_size: total,
+                });
+            }
+        }
+
+        remote_file.flush().await.map_err(|e| format!("remote flush: {}", e))?;
+        Ok(())
+    }
+
+    async fn do_remove(session: &SftpSession, path: &str) -> Result<(), String> {
+        // Try as file first, then as directory
+        let attrs = session.metadata(path).await
+            .map_err(|e| format!("stat failed: {}", e))?;
+        if attrs.is_dir() {
+            session.remove_dir(path).await
+                .map_err(|e| format!("remove_dir failed: {}", e))
+        } else {
+            session.remove_file(path).await
+                .map_err(|e| format!("remove_file failed: {}", e))
+        }
+    }
+
+    async fn do_rename(session: &SftpSession, old: &str, new: &str) -> Result<(), String> {
+        session.rename(old, new).await
+            .map_err(|e| format!("rename failed: {}", e))
+    }
+
+    async fn do_mkdir(session: &SftpSession, path: &str) -> Result<(), String> {
+        session.create_dir(path).await
+            .map_err(|e| format!("mkdir failed: {}", e))
+    }
+
+    async fn do_read_file(session: &SftpSession, remote: &str) -> Result<String, String> {
+        let data = session.read(remote).await
+            .map_err(|e| format!("read failed: {}", e))?;
+        String::from_utf8(data).map_err(|e| format!("UTF-8: {}", e))
+    }
+
+    async fn do_write_file(session: &SftpSession, remote: &str, content: &str) -> Result<(), String> {
+        session.write(remote, content.as_bytes()).await
+            .map_err(|e| format!("write failed: {}", e))
     }
 
     pub fn list_dir(&self, path: &str) -> Result<Vec<FileEntry>, String> {
@@ -340,8 +470,4 @@ impl SftpConnection {
             let _ = handle.join();
         }
     }
-}
-
-fn shell_escape(s: &str) -> String {
-    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }

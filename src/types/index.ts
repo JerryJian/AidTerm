@@ -97,6 +97,18 @@ export interface UploadTask {
   status: 'uploading' | 'done' | 'error'
   error?: string
   type: 'upload' | 'download'
+  percent?: number
+  total_size?: number
+  bytes_transferred?: number
+  speed?: number
+}
+
+export interface SftpProgress {
+  remote: string
+  local: string
+  type: 'upload' | 'download'
+  bytes_transferred: number
+  total_size: number
 }
 
 export interface FileEntry {

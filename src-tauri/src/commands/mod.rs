@@ -127,6 +127,7 @@ async fn sftp_call<T: Send + 'static>(
 
 #[tauri::command]
 pub async fn sftp_connect(
+    app: tauri::AppHandle,
     manager: State<'_, sftp::SftpManager>,
     host: String,
     port: u16,
@@ -135,7 +136,7 @@ pub async fn sftp_connect(
     private_key_path: Option<String>,
 ) -> Result<String, String> {
     let id = uuid::Uuid::new_v4().to_string();
-    let conn = sftp::SftpConnection::connect(host, port, username, password, private_key_path)?;
+    let conn = sftp::SftpConnection::connect(host, port, username, password, private_key_path, app)?;
     let mut connections = manager.connections.lock().map_err(|e| e.to_string())?;
     connections.insert(id.clone(), conn);
     Ok(id)
