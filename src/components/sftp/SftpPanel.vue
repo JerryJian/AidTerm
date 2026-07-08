@@ -457,23 +457,24 @@ function fileIcon(entry: FileEntry): string {
       <!-- Transfer progress -->
       <div v-if="allTasks.length" class="upload-progress">
         <div v-for="(task, i) in allTasks" :key="i" class="upload-task" :class="task.status">
-          <span class="task-icon">
-            <span v-if="task.status === 'uploading'" class="spinner" v-html="icons.spinner" />
-            <span v-else-if="task.status === 'done'" class="check">&#10003;</span>
-            <span v-else class="cross">&#10007;</span>
-          </span>
-          <span class="task-dir">{{ task.type === 'upload' ? '↑' : '↓' }}</span>
-          <span class="task-name">{{ task.name }}</span>
-          <span v-if="task.status === 'uploading'" class="task-status">
-            {{ task.type === 'upload' ? t('sftp.uploading') : t('sftp.downloading') }}
-            <span v-if="task.total_size !== undefined" class="task-progress-detail">
-              {{ formatSize(task.bytes_transferred ?? 0) }}/{{ formatSize(task.total_size) }}
-              ({{ task.percent }}%)
+          <div class="task-row">
+            <span class="task-icon">
+              <span v-if="task.status === 'uploading'" class="spinner" v-html="icons.spinner" />
+              <span v-else-if="task.status === 'done'" class="check">&#10003;</span>
+              <span v-else class="cross">&#10007;</span>
             </span>
-            <span v-if="task.speed" class="task-speed">{{ formatSpeed(task.speed) }}</span>
-          </span>
-          <span v-else-if="task.status === 'error'" class="task-error" :title="task.error">{{ t('sftp.upload_failed') }}</span>
-          <span v-else class="task-done">{{ t('sftp.upload_done') }}</span>
+            <span class="task-dir">{{ task.type === 'upload' ? '↑' : '↓' }}</span>
+            <span class="task-name">{{ task.name }}</span>
+            <span v-if="task.status === 'uploading' && task.total_size !== undefined" class="task-transfer-info">
+              {{ formatSize(task.bytes_transferred ?? 0) }}/{{ formatSize(task.total_size) }}
+              <span v-if="task.speed" class="task-speed">{{ formatSpeed(task.speed) }}</span>
+            </span>
+            <span v-else-if="task.status === 'error'" class="task-error" :title="task.error">{{ t('sftp.upload_failed') }}</span>
+            <span v-else class="task-done">{{ t('sftp.upload_done') }}</span>
+          </div>
+          <div v-if="task.status === 'uploading' && task.percent !== undefined" class="task-bar-track">
+            <div class="task-bar-fill" :style="{ width: task.percent + '%' }" />
+          </div>
         </div>
       </div>
     </div>
@@ -826,15 +827,20 @@ function fileIcon(entry: FileEntry): string {
 
 .upload-progress {
   border-top: 1px solid var(--bg-surface0);
-  padding: 8px 12px;
+  padding: 6px 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 120px;
+  gap: 2px;
+  max-height: 140px;
   overflow-y: auto;
   flex-shrink: 0;
 }
 .upload-task {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.upload-task .task-row {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -875,10 +881,19 @@ function fileIcon(entry: FileEntry): string {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text);
+  min-width: 0;
 }
-.upload-task .task-status {
+.upload-task .task-transfer-info {
   color: var(--text-sub0);
   flex-shrink: 0;
+  white-space: nowrap;
+}
+.upload-task .task-speed {
+  margin-left: 6px;
+  color: var(--text-overlay0);
+  width: 60px;
+  display: inline-block;
+  text-align: right;
 }
 .upload-task .task-done {
   color: var(--green);
@@ -891,6 +906,18 @@ function fileIcon(entry: FileEntry): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.upload-task .task-bar-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--bg-surface0);
+  overflow: hidden;
+}
+.upload-task .task-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.2s ease;
 }
 </style>
 

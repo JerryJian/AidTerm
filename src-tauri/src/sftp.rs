@@ -227,14 +227,19 @@ impl SftpConnection {
                     SftpCmd::Download { remote, local, resp } => {
                         let s = session.clone();
                         let a = app.clone();
-                        let result = Self::do_download(&s, &remote, &local, &remote, &local, &a).await;
-                        let _ = resp.send(result);
+                        // Spawn so other commands (listDir, etc.) can run concurrently
+                        tokio::spawn(async move {
+                            let result = Self::do_download(&s, &remote, &local, &remote, &local, &a).await;
+                            let _ = resp.send(result);
+                        });
                     }
                     SftpCmd::Upload { local, remote, resp } => {
                         let s = session.clone();
                         let a = app.clone();
-                        let result = Self::do_upload(&s, &local, &remote, &remote, &local, &a).await;
-                        let _ = resp.send(result);
+                        tokio::spawn(async move {
+                            let result = Self::do_upload(&s, &local, &remote, &remote, &local, &a).await;
+                            let _ = resp.send(result);
+                        });
                     }
                     SftpCmd::Remove { path, resp } => {
                         let s = session.clone();
