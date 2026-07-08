@@ -6,6 +6,20 @@ import { listen } from '@tauri-apps/api/event'
 import { useI18n } from 'vue-i18n'
 import type { FileEntry, TerminalTab } from '../../types'
 
+const svg = (d: string) => `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
+
+const icons = {
+  up: svg('<path d="M5 3h14"/><path d="m18 13-6-6-6 6"/><path d="M12 7v14"/>'),
+  refresh: svg('<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>'),
+  folderPlus: svg('<path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>'),
+  upload: svg('<path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'),
+  download: svg('<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>'),
+  close: svg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+  edit: svg('<path d="M14.364 13.634a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506l4.013-4.009a1 1 0 0 0-3.004-3.004z"/><path d="M14.487 7.858A1 1 0 0 1 14 7V2"/><path d="M20 19.645V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l2.516 2.516"/><path d="M8 18h1"/>'),
+  rename: svg('<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>'),
+  delete: svg('<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'),
+}
+
 const { t } = useI18n()
 const store = useSftpStore()
 
@@ -257,11 +271,11 @@ function fileIcon(entry: FileEntry): string {
           </span>
         </span>
         <div class="toolbar-actions">
-          <button class="tb-btn" :title="t('sftp.go_up')" @click="goUp">⬆</button>
-          <button class="tb-btn" :title="t('sftp.refresh')" @click="store.listDir(store.currentPath)">🔄</button>
-          <button class="tb-btn" :title="t('sftp.mkdir')" @click="showNewDir = !showNewDir">📁+</button>
-          <button class="tb-btn" :title="t('sftp.upload')" @click="doUpload">⬆</button>
-          <button class="tb-btn" :title="t('sftp.disconnect')" @click="handleDisconnect">✕</button>
+          <button class="tb-btn" :title="t('sftp.go_up')" @click="goUp" v-html="icons.up" />
+          <button class="tb-btn" :title="t('sftp.refresh')" @click="store.listDir(store.currentPath)" v-html="icons.refresh" />
+          <button class="tb-btn" :title="t('sftp.mkdir')" @click="showNewDir = !showNewDir" v-html="icons.folderPlus" />
+          <button class="tb-btn" :title="t('sftp.upload')" @click="doUpload" v-html="icons.upload" />
+          <button class="tb-btn" :title="t('sftp.disconnect')" @click="handleDisconnect" v-html="icons.close" />
         </div>
       </div>
 
@@ -313,10 +327,10 @@ function fileIcon(entry: FileEntry): string {
           <span class="col-size">{{ entry.is_dir ? '—' : formatSize(entry.size) }}</span>
           <span class="col-modified">{{ entry.modified }}</span>
           <span class="col-actions">
-            <button v-if="!entry.is_dir" class="action-btn" :title="t('sftp.edit')" @click.stop="onEntryDblClick(entry)">✎</button>
-            <button class="action-btn" :title="t('sftp.download')" @click.stop="doDownload(entry)">⬇</button>
-            <button class="action-btn" :title="t('sftp.rename')" @click.stop="startRename(entry)">✏</button>
-            <button class="action-btn danger" :title="t('sftp.delete')" @click.stop="doDelete(entry)">🗑</button>
+            <button v-if="!entry.is_dir" class="action-btn" :title="t('sftp.edit')" @click.stop="onEntryDblClick(entry)" v-html="icons.edit" />
+            <button class="action-btn" :title="t('sftp.download')" @click.stop="doDownload(entry)" v-html="icons.download" />
+            <button class="action-btn" :title="t('sftp.rename')" @click.stop="startRename(entry)" v-html="icons.rename" />
+            <button class="action-btn danger" :title="t('sftp.delete')" @click.stop="doDelete(entry)" v-html="icons.delete" />
           </span>
         </div>
 
@@ -327,11 +341,11 @@ function fileIcon(entry: FileEntry): string {
       <div v-if="ctxPos" class="ctx-backdrop" @click="closeCtxMenu" @contextmenu.prevent="closeCtxMenu" />
       <Teleport to="body">
         <div v-if="ctxPos" class="ctx-menu" :style="{ left: ctxPos.x + 'px', top: ctxPos.y + 'px' }">
-          <button v-if="!ctxEntry?.is_dir" class="ctx-item" @click="closeCtxMenu; ctxEntry && onEntryDblClick(ctxEntry)">{{ t('sftp.edit') }}</button>
-          <button class="ctx-item" @click="closeCtxMenu; ctxEntry && doDownload(ctxEntry)">{{ t('sftp.download') }}</button>
-          <button class="ctx-item" @click="closeCtxMenu; ctxEntry && startRename(ctxEntry)">{{ t('sftp.rename') }}</button>
+          <button v-if="!ctxEntry?.is_dir" class="ctx-item" @click="closeCtxMenu; ctxEntry && onEntryDblClick(ctxEntry)"><span v-html="icons.edit" />{{ t('sftp.edit') }}</button>
+          <button class="ctx-item" @click="closeCtxMenu; ctxEntry && doDownload(ctxEntry)"><span v-html="icons.download" />{{ t('sftp.download') }}</button>
+          <button class="ctx-item" @click="closeCtxMenu; ctxEntry && startRename(ctxEntry)"><span v-html="icons.rename" />{{ t('sftp.rename') }}</button>
           <div class="ctx-divider" />
-          <button class="ctx-item danger" @click="closeCtxMenu; ctxEntry && doDelete(ctxEntry)">{{ t('sftp.delete') }}</button>
+          <button class="ctx-item danger" @click="closeCtxMenu; ctxEntry && doDelete(ctxEntry)"><span v-html="icons.delete" />{{ t('sftp.delete') }}</button>
         </div>
       </Teleport>
 
@@ -695,7 +709,9 @@ function fileIcon(entry: FileEntry): string {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 .ctx-menu .ctx-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   text-align: left;
   padding: 6px 12px;
