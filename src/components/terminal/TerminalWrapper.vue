@@ -306,15 +306,14 @@ async function initTerminal() {
       const tabId = store.activeTabId
       if (tabId) {
         invoke<SystemInfo>('get_remote_system_info', {
-          host: props.sshInfo.host,
-          port: props.sshInfo.port,
-          username: props.sshInfo.username,
-          password: props.sshInfo.password,
-          privateKeyPath: props.sshInfo.privateKeyPath ?? null,
+          sessionId: id,
         }).then(info => {
           store.updateSystemInfo(tabId, info)
           store.updateTabTitle(tabId, `${info.os} | ${info.hostname}`)
-        }).catch(() => {})
+        }).catch((e: any) => {
+          console.error('get_remote_system_info error:', e)
+          terminal?.writeln(`\r\n\x1b[1;31m[System Info Error: ${typeof e === 'string' ? e : e?.message ?? e}]\x1b[0m`)
+        })
       }
     }
   } catch (e) {

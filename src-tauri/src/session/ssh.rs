@@ -10,13 +10,17 @@ use russh::keys::*;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{self as tokio_mpsc, UnboundedReceiver, UnboundedSender};
+use tokio::sync::oneshot;
 use crate::proxy;
 use crate::zmodem;
+
+type ExecResponse = oneshot::Sender<Result<String, String>>;
 
 pub struct SshConnection {
     pub write_tx: UnboundedSender<String>,
     resize_tx: UnboundedSender<(u16, u16)>,
     kill_tx: Option<UnboundedSender<()>>,
+    exec_tx: Option<UnboundedSender<(String, ExecResponse)>>,
     handle: Option<JoinHandle<()>>,
 }
 
@@ -132,6 +136,7 @@ impl SshConnection {
         let (write_tx, write_rx) = tokio_mpsc::unbounded_channel();
         let (resize_tx, resize_rx) = tokio_mpsc::unbounded_channel();
         let (kill_tx, kill_rx) = tokio_mpsc::unbounded_channel();
+        let (exec_tx, exec_rx) = tokio_mpsc::unbounded_channel();
 
         let session_id = id.clone();
 
@@ -140,10 +145,12 @@ impl SshConnection {
             let (sync_write_tx, sync_write_rx): (Sender<String>, _) = mpsc::channel();
             let (sync_resize_tx, sync_resize_rx): (Sender<(u16, u16)>, _) = mpsc::channel();
             let (sync_kill_tx, sync_kill_rx): (Sender<()>, _) = mpsc::channel();
+            let (sync_exec_tx, sync_exec_rx): (Sender<(String, oneshot::Sender<Result<String, String>>)>, _) = mpsc::channel();
 
             // Bridge the tokio channels to std channels
             let write_tx2 = write_tx.clone();
             let resize_tx2 = resize_tx.clone();
+            let exec_tx2 = exec_tx.clone();
             std::thread::spawn(move || {
                 let rt = match Runtime::new() {
                     Ok(rt) => rt,
@@ -153,10 +160,10 @@ impl SshConnection {
                     }
                 };
                 rt.block_on(async {
-                    // Forward from tokio::sync to std::sync
                     let mut write_rx = write_rx;
                     let mut resize_rx = resize_rx;
                     let mut kill_rx = kill_rx;
+                    let mut exec_rx = exec_rx;
                     loop {
                         tokio::select! {
                             Some(data) = write_rx.recv() => {
@@ -164,6 +171,9 @@ impl SshConnection {
                             }
                             Some((r, c)) = resize_rx.recv() => {
                                 let _ = sync_resize_tx.send((r, c));
+                            }
+                            Some((cmd, resp)) = exec_rx.recv() => {
+                                let _ = sync_exec_tx.send((cmd, resp));
                             }
                             _ = kill_rx.recv() => {
                                 let _ = sync_kill_tx.send(());
@@ -179,7 +189,8 @@ impl SshConnection {
                 let result = Self::run_session_via_proxy(
                     &addr, &username, &password, private_key_path,
                     &proxy_config, rows, cols, agent_forwarding, x11_forwarding,
-                    sync_write_rx, sync_resize_rx, sync_kill_rx, &app_handle, &session_id,
+                    sync_write_rx, sync_resize_rx, sync_kill_rx, sync_exec_rx,
+                    &app_handle, &session_id,
                 );
                 if let Err(e) = result {
                     let _ = app_handle.emit("terminal-output", serde_json::json!({
@@ -191,7 +202,11 @@ impl SshConnection {
                 }
             });
 
-            Ok(Self { write_tx: write_tx2, resize_tx: resize_tx2, kill_tx: Some(kill_tx), handle: Some(handle) })
+            Ok(Self {
+                write_tx: write_tx2, resize_tx: resize_tx2,
+                kill_tx: Some(kill_tx), exec_tx: Some(exec_tx2),
+                handle: Some(handle),
+            })
         } else {
             let handle = std::thread::spawn(move || {
                 let rt = match Runtime::new() {
@@ -204,7 +219,7 @@ impl SshConnection {
                 rt.block_on(async {
                     let result = Self::run_session_async(
                         &addr, &username, &password, private_key_path,
-                        rows, cols, write_rx, resize_rx, kill_rx,
+                        rows, cols, write_rx, resize_rx, kill_rx, exec_rx,
                         &app_handle, &session_id,
                     ).await;
                     if let Err(e) = result {
@@ -219,7 +234,11 @@ impl SshConnection {
                 });
             });
 
-            Ok(Self { write_tx, resize_tx, kill_tx: Some(kill_tx), handle: Some(handle) })
+            Ok(Self {
+                write_tx, resize_tx,
+                kill_tx: Some(kill_tx), exec_tx: Some(exec_tx),
+                handle: Some(handle),
+            })
         }
     }
 
@@ -258,6 +277,7 @@ impl SshConnection {
         mut write_rx: UnboundedReceiver<String>,
         mut resize_rx: UnboundedReceiver<(u16, u16)>,
         mut kill_rx: UnboundedReceiver<()>,
+        mut exec_rx: UnboundedReceiver<(String, ExecResponse)>,
         app_handle: &AppHandle,
         session_id: &str,
     ) -> Result<(), String> {
@@ -280,9 +300,6 @@ impl SshConnection {
             "session_id": session_id, "status": "connected",
         }));
 
-        // Drive the session handle in the background
-        tokio::spawn(handle);
-
         let mut emit_count = 0u64;
         let mut emit_bytes = 0u64;
 
@@ -293,6 +310,10 @@ impl SshConnection {
                 }
                 Some((r, c)) = resize_rx.recv() => {
                     let _ = channel.window_change(c as u32, r as u32, 0, 0).await;
+                }
+                Some((cmd, resp)) = exec_rx.recv() => {
+                    let result = Self::exec_on_handle(&handle, &cmd).await;
+                    let _ = resp.send(result);
                 }
                 _ = kill_rx.recv() => {
                     break;
@@ -346,6 +367,28 @@ impl SshConnection {
         Ok(())
     }
 
+    async fn exec_on_handle(
+        handle: &client::Handle<SshHandler>,
+        command: &str,
+    ) -> Result<String, String> {
+        let mut channel = handle.channel_open_session().await
+            .map_err(|e| format!("Failed to open exec channel: {}", e))?;
+        channel.exec(true, command).await
+            .map_err(|e| format!("Exec request failed: {}", e))?;
+
+        let mut output = Vec::new();
+        loop {
+            match channel.wait().await {
+                Some(ChannelMsg::Data { data }) => output.extend_from_slice(&data),
+                Some(ChannelMsg::ExtendedData { ext: 1, data }) => output.extend_from_slice(&data),
+                Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+                _ => {}
+            }
+        }
+        let _ = channel.close().await;
+        String::from_utf8(output).map_err(|e| format!("UTF-8 error: {}", e))
+    }
+
     fn run_session_via_proxy(
         addr: &str,
         username: &str,
@@ -359,6 +402,7 @@ impl SshConnection {
         write_rx: Receiver<String>,
         resize_rx: Receiver<(u16, u16)>,
         kill_rx: Receiver<()>,
+        exec_rx: Receiver<(String, oneshot::Sender<Result<String, String>>)>,
         app_handle: &AppHandle,
         session_id: &str,
     ) -> Result<(), String> {
@@ -398,10 +442,11 @@ impl SshConnection {
         sess.set_blocking(false);
 
         let channel_ref = RefCell::new(channel);
-        let mut write_channel = |data: &[u8]| -> Result<(), String> {
+
+        let write_channel = |data: &[u8]| -> Result<(), String> {
             channel_ref.borrow_mut().write_all(data).map_err(|e| format!("SSH2 write: {}", e))
         };
-        let mut read_channel = || -> Result<Vec<u8>, String> {
+        let read_channel = || -> Result<Vec<u8>, String> {
             let mut buf = vec![0u8; 65536];
             match channel_ref.borrow_mut().read(&mut buf) {
                 Ok(0) => Ok(Vec::new()),
@@ -413,7 +458,7 @@ impl SshConnection {
                 Err(e) => Err(e.to_string()),
             }
         };
-        let mut do_resize = |r: u16, c: u16| -> Result<(), String> {
+        let do_resize = |r: u16, c: u16| -> Result<(), String> {
             channel_ref.borrow_mut().request_pty_size(c as u32, r as u32, None, None)
                 .map_err(|e| format!("SSH2 resize: {}", e))
         };
@@ -422,7 +467,10 @@ impl SshConnection {
             "session_id": session_id, "status": "connected",
         }));
 
-        let result = Self::event_loop(&write_rx, &resize_rx, &kill_rx, app_handle, session_id, &mut write_channel, &mut read_channel, &mut do_resize);
+        let result = Self::event_loop(
+            &write_rx, &resize_rx, &kill_rx, &exec_rx, &sess,
+            app_handle, session_id, &write_channel, &read_channel, &do_resize,
+        );
 
         let mut channel = channel_ref.into_inner();
         let _ = channel.close();
@@ -434,17 +482,28 @@ impl SshConnection {
         write_rx: &Receiver<String>,
         resize_rx: &Receiver<(u16, u16)>,
         kill_rx: &Receiver<()>,
+        exec_rx: &Receiver<(String, oneshot::Sender<Result<String, String>>)>,
+        sess: &ssh2::Session,
         app_handle: &AppHandle,
         session_id: &str,
-        write_shell: &mut impl FnMut(&[u8]) -> Result<(), String>,
-        read_shell: &mut impl FnMut() -> Result<Vec<u8>, String>,
-        do_resize: &mut impl FnMut(u16, u16) -> Result<(), String>,
+        write_shell: impl Fn(&[u8]) -> Result<(), String>,
+        read_shell: impl Fn() -> Result<Vec<u8>, String>,
+        do_resize: impl Fn(u16, u16) -> Result<(), String>,
     ) -> Result<(), String> {
+        let write_shell = write_shell;
+        let read_shell = read_shell;
+        let do_resize = do_resize;
         let mut emit_count = 0u64;
         let mut emit_bytes = 0u64;
         loop {
             if kill_rx.try_recv().is_ok() {
                 break;
+            }
+
+            // Handle exec requests
+            while let Ok((cmd, resp)) = exec_rx.try_recv() {
+                let result = Self::exec_on_session(sess, &cmd);
+                let _ = resp.send(result);
             }
 
             while let Ok((r, c)) = resize_rx.try_recv() {
@@ -495,6 +554,37 @@ impl SshConnection {
         }
 
         Ok(())
+    }
+
+    fn exec_on_session(
+        sess: &ssh2::Session,
+        command: &str,
+    ) -> Result<String, String> {
+        let mut channel = sess.channel_session()
+            .map_err(|e| format!("SSH2 exec channel: {}", e))?;
+        channel.exec(command)
+            .map_err(|e| format!("SSH2 exec: {}", e))?;
+
+        let mut output = Vec::new();
+        let mut buf = [0u8; 65536];
+        loop {
+            match channel.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => output.extend_from_slice(&buf[..n]),
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(Duration::from_millis(10));
+                    continue;
+                }
+                Err(e) => return Err(format!("SSH2 read: {}", e)),
+            }
+        }
+        let _ = channel.close();
+        let _ = channel.wait_close();
+        String::from_utf8(output).map_err(|e| format!("UTF-8 error: {}", e))
+    }
+
+    pub fn exec_tx(&self) -> Option<UnboundedSender<(String, ExecResponse)>> {
+        self.exec_tx.clone()
     }
 
     pub fn write(&self, data: &str) -> Result<(), String> {

@@ -5,6 +5,7 @@ pub(crate) mod telnet;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::AppHandle;
+use tokio::sync::oneshot;
 use crate::proxy;
 
 pub(crate) enum Session {
@@ -91,6 +92,21 @@ impl SessionManager {
             Session::Ssh(s) => s.resize(rows, cols),
             Session::Telnet(_) => Ok(()),
         }
+    }
+
+    pub async fn exec(&self, id: &str, command: &str) -> Result<String, String> {
+        let exec_tx = {
+            let sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+            let session = sessions.get(id).ok_or("Session not found")?;
+            match session {
+                Session::Ssh(s) => s.exec_tx(),
+                _ => return Err("Exec not supported for this session type".to_string()),
+            }
+        };
+        let tx = exec_tx.ok_or("SSH exec unavailable")?;
+        let (resp_tx, resp_rx) = oneshot::channel();
+        tx.send((command.to_string(), resp_tx)).map_err(|e| format!("Exec send: {}", e))?;
+        resp_rx.await.map_err(|e| format!("Exec recv: {}", e))?
     }
 
     pub fn kill(&self, id: &str) -> Result<(), String> {

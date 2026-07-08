@@ -1,8 +1,4 @@
-use std::sync::Arc;
 use tauri::{Manager, State};
-use russh::client;
-use russh::keys::*;
-use russh::ChannelMsg;
 use crate::ai;
 use crate::keychain;
 use crate::known_hosts;
@@ -334,88 +330,15 @@ pub async fn get_system_info() -> SystemInfo {
     SystemInfo { os, arch, hostname, kernel, shell }
 }
 
-struct RemoteSshHandler;
-
-impl client::Handler for RemoteSshHandler {
-    type Error = anyhow::Error;
-
-    async fn check_server_key(
-        &mut self,
-        _server_public_key: &PublicKey,
-    ) -> Result<bool, Self::Error> {
-        Ok(true)
-    }
-}
-
-async fn exec_remote_command(
-    addr: &str,
-    username: &str,
-    password: &str,
-    private_key_path: Option<&str>,
-    command: &str,
-) -> Result<String, String> {
-    let config = Arc::new(client::Config::default());
-    let mut handle = client::connect(config, addr, RemoteSshHandler).await
-        .map_err(|e| format!("SSH connect failed: {}", e))?;
-
-    if let Some(key_path) = private_key_path {
-        let key = load_secret_key(key_path, None)
-            .map_err(|e| format!("Failed to load private key: {}", e))?;
-        let key_with_alg = PrivateKeyWithHashAlg::new(Arc::new(key), None);
-        let auth = handle.authenticate_publickey(username, key_with_alg).await
-            .map_err(|e| format!("Public key auth failed: {}", e))?;
-        if !auth.success() {
-            return Err("Public key authentication rejected".to_string());
-        }
-    } else {
-        let auth = handle.authenticate_password(username, password).await
-            .map_err(|e| format!("Password auth failed: {}", e))?;
-        if !auth.success() {
-            return Err("Password authentication rejected".to_string());
-        }
-    }
-
-    let mut channel = handle.channel_open_session().await
-        .map_err(|e| format!("Failed to open session channel: {}", e))?;
-
-    channel.exec(true, command).await
-        .map_err(|e| format!("Exec request failed: {}", e))?;
-
-    let mut output = Vec::new();
-    loop {
-        match channel.wait().await {
-            Some(ChannelMsg::Data { data }) => {
-                output.extend_from_slice(&data);
-            }
-            Some(ChannelMsg::ExtendedData { ext: 1, data }) => {
-                output.extend_from_slice(&data);
-            }
-            Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
-            _ => {}
-        }
-    }
-
-    let _ = channel.close().await;
-    tokio::spawn(handle);
-
-    String::from_utf8(output).map_err(|e| format!("UTF-8 error: {}", e))
-}
-
 #[tauri::command]
 pub async fn get_remote_system_info(
-    host: String,
-    port: u16,
-    username: String,
-    password: String,
-    private_key_path: Option<String>,
+    manager: State<'_, crate::session::SessionManager>,
+    session_id: String,
 ) -> Result<SystemInfo, String> {
-    log::info!("[get_remote_system_info] start host={}:{}", host, port);
+    log::info!("[get_remote_system_info] start session={}", session_id);
     let t0 = std::time::Instant::now();
 
-    let addr = format!("{}:{}", host, port);
-    let key_ref = private_key_path.as_deref();
-
-    let uname_output = exec_remote_command(&addr, &username, &password, key_ref, "uname -a").await?;
+    let uname_output = manager.exec(&session_id, "uname -a").await?;
     log::info!("[get_remote_system_info] uname done in {:?}", t0.elapsed());
 
     let parts: Vec<&str> = uname_output.split_whitespace().collect();
@@ -425,7 +348,7 @@ pub async fn get_remote_system_info(
     let arch = parts.iter().nth_back(1).unwrap_or(&"remote").to_string();
 
     let t1 = std::time::Instant::now();
-    let os_release = exec_remote_command(&addr, &username, &password, key_ref, "cat /etc/os-release").await;
+    let os_release = manager.exec(&session_id, "cat /etc/os-release").await;
     let os_label = os_release.as_ref().ok().and_then(|out| {
         for line in out.lines() {
             if let Some(val) = line.strip_prefix("PRETTY_NAME=") {
