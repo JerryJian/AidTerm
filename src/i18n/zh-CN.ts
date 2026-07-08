@@ -184,6 +184,7 @@ export default {
     upload_done: '完成',
     upload_failed: '失败',
     confirm_delete: '确认删除 {name}？',
+    address_placeholder: 'user@host:port 或 ssh://user@host',
   },
   tunnel: {
     title: '端口转发',

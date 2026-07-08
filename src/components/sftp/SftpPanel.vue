@@ -34,6 +34,7 @@ const emit = defineEmits<{
   editFile: [remotePath: string, connId: string]
 }>()
 
+const address = ref('')
 const host = ref('')
 const port = ref(22)
 const username = ref('')
@@ -69,6 +70,7 @@ watch(
       port.value = info.port
       username.value = info.username
       password.value = info.password || ''
+      address.value = `${info.username}@${info.host}:${info.port}`
       if (host.value.trim()) {
         autoConnecting = true
         connecting.value = true
@@ -82,6 +84,26 @@ watch(
   },
   { immediate: true },
 )
+
+function parseAddress(val: string) {
+  let a = val.trim()
+  if (!a) return
+  if (a.startsWith('ssh://')) a = a.slice(6)
+  if (a.startsWith('sftp://')) a = a.slice(7)
+  const atIdx = a.lastIndexOf('@')
+  if (atIdx >= 0) {
+    username.value = a.slice(0, atIdx)
+    a = a.slice(atIdx + 1)
+  }
+  const colonIdx = a.lastIndexOf(':')
+  if (colonIdx >= 0) {
+    host.value = a.slice(0, colonIdx)
+    port.value = parseInt(a.slice(colonIdx + 1)) || 22
+  } else {
+    host.value = a
+    port.value = 22
+  }
+}
 
 function onRowCtxMenu(e: MouseEvent, entry: FileEntry) {
   e.preventDefault()
@@ -160,6 +182,7 @@ function handleDisconnect() {
 }
 
 async function doConnect() {
+  parseAddress(address.value)
   if (!host.value.trim()) return
   connecting.value = true
   try {
@@ -276,10 +299,8 @@ function fileIcon(entry: FileEntry): string {
 
     <!-- Connection form -->
     <div v-if="!store.connected" class="connect-form">
-      <input v-model="host" :placeholder="t('common.host')" class="sftp-input" />
-      <input v-model="port" type="number" :placeholder="t('common.port')" class="sftp-input sftp-input-sm" />
-      <input v-model="username" :placeholder="t('common.username')" class="sftp-input" />
-      <input v-model="password" type="password" :placeholder="t('common.password')" class="sftp-input" />
+      <input v-model="address" :placeholder="t('sftp.address_placeholder')" class="sftp-input" @keydown.enter="doConnect" />
+      <input v-model="password" type="password" :placeholder="t('common.password')" class="sftp-input" @keydown.enter="doConnect" />
       <button class="connect-btn" :disabled="connecting" @click="doConnect">
         {{ connecting ? t('sftp.connecting') : t('sftp.connect') }}
       </button>
