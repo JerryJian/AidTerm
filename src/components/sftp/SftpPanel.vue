@@ -50,6 +50,7 @@ const userDisconnected = ref(false)
 const uploadTasks = ref<UploadTask[]>([])
 const ctxEntry = ref<FileEntry | null>(null)
 const ctxPos = ref<{ x: number; y: number } | null>(null)
+const deleteConfirm = ref<FileEntry | null>(null)
 
 let autoConnecting = false
 
@@ -217,7 +218,16 @@ async function doDownload(entry: FileEntry) {
   await store.download(remotePath, dest)
 }
 
+function confirmDelete(entry: FileEntry) {
+  deleteConfirm.value = entry
+}
+
+function cancelConfirmDelete() {
+  deleteConfirm.value = null
+}
+
 async function doDelete(entry: FileEntry) {
+  deleteConfirm.value = null
   const path = store.currentPath.replace(/\/?$/, '/') + entry.name
   await store.remove(path)
 }
@@ -344,7 +354,7 @@ function fileIcon(entry: FileEntry): string {
             <button v-if="!entry.is_dir" class="action-btn" :title="t('sftp.edit')" @click.stop="onEntryDblClick(entry)" v-html="icons.edit" />
             <button class="action-btn" :title="t('sftp.download')" @click.stop="doDownload(entry)" v-html="icons.download" />
             <button class="action-btn" :title="t('sftp.rename')" @click.stop="startRename(entry)" v-html="icons.rename" />
-            <button class="action-btn danger" :title="t('sftp.delete')" @click.stop="doDelete(entry)" v-html="icons.delete" />
+            <button class="action-btn danger" :title="t('sftp.delete')" @click.stop="confirmDelete(entry)" v-html="icons.delete" />
           </span>
         </div>
 
@@ -359,7 +369,7 @@ function fileIcon(entry: FileEntry): string {
           <button class="ctx-item" @click="closeCtxMenu; ctxEntry && doDownload(ctxEntry)"><span v-html="icons.download" />{{ t('sftp.download') }}</button>
           <button class="ctx-item" @click="closeCtxMenu; ctxEntry && startRename(ctxEntry)"><span v-html="icons.rename" />{{ t('sftp.rename') }}</button>
           <div class="ctx-divider" />
-          <button class="ctx-item danger" @click="closeCtxMenu; ctxEntry && doDelete(ctxEntry)"><span v-html="icons.delete" />{{ t('sftp.delete') }}</button>
+          <button class="ctx-item danger" @click="closeCtxMenu; ctxEntry && confirmDelete(ctxEntry)"><span v-html="icons.delete" />{{ t('sftp.delete') }}</button>
         </div>
       </Teleport>
 
@@ -367,6 +377,22 @@ function fileIcon(entry: FileEntry): string {
       <div v-if="dragOver" class="drop-zone">
         <span class="drop-label">{{ t('sftp.drop_to_upload') }}</span>
       </div>
+
+      <!-- Delete confirm dialog -->
+      <Teleport to="body">
+        <div v-if="deleteConfirm" class="confirm-overlay" @click="cancelConfirmDelete">
+          <div class="confirm-box" @click.stop>
+            <div class="confirm-msg">
+              <span class="confirm-icon" v-html="icons.delete" />
+              <span>{{ t('sftp.confirm_delete', { name: deleteConfirm.name }) }}</span>
+            </div>
+            <div class="confirm-actions">
+              <button class="btn btn-cancel" @click="cancelConfirmDelete">{{ t('common.cancel') }}</button>
+              <button class="btn btn-danger" @click="doDelete(deleteConfirm)">{{ t('common.delete') }}</button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- Upload progress -->
       <div v-if="uploadTasks.length" class="upload-progress">
@@ -826,5 +852,63 @@ function fileIcon(entry: FileEntry): string {
   height: 1px;
   background: var(--bg-surface0);
   margin: 4px 8px;
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.confirm-box {
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface0);
+  border-radius: 8px;
+  padding: 20px 24px;
+  min-width: 280px;
+  max-width: 400px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.confirm-msg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 18px;
+}
+.confirm-icon {
+  display: flex;
+  color: var(--danger);
+  flex-shrink: 0;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.confirm-actions .btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.confirm-actions .btn-cancel {
+  background: var(--bg-surface0);
+  color: var(--text);
+}
+.confirm-actions .btn-cancel:hover {
+  background: var(--bg-surface1);
+}
+.confirm-actions .btn-danger {
+  background: var(--danger);
+  color: var(--bg-base);
+}
+.confirm-actions .btn-danger:hover {
+  opacity: 0.85;
 }
 </style>

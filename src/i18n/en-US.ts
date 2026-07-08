@@ -183,6 +183,7 @@ export default {
     uploading: 'Uploading...',
     upload_done: 'Done',
     upload_failed: 'Failed',
+    confirm_delete: 'Delete {name}?',
   },
   tunnel: {
     title: 'Port Forwarding',

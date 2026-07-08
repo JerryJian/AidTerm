@@ -183,6 +183,7 @@ export default {
     uploading: '上传中...',
     upload_done: '完成',
     upload_failed: '失败',
+    confirm_delete: '确认删除 {name}？',
   },
   tunnel: {
     title: '端口转发',
