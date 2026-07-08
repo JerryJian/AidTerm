@@ -93,8 +93,9 @@ export interface SavedSessionGroup {
 }
 
 export interface UploadTask {
+  id: string
   name: string
-  status: 'uploading' | 'done' | 'error'
+  status: 'uploading' | 'done' | 'error' | 'cancelled'
   error?: string
   type: 'upload' | 'download'
   percent?: number

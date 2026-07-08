@@ -148,7 +148,7 @@ onMounted(async () => {
       for (const path of paths) {
         const name = path.split('\\').pop()?.split('/').pop() || 'file'
         const remotePath = store.currentPath.replace(/\/?$/, '/') + name
-        store.upload(path, remotePath)
+        store.upload(genId(), path, remotePath)
       }
       dragOver.value = false
     }
@@ -235,6 +235,10 @@ function onEntryDblClick(entry: FileEntry) {
   }
 }
 
+function genId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+}
+
 async function doUpload() {
   const selected = await open({ multiple: true, directory: false })
   if (!selected) return
@@ -242,14 +246,19 @@ async function doUpload() {
   for (const file of files) {
     const name = file.split('\\').pop()?.split('/').pop() || 'file'
     const remotePath = store.currentPath.replace(/\/?$/, '/') + name
-    const task: UploadTask = { name, status: 'uploading', type: 'upload' }
+    const id = genId()
+    const task: UploadTask = { id, name, status: 'uploading', type: 'upload' }
     uploadTasks.value.push(task)
     try {
-      await store.upload(file, remotePath)
+      await store.upload(id, file, remotePath)
       task.status = 'done'
     } catch (e: any) {
-      task.status = 'error'
-      task.error = String(e)
+      if (String(e).includes('Cancelled')) {
+        task.status = 'cancelled'
+      } else {
+        task.status = 'error'
+        task.error = String(e)
+      }
     }
   }
   // auto-clear completed tasks after 5s
@@ -262,18 +271,28 @@ async function doDownload(entry: FileEntry) {
   const remotePath = store.currentPath.replace(/\/?$/, '/') + entry.name
   const dest = await save({ defaultPath: entry.name })
   if (!dest) return
-  const task: UploadTask = { name: entry.name, status: 'uploading', type: 'download' }
+  const id = genId()
+  const task: UploadTask = { id, name: entry.name, status: 'uploading', type: 'download' }
   downloadTasks.value.push(task)
   try {
-    await store.download(remotePath, dest)
+    await store.download(id, remotePath, dest)
     task.status = 'done'
   } catch (e: any) {
-    task.status = 'error'
-    task.error = String(e)
+    if (String(e).includes('Cancelled')) {
+      task.status = 'cancelled'
+    } else {
+      task.status = 'error'
+      task.error = String(e)
+    }
   }
   setTimeout(() => {
     downloadTasks.value = downloadTasks.value.filter(t => t.status === 'uploading')
   }, 5000)
+}
+
+function doCancel(task: UploadTask) {
+  task.status = 'cancelled'
+  store.cancelTransfer(task.id)
 }
 
 function confirmDelete(entry: FileEntry) {
@@ -461,19 +480,20 @@ function fileIcon(entry: FileEntry): string {
             <span class="task-icon">
               <span v-if="task.status === 'uploading'" class="spinner" v-html="icons.spinner" />
               <span v-else-if="task.status === 'done'" class="check">&#10003;</span>
+              <span v-else-if="task.status === 'cancelled'" class="cross">&#10007;</span>
               <span v-else class="cross">&#10007;</span>
             </span>
             <span class="task-dir">{{ task.type === 'upload' ? '↑' : '↓' }}</span>
             <span class="task-name">{{ task.name }}</span>
             <span v-if="task.status === 'uploading' && task.total_size !== undefined" class="task-transfer-info">
-              {{ formatSize(task.bytes_transferred ?? 0) }}/{{ formatSize(task.total_size) }}
               <span v-if="task.speed" class="task-speed">{{ formatSpeed(task.speed) }}</span>
+              {{ formatSize(task.bytes_transferred ?? 0) }}/{{ formatSize(task.total_size) }}
             </span>
             <span v-else-if="task.status === 'error'" class="task-error" :title="task.error">{{ t('sftp.upload_failed') }}</span>
+            <span v-else-if="task.status === 'cancelled'" class="task-cancelled">{{ t('sftp.cancelled') }}</span>
             <span v-else class="task-done">{{ t('sftp.upload_done') }}</span>
-          </div>
-          <div v-if="task.status === 'uploading' && task.percent !== undefined" class="task-bar-track">
-            <div class="task-bar-fill" :style="{ width: task.percent + '%' }" />
+            <span v-if="task.status === 'uploading'" class="task-pct">{{ task.percent ?? 0 }}%</span>
+            <button v-if="task.status === 'uploading'" class="task-cancel-btn" @click="doCancel(task)" :title="t('common.cancel')">✕</button>
           </div>
         </div>
       </div>
@@ -889,7 +909,7 @@ function fileIcon(entry: FileEntry): string {
   white-space: nowrap;
 }
 .upload-task .task-speed {
-  margin-left: 6px;
+  margin: 0 8px;
   color: var(--text-overlay0);
   width: 60px;
   display: inline-block;
@@ -897,6 +917,10 @@ function fileIcon(entry: FileEntry): string {
 }
 .upload-task .task-done {
   color: var(--green);
+  flex-shrink: 0;
+}
+.upload-task .task-cancelled {
+  color: var(--text-overlay0);
   flex-shrink: 0;
 }
 .upload-task .task-error {
@@ -907,17 +931,26 @@ function fileIcon(entry: FileEntry): string {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.upload-task .task-bar-track {
-  height: 3px;
-  border-radius: 2px;
-  background: var(--bg-surface0);
-  overflow: hidden;
+.upload-task .task-pct {
+  width: 22px;
+  text-align: right;
+  color: var(--text-sub0);
+  flex-shrink: 0;
 }
-.upload-task .task-bar-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 2px;
-  transition: width 0.2s ease;
+.upload-task .task-cancel-btn {
+  background: none;
+  border: none;
+  color: var(--text-overlay0);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+.upload-task .task-cancel-btn:hover {
+  opacity: 1;
+  color: var(--danger);
 }
 </style>
 

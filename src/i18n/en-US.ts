@@ -184,6 +184,7 @@ export default {
     downloading: 'Downloading...',
     upload_done: 'Done',
     upload_failed: 'Failed',
+    cancelled: 'Cancelled',
     confirm_delete: 'Delete {name}?',
   },
   tunnel: {

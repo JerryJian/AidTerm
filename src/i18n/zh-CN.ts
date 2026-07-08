@@ -184,6 +184,7 @@ export default {
     downloading: '下载中...',
     upload_done: '完成',
     upload_failed: '失败',
+    cancelled: '已取消',
     confirm_delete: '确认删除 {name}？',
   },
   tunnel: {

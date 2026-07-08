@@ -167,20 +167,32 @@ pub async fn sftp_list_dir(
 pub async fn sftp_download(
     manager: State<'_, sftp::SftpManager>,
     conn_id: String,
+    transfer_id: String,
     remote: String,
     local: String,
 ) -> Result<(), String> {
-    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::Download { remote, local, resp: tx }).await
+    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::Download { id: transfer_id, remote, local, resp: tx }).await
 }
 
 #[tauri::command]
 pub async fn sftp_upload(
     manager: State<'_, sftp::SftpManager>,
     conn_id: String,
-    local: String,
+    transfer_id: String,
     remote: String,
+    local: String,
 ) -> Result<(), String> {
-    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::Upload { local, remote, resp: tx }).await
+    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::Upload { id: transfer_id, local, remote, resp: tx }).await
+}
+
+#[tauri::command]
+#[allow(dead_code)]
+pub async fn sftp_cancel_transfer(
+    manager: State<'_, sftp::SftpManager>,
+    conn_id: String,
+    transfer_id: String,
+) -> Result<(), String> {
+    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::CancelTransfer { id: transfer_id, resp: tx }).await
 }
 
 #[tauri::command]

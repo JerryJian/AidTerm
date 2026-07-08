@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -44,8 +45,9 @@ pub(crate) type Resp<T> = Sender<Result<T, String>>;
 
 pub(crate) enum SftpCmd {
     ListDir { path: String, resp: Resp<Vec<FileEntry>> },
-    Download { remote: String, local: String, resp: Resp<()> },
-    Upload { local: String, remote: String, resp: Resp<()> },
+    Download { id: String, remote: String, local: String, resp: Resp<()> },
+    Upload { id: String, local: String, remote: String, resp: Resp<()> },
+    CancelTransfer { id: String, resp: Resp<()> },
     Remove { path: String, resp: Resp<()> },
     Rename { old: String, new: String, resp: Resp<()> },
     Mkdir { path: String, resp: Resp<()> },
@@ -147,6 +149,9 @@ impl SftpConnection {
         let (kill_tx, kill_rx) = mpsc::channel();
         let addr = format!("{}:{}", host, port);
 
+        let cancel_flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>> = Arc::new(Mutex::new(HashMap::new()));
+        let cf = cancel_flags.clone();
+
         let handle = std::thread::spawn(move || {
             let rt = match Runtime::new() {
                 Ok(rt) => rt,
@@ -155,7 +160,7 @@ impl SftpConnection {
                     return;
                 }
             };
-            if let Err(e) = rt.block_on(Self::run_async(&addr, &username, &password, private_key_path, cmd_rx, kill_rx, app)) {
+            if let Err(e) = rt.block_on(Self::run_async(&addr, &username, &password, private_key_path, cmd_rx, kill_rx, app, cf)) {
                 eprintln!("SFTP session error: {}", e);
             }
         });
@@ -196,6 +201,7 @@ impl SftpConnection {
         cmd_rx: Receiver<SftpCmd>,
         kill_rx: Receiver<()>,
         app: AppHandle,
+        cancel_flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
     ) -> Result<(), String> {
         let config = Arc::new(client::Config::default());
         let mut handle = client::connect(config, addr, SftpHandler).await
@@ -224,22 +230,39 @@ impl SftpConnection {
                         let result = Self::do_list_dir(&s, &path).await;
                         let _ = resp.send(result);
                     }
-                    SftpCmd::Download { remote, local, resp } => {
+                    SftpCmd::Download { id, remote, local, resp } => {
                         let s = session.clone();
                         let a = app.clone();
+                        let cf = cancel_flags.clone();
+                        let cancel_flag = Arc::new(AtomicBool::new(false));
+                        cf.lock().unwrap().insert(id.clone(), cancel_flag.clone());
                         // Spawn so other commands (listDir, etc.) can run concurrently
                         tokio::spawn(async move {
-                            let result = Self::do_download(&s, &remote, &local, &remote, &local, &a).await;
+                            let result = Self::do_download(&s, &remote, &local, &remote, &local, &a, &cancel_flag).await;
+                            cf.lock().unwrap().remove(&id);
                             let _ = resp.send(result);
                         });
                     }
-                    SftpCmd::Upload { local, remote, resp } => {
+                    SftpCmd::Upload { id, local, remote, resp } => {
                         let s = session.clone();
                         let a = app.clone();
+                        let cf = cancel_flags.clone();
+                        let cancel_flag = Arc::new(AtomicBool::new(false));
+                        cf.lock().unwrap().insert(id.clone(), cancel_flag.clone());
                         tokio::spawn(async move {
-                            let result = Self::do_upload(&s, &local, &remote, &remote, &local, &a).await;
+                            let result = Self::do_upload(&s, &local, &remote, &remote, &local, &a, &cancel_flag).await;
+                            cf.lock().unwrap().remove(&id);
                             let _ = resp.send(result);
                         });
+                    }
+                    SftpCmd::CancelTransfer { id, resp } => {
+                        let result = if let Some(flag) = cancel_flags.lock().unwrap().remove(&id) {
+                            flag.store(true, Ordering::Relaxed);
+                            Ok(())
+                        } else {
+                            Err("Transfer not found or already completed".to_string())
+                        };
+                        let _ = resp.send(result);
                     }
                     SftpCmd::Remove { path, resp } => {
                         let s = session.clone();
@@ -295,7 +318,10 @@ impl SftpConnection {
         Ok(entries)
     }
 
-    async fn do_download(session: &SftpSession, remote: &str, local: &str, remote_ident: &str, local_ident: &str, app: &AppHandle) -> Result<(), String> {
+    async fn do_download(session: &SftpSession, remote: &str, local: &str, remote_ident: &str, local_ident: &str, app: &AppHandle, cancel: &AtomicBool) -> Result<(), String> {
+        if cancel.load(Ordering::Relaxed) {
+            return Err("Cancelled".to_string());
+        }
         let attrs = session.metadata(remote).await
             .map_err(|e| format!("stat failed: {}", e))?;
         let total = attrs.len();
@@ -309,6 +335,9 @@ impl SftpConnection {
         let mut transferred = 0u64;
 
         loop {
+            if cancel.load(Ordering::Relaxed) {
+                return Err("Cancelled".to_string());
+            }
             let n = remote_file.read(&mut buf).await
                 .map_err(|e| format!("read remote: {}", e))?;
             if n == 0 { break; }
@@ -330,7 +359,10 @@ impl SftpConnection {
         Ok(())
     }
 
-    async fn do_upload(session: &SftpSession, local: &str, remote: &str, remote_ident: &str, local_ident: &str, app: &AppHandle) -> Result<(), String> {
+    async fn do_upload(session: &SftpSession, local: &str, remote: &str, remote_ident: &str, local_ident: &str, app: &AppHandle, cancel: &AtomicBool) -> Result<(), String> {
+        if cancel.load(Ordering::Relaxed) {
+            return Err("Cancelled".to_string());
+        }
         let local_metadata = std::fs::metadata(local)
             .map_err(|e| format!("local stat: {}", e))?;
         let total = local_metadata.len();
@@ -344,6 +376,9 @@ impl SftpConnection {
         let mut transferred = 0u64;
 
         loop {
+            if cancel.load(Ordering::Relaxed) {
+                return Err("Cancelled".to_string());
+            }
             let n = local_file.read(&mut buf).await
                 .map_err(|e| format!("local read: {}", e))?;
             if n == 0 { break; }
@@ -407,18 +442,26 @@ impl SftpConnection {
         rx.recv().map_err(|e| format!("Receive error: {}", e))?
     }
 
-    pub fn download(&self, remote: &str, local: &str) -> Result<(), String> {
+    pub fn download(&self, id: &str, remote: &str, local: &str) -> Result<(), String> {
         let (tx, rx) = mpsc::channel();
         self.cmd_tx
-            .send(SftpCmd::Download { remote: remote.to_string(), local: local.to_string(), resp: tx })
+            .send(SftpCmd::Download { id: id.to_string(), remote: remote.to_string(), local: local.to_string(), resp: tx })
             .map_err(|e| format!("Send error: {}", e))?;
         rx.recv().map_err(|e| format!("Receive error: {}", e))?
     }
 
-    pub fn upload(&self, local: &str, remote: &str) -> Result<(), String> {
+    pub fn upload(&self, id: &str, local: &str, remote: &str) -> Result<(), String> {
         let (tx, rx) = mpsc::channel();
         self.cmd_tx
-            .send(SftpCmd::Upload { local: local.to_string(), remote: remote.to_string(), resp: tx })
+            .send(SftpCmd::Upload { id: id.to_string(), local: local.to_string(), remote: remote.to_string(), resp: tx })
+            .map_err(|e| format!("Send error: {}", e))?;
+        rx.recv().map_err(|e| format!("Receive error: {}", e))?
+    }
+
+    pub fn cancel_transfer(&self, id: &str) -> Result<(), String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd_tx
+            .send(SftpCmd::CancelTransfer { id: id.to_string(), resp: tx })
             .map_err(|e| format!("Send error: {}", e))?;
         rx.recv().map_err(|e| format!("Receive error: {}", e))?
     }

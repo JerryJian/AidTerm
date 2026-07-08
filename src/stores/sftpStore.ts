@@ -53,17 +53,22 @@ export const useSftpStore = defineStore('sftp', () => {
     }
   }
 
-  async function download(remote: string, local: string) {
+  async function download(transferId: string, remote: string, local: string) {
     if (!connId.value) return
     error.value = ''
-    await invoke('sftp_download', { connId: connId.value, remote, local })
+    await invoke('sftp_download', { connId: connId.value, transferId, remote, local })
   }
 
-  async function upload(local: string, remote: string) {
+  async function upload(transferId: string, local: string, remote: string) {
     if (!connId.value) return
     error.value = ''
-    await invoke('sftp_upload', { connId: connId.value, local, remote })
+    await invoke('sftp_upload', { connId: connId.value, transferId, remote, local })
     await listDir(currentPath.value)
+  }
+
+  async function cancelTransfer(transferId: string) {
+    if (!connId.value) return
+    await invoke('sftp_cancel_transfer', { connId: connId.value, transferId })
   }
 
   async function remove(path: string) {
@@ -101,7 +106,7 @@ export const useSftpStore = defineStore('sftp', () => {
 
   return {
     connId, connected, currentPath, entries, loading, error,
-    connect, disconnect, listDir, download, upload, remove, renameItem, mkdir,
+    connect, disconnect, listDir, download, upload, cancelTransfer, remove, renameItem, mkdir,
     readFile, writeFile,
   }
 })
