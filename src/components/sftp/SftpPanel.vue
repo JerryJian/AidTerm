@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useSftpStore } from '../../stores/sftpStore'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
 import { useI18n } from 'vue-i18n'
-import type { FileEntry } from '../../types'
+import type { FileEntry, TerminalTab } from '../../types'
 
 const { t } = useI18n()
 const store = useSftpStore()
+
+const props = defineProps<{
+  tabId: string
+  tab: TerminalTab
+}>()
 
 const emit = defineEmits<{
   close: []
@@ -27,6 +32,37 @@ const renameValue = ref('')
 const dragOver = ref(false)
 const unlistens: Array<() => void> = []
 const userDisconnected = ref(false)
+
+let autoConnecting = false
+
+watch(
+  () => {
+    const s = props.tab.session
+    if (!s || s.type !== 'ssh' || !props.tab.sshInfo) return null
+    return `${s.id}:${s.status}:${props.tab.sshInfo.host}:${props.tab.sshInfo.port}:${props.tab.sshInfo.username}`
+  },
+  async (key) => {
+    if (autoConnecting || store.connected) return
+    if (props.tab.activeToolTab !== 'sftp') return
+    if (key && key.includes(':connected:')) {
+      const info = props.tab.sshInfo!
+      host.value = info.host
+      port.value = info.port
+      username.value = info.username
+      password.value = info.password || ''
+      if (host.value.trim()) {
+        autoConnecting = true
+        connecting.value = true
+        try {
+          await store.connect(info.host, info.port, info.username, info.password || '')
+        } catch { /* ignored */ }
+        connecting.value = false
+        autoConnecting = false
+      }
+    }
+  },
+  { immediate: true },
+)
 
 const sortedEntries = computed(() => {
   const sorted = [...store.entries]

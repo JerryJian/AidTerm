@@ -56,18 +56,18 @@ function onCloseTab(e: MouseEvent, tool: ToolTab) {
     </div>
     <div class="tool-body">
       <SftpPanel
-        v-if="activeToolTab() === 'sftp'"
+        v-show="activeToolTab() === 'sftp'"
         :tab-id="tabId"
         :tab="tab"
         @edit-file="(p, c) => emit('editFile', p, c)"
         @close="terminalStore.closeToolTab(tabId, 'sftp')"
       />
-      <TunnelPanel v-if="activeToolTab() === 'tunnel'" />
-      <ProxyPanel v-if="activeToolTab() === 'proxy'" />
-      <SnippetPanel v-if="activeToolTab() === 'snippet'" />
-      <TriggerPanel v-if="activeToolTab() === 'trigger'" />
-      <KeyManagerPanel v-if="activeToolTab() === 'key'" />
-      <KnownHostsPanel v-if="activeToolTab() === 'knownHosts'" />
+      <TunnelPanel v-show="activeToolTab() === 'tunnel'" />
+      <ProxyPanel v-show="activeToolTab() === 'proxy'" />
+      <SnippetPanel v-show="activeToolTab() === 'snippet'" />
+      <TriggerPanel v-show="activeToolTab() === 'trigger'" />
+      <KeyManagerPanel v-show="activeToolTab() === 'key'" />
+      <KnownHostsPanel v-show="activeToolTab() === 'knownHosts'" />
     </div>
   </div>
 </template>
