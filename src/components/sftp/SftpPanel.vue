@@ -19,6 +19,7 @@ const icons = {
   rename: svg('<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>'),
   delete: svg('<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'),
   spinner: svg('<path d="M21 12a9 9 0 1 1-6.219-8.56"/>'),
+  more: svg('<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>'),
 }
 
 const { t } = useI18n()
@@ -52,6 +53,22 @@ const ctxEntry = ref<FileEntry | null>(null)
 const ctxPos = ref<{ x: number; y: number } | null>(null)
 const deleteConfirm = ref<FileEntry | null>(null)
 const pathInput = ref('')
+const rowMenuEntry = ref<FileEntry | null>(null)
+const rowMenuPos = ref({ x: 0, y: 0 })
+
+function closeRowMenu() {
+  rowMenuEntry.value = null
+}
+
+function toggleRowMenu(entry: FileEntry, e: MouseEvent) {
+  if (rowMenuEntry.value === entry) {
+    closeRowMenu()
+    return
+  }
+  rowMenuEntry.value = entry
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  rowMenuPos.value = { x: rect.right, y: rect.bottom }
+}
 
 watch(() => store.currentPath, (p) => { pathInput.value = p }, { immediate: true })
 
@@ -344,18 +361,24 @@ function fileIcon(entry: FileEntry): string {
           <span class="col-size">{{ entry.is_dir ? '—' : formatSize(entry.size) }}</span>
           <span class="col-modified">{{ entry.modified }}</span>
           <span class="col-actions">
-            <button v-if="!entry.is_dir" class="action-btn" :title="t('sftp.edit')" @click.stop="onEntryDblClick(entry)" v-html="icons.edit" />
-            <button class="action-btn" :title="t('sftp.download')" @click.stop="doDownload(entry)" v-html="icons.download" />
-            <button class="action-btn" :title="t('sftp.rename')" @click.stop="startRename(entry)" v-html="icons.rename" />
-            <button class="action-btn danger" :title="t('sftp.delete')" @click.stop="confirmDelete(entry)" v-html="icons.delete" />
+            <button class="row-menu-btn" @click.stop="(e) => toggleRowMenu(entry, e)" v-html="icons.more" />
+            <Teleport to="body">
+              <div v-if="rowMenuEntry === entry" class="row-menu" :style="{ left: rowMenuPos.x + 'px', top: rowMenuPos.y + 'px' }" @click.stop>
+                <button v-if="!entry.is_dir" class="row-menu-item" @click="closeRowMenu(); onEntryDblClick(entry)"><span v-html="icons.edit" />{{ t('sftp.edit') }}</button>
+                <button class="row-menu-item" @click="closeRowMenu(); doDownload(entry)"><span v-html="icons.download" />{{ t('sftp.download') }}</button>
+                <button class="row-menu-item" @click="closeRowMenu(); startRename(entry)"><span v-html="icons.rename" />{{ t('sftp.rename') }}</button>
+                <div class="row-menu-divider" />
+                <button class="row-menu-item danger" @click="closeRowMenu(); confirmDelete(entry)"><span v-html="icons.delete" />{{ t('sftp.delete') }}</button>
+              </div>
+            </Teleport>
           </span>
         </div>
 
         <div v-if="sortedEntries.length === 0" class="empty">{{ t('sftp.empty_directory') }}</div>
       </div>
 
-      <!-- Context menu -->
-      <div v-if="ctxPos" class="ctx-backdrop" @click="closeCtxMenu" @contextmenu.prevent="closeCtxMenu" />
+      <!-- Backdrop for row menu & context menu -->
+      <div v-if="ctxPos || rowMenuEntry" class="ctx-backdrop" @click="closeCtxMenu(); closeRowMenu()" @contextmenu.prevent="closeCtxMenu(); closeRowMenu()" />
       <Teleport to="body">
         <div v-if="ctxPos" class="ctx-menu" :style="{ left: ctxPos.x + 'px', top: ctxPos.y + 'px' }">
           <button v-if="!ctxEntry?.is_dir" class="ctx-item" @click="closeCtxMenu(); ctxEntry && onEntryDblClick(ctxEntry)"><span v-html="icons.edit" />{{ t('sftp.edit') }}</button>
@@ -633,7 +656,7 @@ function fileIcon(entry: FileEntry): string {
 }
 
 .col-actions {
-  width: 80px;
+  width: 36px;
   display: flex;
   gap: 2px;
   justify-content: flex-end;
@@ -670,6 +693,25 @@ function fileIcon(entry: FileEntry): string {
 
 .action-btn.danger:hover {
   color: var(--danger);
+}
+
+.row-menu-btn {
+  background: none;
+  border: none;
+  color: var(--text-overlay0);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+  opacity: 0.5;
+}
+.file-row:hover .row-menu-btn,
+.row-menu-btn:focus-visible {
+  opacity: 1;
+}
+.row-menu-btn:hover {
+  color: var(--text);
+  background: var(--bg-surface1);
 }
 
 .rename-row {
@@ -895,5 +937,43 @@ function fileIcon(entry: FileEntry): string {
 }
 .confirm-actions .btn-danger:hover {
   opacity: 0.85;
+}
+
+.row-menu {
+  position: fixed;
+  z-index: 10001;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface0);
+  border-radius: 6px;
+  min-width: 130px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.row-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.row-menu-item:hover {
+  background: var(--bg-surface0);
+  color: var(--accent);
+}
+.row-menu-item.danger:hover {
+  color: var(--danger);
+}
+.row-menu-divider {
+  height: 1px;
+  background: var(--bg-surface0);
+  margin: 4px 8px;
 }
 </style>
