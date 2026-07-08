@@ -184,7 +184,6 @@ export default {
     upload_done: 'Done',
     upload_failed: 'Failed',
     confirm_delete: 'Delete {name}?',
-    address_placeholder: 'user@host:port or ssh://user@host',
   },
   tunnel: {
     title: 'Port Forwarding',

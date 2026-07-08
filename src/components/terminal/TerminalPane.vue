@@ -13,7 +13,7 @@ defineEmits<{
   editFile: [remotePath: string, connId: string]
 }>()
 
-const toolWidth = ref(340)
+const toolWidth = ref(400)
 const dragging = ref(false)
 
 function onDividerDown(e: MouseEvent) {
