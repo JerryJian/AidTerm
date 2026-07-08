@@ -365,11 +365,11 @@ function fileIcon(entry: FileEntry): string {
       <div v-if="ctxPos" class="ctx-backdrop" @click="closeCtxMenu" @contextmenu.prevent="closeCtxMenu" />
       <Teleport to="body">
         <div v-if="ctxPos" class="ctx-menu" :style="{ left: ctxPos.x + 'px', top: ctxPos.y + 'px' }">
-          <button v-if="!ctxEntry?.is_dir" class="ctx-item" @click="closeCtxMenu; ctxEntry && onEntryDblClick(ctxEntry)"><span v-html="icons.edit" />{{ t('sftp.edit') }}</button>
-          <button class="ctx-item" @click="closeCtxMenu; ctxEntry && doDownload(ctxEntry)"><span v-html="icons.download" />{{ t('sftp.download') }}</button>
-          <button class="ctx-item" @click="closeCtxMenu; ctxEntry && startRename(ctxEntry)"><span v-html="icons.rename" />{{ t('sftp.rename') }}</button>
+          <button v-if="!ctxEntry?.is_dir" class="ctx-item" @click="closeCtxMenu(); ctxEntry && onEntryDblClick(ctxEntry)"><span v-html="icons.edit" />{{ t('sftp.edit') }}</button>
+          <button class="ctx-item" @click="closeCtxMenu(); ctxEntry && doDownload(ctxEntry)"><span v-html="icons.download" />{{ t('sftp.download') }}</button>
+          <button class="ctx-item" @click="closeCtxMenu(); ctxEntry && startRename(ctxEntry)"><span v-html="icons.rename" />{{ t('sftp.rename') }}</button>
           <div class="ctx-divider" />
-          <button class="ctx-item danger" @click="closeCtxMenu; ctxEntry && confirmDelete(ctxEntry)"><span v-html="icons.delete" />{{ t('sftp.delete') }}</button>
+          <button class="ctx-item danger" @click="closeCtxMenu(); ctxEntry && confirmDelete(ctxEntry)"><span v-html="icons.delete" />{{ t('sftp.delete') }}</button>
         </div>
       </Teleport>
 
