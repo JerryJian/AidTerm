@@ -5,6 +5,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { useTerminal } from '../../hooks/useTerminal'
 import { useTerminalStore } from '../../stores/terminal'
 import { useThemeStore } from '../../stores/themeStore'
@@ -39,6 +40,7 @@ const themeStore = useThemeStore()
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let unlisten: (() => void) | null = null
+const unlisteners: (() => void)[] = []
 let resizeObserver: ResizeObserver | null = null
 let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 let lastSize = { w: 0, h: 0 }
@@ -258,6 +260,18 @@ async function initTerminal() {
   const rows = terminal.rows
   const cols = terminal.cols
 
+  let sessionId: string | null = null
+  const unsubStatus = await listen<{ session_id: string; status: string; error?: string }>('session-status', event => {
+    if (event.payload.session_id === sessionId) {
+      if (event.payload.status === 'connected') {
+        store.updateSessionStatus(store.activeTabId ?? '', 'connected')
+      } else if (event.payload.status === 'disconnected') {
+        store.updateSessionStatus(store.activeTabId ?? '', 'disconnected')
+      }
+    }
+  })
+  if (unsubStatus) unlisteners.push(unsubStatus)
+
   try {
     const id = props.sshInfo
       ? await sshConnect(
@@ -276,8 +290,13 @@ async function initTerminal() {
         ? await telnetConnect(props.telnetInfo.host, props.telnetInfo.port)
         : await createSession(rows, cols, store.activeTab?.session?.subshell)
 
+    sessionId = id
     store.updateSessionId(store.activeTabId ?? '', id)
-    store.updateSessionStatus(store.activeTabId ?? '', 'connected')
+    // Local and telnet sessions connect synchronously; the event emitted during
+    // creation arrives before sessionId is set, so set connected status directly.
+    if (!props.sshInfo) {
+      store.updateSessionStatus(store.activeTabId ?? '', 'connected')
+    }
     const unsub = await onOutput((data: string) => {
       if (!suppressOutput.value) terminal?.write(data)
     })
@@ -286,17 +305,16 @@ async function initTerminal() {
     if (props.sshInfo) {
       const tabId = store.activeTabId
       if (tabId) {
-        const info = await invoke<SystemInfo>('get_remote_system_info', {
+        invoke<SystemInfo>('get_remote_system_info', {
           host: props.sshInfo.host,
           port: props.sshInfo.port,
           username: props.sshInfo.username,
           password: props.sshInfo.password,
           privateKeyPath: props.sshInfo.privateKeyPath ?? null,
-        }).catch(() => null)
-        if (info) {
+        }).then(info => {
           store.updateSystemInfo(tabId, info)
           store.updateTabTitle(tabId, `${info.os} | ${info.hostname}`)
-        }
+        }).catch(() => {})
       }
     }
   } catch (e) {
@@ -322,6 +340,7 @@ onUnmounted(() => {
   if (fallbackTimer) clearTimeout(fallbackTimer)
   if (resizeObserver) resizeObserver.disconnect()
   if (unlisten) unlisten()
+  unlisteners.forEach(fn => fn())
   terminal?.dispose()
   terminal = null
   fitAddon = null

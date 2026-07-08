@@ -45,6 +45,9 @@ impl TelnetConnection {
         let mut conn = Telnet::connect((host, port), 4096)
             .map_err(|e| format!("Telnet connect failed: {}", e))?;
 
+        let _ = app_handle.emit("session-status", serde_json::json!({
+            "session_id": session_id, "status": "connected",
+        }));
         let _ = app_handle.emit("terminal-output", serde_json::json!({
             "session_id": session_id,
             "data": format!("\r\n[Trying {}:{}... connected]\r\n", host, port),
@@ -78,6 +81,9 @@ impl TelnetConnection {
             }
         }
 
+        let _ = app_handle.emit("session-status", serde_json::json!({
+            "session_id": session_id, "status": "disconnected",
+        }));
         Ok(())
     }
 

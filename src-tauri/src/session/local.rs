@@ -64,7 +64,12 @@ impl LocalSession {
             .take_writer()
             .map_err(|e| format!("Failed to get writer: {}", e))?;
 
+        let _ = app_handle.emit("session-status", serde_json::json!({
+            "session_id": id, "status": "connected",
+        }));
+
         let sid = id.clone();
+        let app_h = app_handle.clone();
         std::thread::spawn(move || {
             let mut buf = [0u8; 4096];
             loop {
@@ -72,15 +77,18 @@ impl LocalSession {
                     Ok(0) => break,
                     Ok(n) => {
                         let data = decode_windows_output(&buf[..n]);
-                        let _ = app_handle.emit("terminal-output", serde_json::json!({
+                        let _ = app_h.emit("terminal-output", serde_json::json!({
                             "session_id": sid, "data": data,
                         }));
                     }
                     Err(_) => break,
                 }
             }
-            let _ = app_handle.emit("terminal-output", serde_json::json!({
+            let _ = app_h.emit("terminal-output", serde_json::json!({
                 "session_id": sid, "data": "\r\n[Process exited]\r\n",
+            }));
+            let _ = app_h.emit("session-status", serde_json::json!({
+                "session_id": sid, "status": "disconnected",
             }));
         });
 

@@ -1,10 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
-use ssh_rs::ssh;
+use russh::client;
+use russh::keys::*;
+use russh::ChannelMsg;
+use tokio::runtime::Runtime;
 
 pub struct SftpManager {
     pub connections: Mutex<HashMap<String, SftpConnection>>,
@@ -38,6 +41,19 @@ enum SftpCmd {
     WriteFile { remote: String, content: String, resp: Resp<()> },
 }
 
+struct SftpHandler;
+
+impl client::Handler for SftpHandler {
+    type Error = anyhow::Error;
+
+    async fn check_server_key(
+        &mut self,
+        _server_public_key: &PublicKey,
+    ) -> Result<bool, Self::Error> {
+        Ok(true)
+    }
+}
+
 pub struct SftpConnection {
     cmd_tx: Sender<SftpCmd>,
     kill_tx: Option<Sender<()>>,
@@ -57,7 +73,14 @@ impl SftpConnection {
         let addr = format!("{}:{}", host, port);
 
         let handle = std::thread::spawn(move || {
-            if let Err(e) = Self::run(&addr, &username, &password, private_key_path, cmd_rx, kill_rx) {
+            let rt = match Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    eprintln!("SFTP runtime error: {}", e);
+                    return;
+                }
+            };
+            if let Err(e) = rt.block_on(Self::run_async(&addr, &username, &password, private_key_path, cmd_rx, kill_rx)) {
                 eprintln!("SFTP session error: {}", e);
             }
         });
@@ -65,7 +88,75 @@ impl SftpConnection {
         Ok(Self { cmd_tx, kill_tx: Some(kill_tx), handle: Some(handle) })
     }
 
-    fn run(
+    async fn authenticate(
+        handle: &mut client::Handle<SftpHandler>,
+        username: &str,
+        password: &str,
+        private_key_path: Option<&str>,
+    ) -> Result<(), String> {
+        if let Some(key_path) = private_key_path {
+            let key = load_secret_key(key_path, None)
+                .map_err(|e| format!("Failed to load private key: {}", e))?;
+            let key_with_alg = PrivateKeyWithHashAlg::new(Arc::new(key), None);
+            let auth = handle.authenticate_publickey(username, key_with_alg).await
+                .map_err(|e| format!("Public key auth failed: {}", e))?;
+            if !auth.success() {
+                return Err("Public key authentication rejected".to_string());
+            }
+        } else {
+            let auth = handle.authenticate_password(username, password).await
+                .map_err(|e| format!("Password auth failed: {}", e))?;
+            if !auth.success() {
+                return Err("Password authentication rejected".to_string());
+            }
+        }
+        Ok(())
+    }
+
+    async fn exec_cmd(
+        handle: &mut client::Handle<SftpHandler>,
+        cmd: &str,
+    ) -> Result<Vec<u8>, String> {
+        let mut channel = handle.channel_open_session().await
+            .map_err(|e| format!("Failed to open channel: {}", e))?;
+        channel.exec(true, cmd).await
+            .map_err(|e| format!("Exec failed: {}", e))?;
+
+        let mut output = Vec::new();
+        loop {
+            match channel.wait().await {
+                Some(ChannelMsg::Data { data }) => output.extend_from_slice(&data),
+                Some(ChannelMsg::ExtendedData { ext: 1, data }) => output.extend_from_slice(&data),
+                Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+                _ => {}
+            }
+        }
+        let _ = channel.close().await;
+        Ok(output)
+    }
+
+    async fn write_file_remote(
+        handle: &mut client::Handle<SftpHandler>,
+        remote: &str,
+        content: &[u8],
+    ) -> Result<(), String> {
+        let mut channel = handle.channel_open_session().await
+            .map_err(|e| format!("Failed to open channel: {}", e))?;
+        channel.exec(true, format!("cat > {}", shell_escape(remote))).await
+            .map_err(|e| format!("Exec failed: {}", e))?;
+        let _ = channel.data(content).await;
+
+        loop {
+            match channel.wait().await {
+                Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+                _ => {}
+            }
+        }
+        let _ = channel.close().await;
+        Ok(())
+    }
+
+    async fn run_async(
         addr: &str,
         username: &str,
         password: &str,
@@ -73,20 +164,11 @@ impl SftpConnection {
         cmd_rx: Receiver<SftpCmd>,
         kill_rx: Receiver<()>,
     ) -> Result<(), String> {
-        let mut builder = ssh::create_session()
-            .username(username)
-            .timeout(Some(Duration::from_secs(10)));
+        let config = Arc::new(client::Config::default());
+        let mut handle = client::connect(config, addr, SftpHandler).await
+            .map_err(|e| format!("SFTP SSH connect failed: {}", e))?;
 
-        if let Some(ref key_path) = private_key_path {
-            builder = builder.private_key_path(key_path);
-        }
-
-        builder = builder.password(password);
-
-        let mut session = builder
-            .connect(addr)
-            .map_err(|e| format!("SFTP SSH connect failed: {}", e))?
-            .run_local();
+        Self::authenticate(&mut handle, username, password, private_key_path.as_deref()).await?;
 
         loop {
             if kill_rx.try_recv().is_ok() {
@@ -96,50 +178,50 @@ impl SftpConnection {
             match cmd_rx.recv_timeout(Duration::from_millis(500)) {
                 Ok(cmd) => match cmd {
                     SftpCmd::ListDir { path, resp } => {
-                        let result = Self::exec_cmd(&mut session, &format!("ls -la {}", shell_escape(&path)))
+                        let result = Self::exec_cmd(&mut handle, &format!("ls -la {}", shell_escape(&path))).await
+                            .and_then(|out| String::from_utf8(out).map_err(|e| format!("UTF-8: {}", e)))
                             .and_then(|out| Self::parse_ls_output(&out, &path));
                         let _ = resp.send(result);
                     }
                     SftpCmd::Download { remote, local, resp } => {
-                        let result = Self::scp_download(&mut session, &local, &remote);
+                        let result = Self::exec_cmd(&mut handle, &format!("cat {}", shell_escape(&remote))).await
+                            .and_then(|content| {
+                                std::fs::write(&local, &content).map_err(|e| format!("Local write: {}", e))
+                            });
                         let _ = resp.send(result);
                     }
                     SftpCmd::Upload { local, remote, resp } => {
-                        let result = Self::scp_upload(&mut session, &local, &remote);
+                        let content = std::fs::read(&local).map_err(|e| format!("Local read: {}", e));
+                        let result = match content {
+                            Ok(c) => Self::write_file_remote(&mut handle, &remote, &c).await,
+                            Err(e) => Err(e),
+                        };
                         let _ = resp.send(result);
                     }
                     SftpCmd::Remove { path, resp } => {
-                        let result =
-                            Self::exec_cmd(&mut session, &format!("rm -rf {}", shell_escape(&path)))
-                                .map(|_| ());
+                        let result = Self::exec_cmd(&mut handle, &format!("rm -rf {}", shell_escape(&path))).await
+                            .map(|_| ());
                         let _ = resp.send(result);
                     }
                     SftpCmd::Rename { old, new, resp } => {
                         let result = Self::exec_cmd(
-                            &mut session,
+                            &mut handle,
                             &format!("mv {} {}", shell_escape(&old), shell_escape(&new)),
-                        )
-                        .map(|_| ());
+                        ).await.map(|_| ());
                         let _ = resp.send(result);
                     }
                     SftpCmd::Mkdir { path, resp } => {
-                        let result =
-                            Self::exec_cmd(&mut session, &format!("mkdir -p {}", shell_escape(&path)))
-                                .map(|_| ());
+                        let result = Self::exec_cmd(&mut handle, &format!("mkdir -p {}", shell_escape(&path))).await
+                            .map(|_| ());
                         let _ = resp.send(result);
                     }
                     SftpCmd::ReadFile { remote, resp } => {
-                        let result = Self::exec_cmd(&mut session, &format!("cat {}", shell_escape(&remote)));
+                        let result = Self::exec_cmd(&mut handle, &format!("cat {}", shell_escape(&remote))).await
+                            .and_then(|out| String::from_utf8(out).map_err(|e| format!("UTF-8: {}", e)));
                         let _ = resp.send(result);
                     }
                     SftpCmd::WriteFile { remote, content, resp } => {
-                        let result = (|| {
-                            let tmp = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
-                            std::fs::write(&tmp, &content).map_err(|e| format!("Temp write: {}", e))?;
-                            let r = Self::scp_upload(&mut session, tmp.to_str().unwrap_or("/tmp/aidterm"), &remote);
-                            let _ = std::fs::remove_file(&tmp);
-                            r
-                        })();
+                        let result = Self::write_file_remote(&mut handle, &remote, content.as_bytes()).await;
                         let _ = resp.send(result);
                     }
                 },
@@ -148,45 +230,8 @@ impl SftpConnection {
             }
         }
 
-        session.close();
+        tokio::spawn(handle);
         Ok(())
-    }
-
-    fn exec_cmd(
-        session: &mut ssh_rs::LocalSession<impl std::io::Read + std::io::Write>,
-        cmd: &str,
-    ) -> Result<String, String> {
-        let exec = session
-            .open_exec()
-            .map_err(|e| format!("Failed to open exec: {}", e))?;
-        let result = exec
-            .send_command(cmd)
-            .map_err(|e| format!("Command failed: {}", e))?;
-        String::from_utf8(result).map_err(|e| format!("UTF-8 error: {}", e))
-    }
-
-    fn scp_download(
-        session: &mut ssh_rs::LocalSession<impl std::io::Read + std::io::Write>,
-        local: &str,
-        remote: &str,
-    ) -> Result<(), String> {
-        let scp = session
-            .open_scp()
-            .map_err(|e| format!("Failed to open SCP: {}", e))?;
-        scp.download(local, remote)
-            .map_err(|e| format!("SCP download failed: {}", e))
-    }
-
-    fn scp_upload(
-        session: &mut ssh_rs::LocalSession<impl std::io::Read + std::io::Write>,
-        local: &str,
-        remote: &str,
-    ) -> Result<(), String> {
-        let scp = session
-            .open_scp()
-            .map_err(|e| format!("Failed to open SCP: {}", e))?;
-        scp.upload(local, remote)
-            .map_err(|e| format!("SCP upload failed: {}", e))
     }
 
     fn parse_ls_output(output: &str, _base_path: &str) -> Result<Vec<FileEntry>, String> {

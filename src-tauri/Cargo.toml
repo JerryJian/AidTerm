@@ -19,8 +19,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 portable-pty = "0.8"
 uuid = { version = "1", features = ["v4"] }
-ssh-rs = "0.3"
-tokio = { version = "1", features = ["io-util", "sync"] }
+russh = { version = "0.62", default-features = false, features = ["ring", "rsa", "flate2"] }
+anyhow = "1"
+tokio = { version = "1", features = ["rt", "macros", "sync", "time", "io-util"] }
 tauri-plugin-dialog = "2.7.1"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-global-shortcut = "2"
@@ -29,5 +30,7 @@ telnet = "0.2"
 ssh2 = "0.9"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 encoding_rs = "0.8"
+log = "0.4"
+env_logger = "0.11"
 ring = "0.17"
 base64 = "0.22"
