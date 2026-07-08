@@ -68,13 +68,10 @@ function onSubmit() {
   })
 }
 
-function onBackdropClick(e: MouseEvent) {
-  if (e.target === e.currentTarget) emit('close')
-}
 </script>
 
 <template>
-  <div class="overlay" @click="onBackdropClick">
+  <div class="overlay">
     <div class="dialog">
       <div class="dialog-header">
         <span>{{ isEditing ? t('session_dialog.title_edit') : t('session_dialog.title_new') }}</span>

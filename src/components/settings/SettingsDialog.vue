@@ -51,7 +51,7 @@ async function toggleFullscreen() {
 </script>
 
 <template>
-  <div class="modal-overlay" @click.self="emit('close')">
+  <div class="modal-overlay">
     <div class="modal-dialog">
       <div class="modal-header">
         <span class="modal-title">{{ t('settings.title') }}</span>

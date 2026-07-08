@@ -62,13 +62,10 @@ function onSubmit() {
   })
 }
 
-function onBackdropClick(e: MouseEvent) {
-  if (e.target === e.currentTarget) emit('close')
-}
 </script>
 
 <template>
-  <div class="overlay" @click="onBackdropClick">
+  <div class="overlay">
     <div class="dialog">
       <div class="dialog-header">
         <span>{{ t('ssh_dialog.title') }}</span>

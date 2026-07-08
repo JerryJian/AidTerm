@@ -38,7 +38,7 @@ function submitEdit() {
 </script>
 
 <template>
-  <div class="confirm-overlay" @click.self="doCancel">
+  <div class="confirm-overlay">
     <div class="confirm-box" @click.stop>
       <div class="confirm-header">
         <span class="confirm-icon">🤖</span>
