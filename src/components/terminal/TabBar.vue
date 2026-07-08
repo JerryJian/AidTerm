@@ -28,15 +28,25 @@ const availableShells = ref<string[]>([])
 const toolsMenuOpen = ref(false)
 const viewsMenuOpen = ref(false)
 
-const toolTabs: { id: ToolTab; icon: string }[] = [
-  { id: 'sftp', icon: '\uD83D\uDCC2' },
-  { id: 'tunnel', icon: '\uD83D\uDD0C' },
-  { id: 'proxy', icon: '\uD83C\uDF10' },
-  { id: 'snippet', icon: '\u26A1' },
-  { id: 'trigger', icon: '\uD83D\uDD2B' },
-  { id: 'key', icon: '\uD83D\uDD11' },
-  { id: 'knownHosts', icon: '\uD83D\uDDC2' },
-]
+const sshOnlyTools: ToolTab[] = ['sftp', 'tunnel', 'proxy', 'key', 'knownHosts']
+
+const activeTabSessionType = computed(() => store.activeTab?.session?.type)
+
+const toolTabs = computed<{ id: ToolTab; icon: string }[]>(() => {
+  const all: { id: ToolTab; icon: string }[] = [
+    { id: 'sftp', icon: '\uD83D\uDCC2' },
+    { id: 'tunnel', icon: '\uD83D\uDD0C' },
+    { id: 'proxy', icon: '\uD83C\uDF10' },
+    { id: 'snippet', icon: '\u26A1' },
+    { id: 'trigger', icon: '\uD83D\uDD2B' },
+    { id: 'key', icon: '\uD83D\uDD11' },
+    { id: 'knownHosts', icon: '\uD83D\uDDC2' },
+  ]
+  if (activeTabSessionType.value !== 'ssh') {
+    return all.filter(t => !sshOnlyTools.includes(t.id))
+  }
+  return all
+})
 
 function toggleToolsMenu() {
   toolsMenuOpen.value = !toolsMenuOpen.value
