@@ -105,7 +105,7 @@ export default {
     snippet: '快捷命令',
     trigger: '触发器',
     key: '密钥',
-    known_hosts: '主机',
+    knownHosts: '主机',
   },
   status: {
     tabs_count: '{count} 个标签页',

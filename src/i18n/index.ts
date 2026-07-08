@@ -5,7 +5,7 @@ import enUS from './en-US'
 const savedLang = localStorage.getItem('aidterm_language') || 'zh-CN'
 
 export const i18n = createI18n({
-  legacy: true,
+  legacy: false,
   locale: savedLang,
   fallbackLocale: 'en-US',
   messages: {
@@ -15,6 +15,6 @@ export const i18n = createI18n({
 })
 
 export function setLanguage(lang: string) {
-  i18n.global.locale = lang as 'zh-CN' | 'en-US'
+  i18n.global.locale.value = lang as 'zh-CN' | 'en-US'
   localStorage.setItem('aidterm_language', lang)
 }

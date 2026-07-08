@@ -105,7 +105,7 @@ export default {
     snippet: 'Snippets',
     trigger: 'Triggers',
     key: 'Keys',
-    known_hosts: 'Hosts',
+    knownHosts: 'Hosts',
   },
   status: {
     tabs_count: '{count} tab(s)',
