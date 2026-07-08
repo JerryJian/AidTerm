@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { TerminalTab, TerminalSession, SshConnectionInfo, TelnetConnectionInfo, SystemInfo } from '../types'
+import type { TerminalTab, TerminalSession, SshConnectionInfo, TelnetConnectionInfo, SystemInfo, ToolTab } from '../types'
 
 let nextId = 1
 function generateId(): string {
@@ -37,6 +37,62 @@ export const useTerminalStore = defineStore('terminal', () => {
     tabs.value.push(tab)
     activeTabId.value = id
     return tab
+  }
+
+  function ensureTabTools(tab: TerminalTab) {
+    if (!tab.openToolTabs) {
+      tab.openToolTabs = []
+    }
+    if (!tab.activeToolTab) {
+      tab.activeToolTab = 'sftp'
+    }
+  }
+
+  function addToolTab(tabId: string, tool: ToolTab) {
+    const tab = tabs.value.find(t => t.id === tabId)
+    if (!tab) return
+    ensureTabTools(tab)
+    if (!tab.openToolTabs!.includes(tool)) {
+      tab.openToolTabs!.push(tool)
+    }
+    tab.activeToolTab = tool
+    tab.toolSidebarOpen = true
+  }
+
+  function closeToolTab(tabId: string, tool: ToolTab) {
+    const tab = tabs.value.find(t => t.id === tabId)
+    if (!tab || !tab.openToolTabs) return
+    const idx = tab.openToolTabs.indexOf(tool)
+    if (idx === -1) return
+    tab.openToolTabs.splice(idx, 1)
+    if (tab.activeToolTab === tool) {
+      if (tab.openToolTabs.length > 0) {
+        const nextIdx = Math.min(idx, tab.openToolTabs.length - 1)
+        tab.activeToolTab = tab.openToolTabs[nextIdx]
+      } else {
+        tab.toolSidebarOpen = false
+      }
+    }
+  }
+
+  function setActiveToolTab(tabId: string, tool: ToolTab) {
+    const tab = tabs.value.find(t => t.id === tabId)
+    if (!tab) return
+    ensureTabTools(tab)
+    tab.activeToolTab = tool
+    tab.toolSidebarOpen = true
+  }
+
+  function toggleToolSidebar(tabId: string) {
+    const tab = tabs.value.find(t => t.id === tabId)
+    if (!tab) return
+    ensureTabTools(tab)
+    tab.toolSidebarOpen = !tab.toolSidebarOpen
+  }
+
+  function isToolOpen(tabId: string, tool: ToolTab): boolean {
+    const tab = tabs.value.find(t => t.id === tabId)
+    return !!tab?.openToolTabs?.includes(tool)
   }
 
   function closeTab(id: string) {
@@ -125,5 +181,10 @@ export const useTerminalStore = defineStore('terminal', () => {
     toggleBatch,
     setBatchTabId,
     getBatchSessionIds,
+    addToolTab,
+    closeToolTab,
+    setActiveToolTab,
+    toggleToolSidebar,
+    isToolOpen,
   }
 })

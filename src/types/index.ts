@@ -44,6 +44,8 @@ export interface SystemInfo {
   shell: string
 }
 
+export type ToolTab = 'sftp' | 'tunnel' | 'proxy' | 'snippet' | 'trigger' | 'key' | 'knownHosts'
+
 export interface TerminalTab {
   id: string
   title: string
@@ -53,6 +55,9 @@ export interface TerminalTab {
   splitDirection?: 'horizontal' | 'vertical'
   children?: TerminalTab[]
   systemInfo?: SystemInfo
+  toolSidebarOpen?: boolean
+  openToolTabs?: ToolTab[]
+  activeToolTab?: ToolTab
 }
 
 export interface TerminalOutputPayload {

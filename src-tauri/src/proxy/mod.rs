@@ -188,7 +188,7 @@ async fn connect_via_jump_host_async(
         .await
         .map_err(|e| format!("Direct TCP/IP channel: {}", e))?;
 
-    let (mut user_end, mut relay_end) = tokio::io::duplex(65536);
+    let (user_end, mut relay_end) = tokio::io::duplex(65536);
 
     tokio::spawn(async move {
         let mut buf = vec![0u8; 65536];

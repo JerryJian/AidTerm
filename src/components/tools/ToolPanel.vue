@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useUiStore, type ToolTab } from '../../stores/uiStore'
+import { useTerminalStore } from '../../stores/terminal'
+import type { ToolTab, TerminalTab } from '../../types'
 import SftpPanel from '../sftp/SftpPanel.vue'
 import TunnelPanel from '../tunnel/TunnelPanel.vue'
 import ProxyPanel from '../proxy/ProxyPanel.vue'
@@ -8,11 +9,16 @@ import TriggerPanel from '../trigger/TriggerPanel.vue'
 import KeyManagerPanel from '../keychain/KeyManagerPanel.vue'
 import KnownHostsPanel from '../keychain/KnownHostsPanel.vue'
 
-const ui = useUiStore()
+const props = defineProps<{
+  tabId: string
+  tab: TerminalTab
+}>()
 
 const emit = defineEmits<{
   editFile: [remotePath: string, connId: string]
 }>()
+
+const terminalStore = useTerminalStore()
 
 const toolMeta: Record<ToolTab, { icon: string }> = {
   sftp: { icon: '\uD83D\uDCC2' },
@@ -24,9 +30,12 @@ const toolMeta: Record<ToolTab, { icon: string }> = {
   knownHosts: { icon: '\uD83D\uDDC2' },
 }
 
-function onCloseTab(e: MouseEvent, tab: ToolTab) {
+const openToolTabs = () => props.tab.openToolTabs ?? []
+const activeToolTab = () => props.tab.activeToolTab ?? 'sftp'
+
+function onCloseTab(e: MouseEvent, tool: ToolTab) {
   e.stopPropagation()
-  ui.closeToolTab(tab)
+  terminalStore.closeToolTab(props.tabId, tool)
 }
 </script>
 
@@ -34,11 +43,11 @@ function onCloseTab(e: MouseEvent, tab: ToolTab) {
   <div class="tool-panel">
     <div class="tool-tabs">
       <button
-        v-for="t in ui.openToolTabs"
+        v-for="t in openToolTabs()"
         :key="t"
         class="tool-tab"
-        :class="{ active: ui.activeToolTab === t }"
-        @click="ui.activeToolTab = t"
+        :class="{ active: activeToolTab() === t }"
+        @click="terminalStore.setActiveToolTab(tabId, t)"
       >
         <span class="tab-icon">{{ toolMeta[t].icon }}</span>
         <span class="tab-label">{{ $t('tool_panel.' + t) }}</span>
@@ -47,15 +56,18 @@ function onCloseTab(e: MouseEvent, tab: ToolTab) {
     </div>
     <div class="tool-body">
       <SftpPanel
-        v-if="ui.activeToolTab === 'sftp'"
+        v-if="activeToolTab() === 'sftp'"
+        :tab-id="tabId"
+        :tab="tab"
         @edit-file="(p, c) => emit('editFile', p, c)"
+        @close="terminalStore.closeToolTab(tabId, 'sftp')"
       />
-      <TunnelPanel v-if="ui.activeToolTab === 'tunnel'" />
-      <ProxyPanel v-if="ui.activeToolTab === 'proxy'" />
-      <SnippetPanel v-if="ui.activeToolTab === 'snippet'" />
-      <TriggerPanel v-if="ui.activeToolTab === 'trigger'" />
-      <KeyManagerPanel v-if="ui.activeToolTab === 'key'" />
-      <KnownHostsPanel v-if="ui.activeToolTab === 'knownHosts'" />
+      <TunnelPanel v-if="activeToolTab() === 'tunnel'" />
+      <ProxyPanel v-if="activeToolTab() === 'proxy'" />
+      <SnippetPanel v-if="activeToolTab() === 'snippet'" />
+      <TriggerPanel v-if="activeToolTab() === 'trigger'" />
+      <KeyManagerPanel v-if="activeToolTab() === 'key'" />
+      <KnownHostsPanel v-if="activeToolTab() === 'knownHosts'" />
     </div>
   </div>
 </template>

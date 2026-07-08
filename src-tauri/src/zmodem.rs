@@ -19,6 +19,7 @@ pub fn detect_init(data: &[u8]) -> bool {
 }
 
 /// Save captured Zmodem data to file.
+#[allow(dead_code)]
 pub fn save_to_file(path: &str, data: &[u8]) -> Result<(), String> {
     let mut file = std::fs::File::create(path)
         .map_err(|e| format!("Failed to create file: {}", e))?;

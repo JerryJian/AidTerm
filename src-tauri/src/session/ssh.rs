@@ -35,6 +35,7 @@ impl client::Handler for SshHandler {
     }
 }
 
+#[allow(dead_code)]
 fn zmodem_loop(
     write_rx: &Receiver<String>,
     kill_rx: &Receiver<()>,
@@ -125,8 +126,8 @@ impl SshConnection {
         proxy_config: Option<proxy::ProxyConfig>,
         rows: u16,
         cols: u16,
-        agent_forwarding: bool,
-        x11_forwarding: bool,
+        _agent_forwarding: bool,
+        _x11_forwarding: bool,
         app_handle: AppHandle,
     ) -> Result<Self, String> {
         let addr = format!("{}:{}", host, port);
@@ -238,10 +239,10 @@ impl SshConnection {
         private_key_path: Option<String>,
         rows: u16,
         cols: u16,
-        mut write_rx: UnboundedReceiver<String>,
-        mut resize_rx: UnboundedReceiver<(u16, u16)>,
-        mut kill_rx: UnboundedReceiver<()>,
-        mut exec_rx: UnboundedReceiver<(String, ExecResponse)>,
+        write_rx: UnboundedReceiver<String>,
+        resize_rx: UnboundedReceiver<(u16, u16)>,
+        kill_rx: UnboundedReceiver<()>,
+        exec_rx: UnboundedReceiver<(String, ExecResponse)>,
         app_handle: &AppHandle,
         session_id: &str,
     ) -> Result<(), String> {

@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSftpStore } from '../../stores/sftpStore'
-import { useTerminalStore } from '../../stores/terminal'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
 import { useI18n } from 'vue-i18n'
@@ -9,7 +8,6 @@ import type { FileEntry } from '../../types'
 
 const { t } = useI18n()
 const store = useSftpStore()
-const terminalStore = useTerminalStore()
 
 const emit = defineEmits<{
   close: []
@@ -29,53 +27,6 @@ const renameValue = ref('')
 const dragOver = ref(false)
 const unlistens: Array<() => void> = []
 const userDisconnected = ref(false)
-
-// Unique key representing the SSH session we should follow
-// Set to null when no SSH tab is active or tab changes
-let followKey: string | null = null
-
-// Watch tab switches + session status changes within the tab
-watch(
-  () => {
-    const tab = terminalStore.activeTab
-    if (!tab?.sshInfo || tab.session?.type !== 'ssh') return null
-    return `${tab.id}:${tab.session?.status}:${tab.sshInfo.host}:${tab.sshInfo.port}:${tab.sshInfo.username}`
-  },
-  async (key) => {
-    if (connecting.value) return
-
-    // Tab switch resets user-disconnected flag
-    if (key && followKey && key.split(':')[0] !== followKey.split(':')[0]) {
-      userDisconnected.value = false
-    }
-
-    // Same key? skip
-    if (key === followKey) return
-    followKey = key
-
-    // User manually disconnected — don't auto-reconnect (wait for tab switch)
-    if (userDisconnected.value) return
-
-    if (key && key.includes(':connected:')) {
-      const tab = terminalStore.activeTab
-      if (!tab?.sshInfo) return
-      if (store.connected) {
-        await store.disconnect()
-      }
-      host.value = tab.sshInfo.host
-      port.value = tab.sshInfo.port
-      username.value = tab.sshInfo.username
-      password.value = tab.sshInfo.password || ''
-      if (host.value.trim()) {
-        await doConnect()
-      }
-    } else if (store.connected) {
-      // No valid SSH session — disconnect
-      await store.disconnect()
-    }
-  },
-  { immediate: true },
-)
 
 const sortedEntries = computed(() => {
   const sorted = [...store.entries]
@@ -216,15 +167,15 @@ async function doMkdir() {
 }
 
 function fileIcon(entry: FileEntry): string {
-  if (entry.is_dir) return '📁'
+  if (entry.is_dir) return '\uD83D\uDCC1'
   const ext = entry.name.split('.').pop()?.toLowerCase()
-  if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'ico', 'webp'].includes(ext || '')) return '🖼'
-  if (['zip', 'tar', 'gz', 'bz2', '7z', 'rar'].includes(ext || '')) return '📦'
-  if (['py', 'js', 'ts', 'rs', 'go', 'java', 'c', 'cpp', 'h'].includes(ext || '')) return '📄'
-  if (['txt', 'md', 'json', 'xml', 'yml', 'yaml', 'toml', 'ini', 'cfg'].includes(ext || '')) return '📝'
-  if (['sh', 'bash', 'zsh', 'bat', 'ps1', 'cmd'].includes(ext || '')) return '⚙'
-  if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext || '')) return '📊'
-  return '📄'
+  if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'ico', 'webp'].includes(ext || '')) return '\uD83D\uDDBC'
+  if (['zip', 'tar', 'gz', 'bz2', '7z', 'rar'].includes(ext || '')) return '\uD83D\uDCE6'
+  if (['py', 'js', 'ts', 'rs', 'go', 'java', 'c', 'cpp', 'h'].includes(ext || '')) return '\uD83D\uDCC4'
+  if (['txt', 'md', 'json', 'xml', 'yml', 'yaml', 'toml', 'ini', 'cfg'].includes(ext || '')) return '\uD83D\uDCDD'
+  if (['sh', 'bash', 'zsh', 'bat', 'ps1', 'cmd'].includes(ext || '')) return '\u2699'
+  if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext || '')) return '\uD83D\uDCCA'
+  return '\uD83D\uDCC4'
 }
 </script>
 

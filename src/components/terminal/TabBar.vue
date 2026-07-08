@@ -3,8 +3,8 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useTerminalStore } from '../../stores/terminal'
 import { useSessionStore } from '../../stores/sessionStore'
-import { useUiStore, type ToolTab } from '../../stores/uiStore'
-import type { SavedSession } from '../../types'
+import { useUiStore } from '../../stores/uiStore'
+import type { SavedSession, ToolTab } from '../../types'
 import QuickConnectBar from '../session/QuickConnectBar.vue'
 
 const store = useTerminalStore()
@@ -44,13 +44,16 @@ function toggleToolsMenu() {
 }
 
 function openToolTab(tab: ToolTab) {
-  ui.addToolTab(tab)
+  if (store.activeTabId) {
+    store.addToolTab(store.activeTabId, tab)
+  }
   menuOpen.value = false
   toolsMenuOpen.value = false
 }
 
 function isToolOpen(tab: ToolTab): boolean {
-  return ui.openToolTabs.includes(tab)
+  if (!store.activeTabId) return false
+  return store.isToolOpen(store.activeTabId, tab)
 }
 
 function toggleSessions() {
@@ -106,11 +109,11 @@ function onNewTabClick() {
 
 function onDocClick(e: MouseEvent) {
   const target = e.target as HTMLElement
-  if (!target.closest('.new-tab-wrapper') && !target.closest('.menu-wrapper')) {
-    newTabMenuOpen.value = false
-    menuOpen.value = false
-    viewsMenuOpen.value = false
-  }
+  if (target?.closest('.tools-wrapper') || target?.closest('.new-tab-wrapper') || target?.closest('.menu-wrapper')) return
+  newTabMenuOpen.value = false
+  menuOpen.value = false
+  viewsMenuOpen.value = false
+  toolsMenuOpen.value = false
 }
 
 onMounted(() => document.addEventListener('click', onDocClick, true))

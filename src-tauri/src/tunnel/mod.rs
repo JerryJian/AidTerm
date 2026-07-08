@@ -326,7 +326,7 @@ async fn run_local_tunnel(
         match listener.accept() {
             Ok((incoming, _)) => {
                 let th = target_host.clone();
-                let mut h = handle.lock().await;
+                let h = handle.lock().await;
                 match h.channel_open_direct_tcpip(&th, target_port as u32, "", 0).await {
                     Ok(ch) => {
                         tokio::spawn(async move {
@@ -354,7 +354,7 @@ async fn run_remote_tunnel(
 ) -> Result<(), String> {
     let (incoming_tx, mut incoming_rx) = tokio_mpsc::unbounded_channel();
 
-    let mut handle = connect_and_auth(auth, RemoteTunnelHandler { incoming_tx }).await?;
+    let handle = connect_and_auth(auth, RemoteTunnelHandler { incoming_tx }).await?;
 
     handle.tcpip_forward(bind_addr, bind_port as u32).await
         .map_err(|e| format!("Remote listen on {}:{}: {}", bind_addr, bind_port, e))?;
@@ -405,7 +405,7 @@ async fn run_dynamic_tunnel(
                     Ok(r) => r,
                     Err(_) => continue,
                 };
-                let mut h = handle.lock().await;
+                let h = handle.lock().await;
                 match h.channel_open_direct_tcpip(&target_host, target_port as u32, "", 0).await {
                     Ok(ch) => {
                         tokio::spawn(async move {

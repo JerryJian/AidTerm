@@ -17,7 +17,7 @@ import TabBar from './components/terminal/TabBar.vue'
 import TitleBar from './components/titlebar/TitleBar.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
 import SessionPanel from './components/session/SessionPanel.vue'
-import ToolPanel from './components/tools/ToolPanel.vue'
+
 import StatusBar from './components/status/StatusBar.vue'
 import SshDialog from './components/session/SshDialog.vue'
 import SessionDialog from './components/session/SessionDialog.vue'
@@ -279,13 +279,9 @@ onUnmounted(() => {
             v-show="store.activeTab && tab.id === store.activeTabId"
             :tab="tab"
             @newSsh="ui.sshDialog = true"
-          />
-          </div>
-        </Pane>
-        <Pane v-if="ui.rightSidebar" :size="ui.rightSidebarPct" :min-size="17" :max-size="50">
-          <ToolPanel
             @edit-file="onEditFile"
           />
+          </div>
         </Pane>
       </Splitpanes>
     </div>
