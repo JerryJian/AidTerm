@@ -382,4 +382,7 @@ export default {
     status: '状态',
     loading: '加载中...',
   },
+  terminal: {
+    connecting: '连接中...',
+  },
 }

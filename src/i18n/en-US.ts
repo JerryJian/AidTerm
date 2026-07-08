@@ -382,4 +382,7 @@ export default {
     status: 'Status',
     loading: 'Loading...',
   },
+  terminal: {
+    connecting: 'Connecting...',
+  },
 }

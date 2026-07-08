@@ -518,6 +518,10 @@ defineExpose({ focusSearch, doFit })
       <button class="search-btn" @click="closeSearch">✕</button>
     </div>
     <div ref="terminalRef" class="terminal-xterm" />
+    <div v-if="store.activeTab?.session?.status === 'connecting'" class="connecting-overlay">
+      <div class="spinner" />
+      <span>{{ t('terminal.connecting') }}</span>
+    </div>
 
     <AiConfirmOverlay
       v-if="aiConv.showConfirm.value"
@@ -558,6 +562,7 @@ defineExpose({ focusSearch, doFit })
   height: 100%;
   min-height: 0;
   min-width: 0;
+  position: relative;
   background: var(--bg-base);
 }
 
@@ -643,6 +648,33 @@ defineExpose({ focusSearch, doFit })
   height: 1px;
   margin: 4px 8px;
   background: var(--bg-surface0);
+}
+
+.connecting-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--bg-base);
+  color: var(--text-sub0);
+  font-size: 14px;
+  z-index: 10;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--bg-surface1);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 </style>
