@@ -180,6 +180,9 @@ export default {
     connecting: '连接中...',
     disconnected: '已断开',
     drop_to_upload: '拖拽文件到此处上传',
+    uploading: '上传中...',
+    upload_done: '完成',
+    upload_failed: '失败',
   },
   tunnel: {
     title: '端口转发',

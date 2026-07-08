@@ -92,6 +92,12 @@ export interface SavedSessionGroup {
   expanded: boolean
 }
 
+export interface UploadTask {
+  name: string
+  status: 'uploading' | 'done' | 'error'
+  error?: string
+}
+
 export interface FileEntry {
   name: string
   is_dir: boolean

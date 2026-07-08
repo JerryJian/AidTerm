@@ -4,7 +4,7 @@ import { useSftpStore } from '../../stores/sftpStore'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
 import { useI18n } from 'vue-i18n'
-import type { FileEntry, TerminalTab } from '../../types'
+import type { FileEntry, TerminalTab, UploadTask } from '../../types'
 
 const svg = (d: string) => `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
 
@@ -18,6 +18,7 @@ const icons = {
   edit: svg('<path d="M14.364 13.634a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506l4.013-4.009a1 1 0 0 0-3.004-3.004z"/><path d="M14.487 7.858A1 1 0 0 1 14 7V2"/><path d="M20 19.645V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l2.516 2.516"/><path d="M8 18h1"/>'),
   rename: svg('<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>'),
   delete: svg('<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'),
+  spinner: svg('<path d="M21 12a9 9 0 1 1-6.219-8.56"/>'),
 }
 
 const { t } = useI18n()
@@ -46,6 +47,7 @@ const renameValue = ref('')
 const dragOver = ref(false)
 const unlistens: Array<() => void> = []
 const userDisconnected = ref(false)
+const uploadTasks = ref<UploadTask[]>([])
 const ctxEntry = ref<FileEntry | null>(null)
 const ctxPos = ref<{ x: number; y: number } | null>(null)
 
@@ -192,8 +194,20 @@ async function doUpload() {
   for (const file of files) {
     const name = file.split('\\').pop()?.split('/').pop() || 'file'
     const remotePath = store.currentPath.replace(/\/?$/, '/') + name
-    await store.upload(file, remotePath)
+    const task: UploadTask = { name, status: 'uploading' }
+    uploadTasks.value.push(task)
+    try {
+      await store.upload(file, remotePath)
+      task.status = 'done'
+    } catch (e: any) {
+      task.status = 'error'
+      task.error = String(e)
+    }
   }
+  // auto-clear completed tasks after 5s
+  setTimeout(() => {
+    uploadTasks.value = uploadTasks.value.filter(t => t.status === 'uploading')
+  }, 5000)
 }
 
 async function doDownload(entry: FileEntry) {
@@ -352,6 +366,21 @@ function fileIcon(entry: FileEntry): string {
       <!-- Drop zone overlay -->
       <div v-if="dragOver" class="drop-zone">
         <span class="drop-label">{{ t('sftp.drop_to_upload') }}</span>
+      </div>
+
+      <!-- Upload progress -->
+      <div v-if="uploadTasks.length" class="upload-progress">
+        <div v-for="(task, i) in uploadTasks" :key="i" class="upload-task" :class="task.status">
+          <span class="task-icon">
+            <span v-if="task.status === 'uploading'" class="spinner" v-html="icons.spinner" />
+            <span v-else-if="task.status === 'done'" class="check">&#10003;</span>
+            <span v-else class="cross">&#10007;</span>
+          </span>
+          <span class="task-name">{{ task.name }}</span>
+          <span v-if="task.status === 'uploading'" class="task-status">{{ t('sftp.uploading') }}</span>
+          <span v-else-if="task.status === 'error'" class="task-error" :title="task.error">{{ t('sftp.upload_failed') }}</span>
+          <span v-else class="task-done">{{ t('sftp.upload_done') }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -688,6 +717,69 @@ function fileIcon(entry: FileEntry): string {
   font-weight: 600;
   color: var(--accent);
   pointer-events: none;
+}
+
+.upload-progress {
+  border-top: 1px solid var(--bg-surface0);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.upload-task {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.upload-task .task-icon {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.upload-task .spinner {
+  animation: spin 1s linear infinite;
+  display: flex;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.upload-task .check {
+  color: var(--green);
+  font-weight: bold;
+}
+.upload-task .cross {
+  color: var(--red);
+  font-weight: bold;
+}
+.upload-task .task-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.upload-task .task-status {
+  color: var(--text-sub0);
+  flex-shrink: 0;
+}
+.upload-task .task-done {
+  color: var(--green);
+  flex-shrink: 0;
+}
+.upload-task .task-error {
+  color: var(--red);
+  flex-shrink: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
 

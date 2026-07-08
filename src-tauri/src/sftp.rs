@@ -145,6 +145,7 @@ impl SftpConnection {
         channel.exec(true, format!("cat > {}", shell_escape(remote))).await
             .map_err(|e| format!("Exec failed: {}", e))?;
         let _ = channel.data(content).await;
+        let _ = channel.eof().await;
 
         loop {
             match channel.wait().await {

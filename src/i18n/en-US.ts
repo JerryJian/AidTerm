@@ -180,6 +180,9 @@ export default {
     connecting: 'Connecting...',
     disconnected: 'Disconnected',
     drop_to_upload: 'Drop files here to upload',
+    uploading: 'Uploading...',
+    upload_done: 'Done',
+    upload_failed: 'Failed',
   },
   tunnel: {
     title: 'Port Forwarding',
