@@ -18,6 +18,7 @@ export default {
     maximize: '最大化',
     restore: '恢复',
     close: '关闭',
+    inspect: '检查 (DevTools)',
   },
   context_menu: {
     copy: '复制',

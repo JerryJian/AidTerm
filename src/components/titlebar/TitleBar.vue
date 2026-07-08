@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 import { useI18n } from 'vue-i18n'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 
@@ -7,11 +8,16 @@ const { t } = useI18n()
 
 const win = getCurrentWindow()
 const isMaximized = ref(false)
+const isWindows = ref(false)
 let lastClickTime = 0
+
+const ctxMenu = ref<{ x: number; y: number } | null>(null)
 
 onMounted(async () => {
   try {
     isMaximized.value = await win.isMaximized()
+    const platform = await invoke<string>('get_platform')
+    isWindows.value = platform === 'windows'
   } catch { /* ignore */ }
 })
 
@@ -41,10 +47,33 @@ function onPointerDown(e: PointerEvent) {
   lastClickTime = now
   win.startDragging()
 }
+
+function onCtxMenu(e: MouseEvent) {
+  e.preventDefault()
+  ctxMenu.value = { x: e.clientX, y: e.clientY }
+}
+
+function closeCtxMenu() {
+  ctxMenu.value = null
+}
+
+async function onRestore() {
+  ctxMenu.value = null
+  try {
+    if (isMaximized.value) await win.toggleMaximize()
+  } catch { /* ignore */ }
+}
+
+async function onInspect() {
+  ctxMenu.value = null
+  try {
+    await invoke('open_devtools')
+  } catch { /* ignore */ }
+}
 </script>
 
 <template>
-  <div class="titlebar" @pointerdown="onPointerDown">
+  <div class="titlebar" @pointerdown="onPointerDown" @contextmenu="onCtxMenu">
     <div class="titlebar-left">
       <svg class="titlebar-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="4 17 10 11 4 5" />
@@ -76,6 +105,20 @@ function onPointerDown(e: PointerEvent) {
       </button>
     </div>
   </div>
+  <div v-if="ctxMenu" class="ctx-backdrop" @click="closeCtxMenu" @contextmenu.prevent="closeCtxMenu" />
+  <Teleport to="body">
+    <div v-if="ctxMenu" class="ctx-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
+      <template v-if="isWindows">
+        <button class="ctx-item" :disabled="!isMaximized" @click="onRestore()">{{ t('titlebar.restore') }}</button>
+        <button class="ctx-item" @click="onMinimize(); ctxMenu = null">{{ t('titlebar.minimize') }}</button>
+        <button class="ctx-item" @click="onMaximize(); ctxMenu = null">{{ isMaximized ? t('titlebar.restore') : t('titlebar.maximize') }}</button>
+        <div class="ctx-divider" />
+        <button class="ctx-item" @click="onClose(); ctxMenu = null">{{ t('titlebar.close') }}</button>
+        <div class="ctx-divider" />
+      </template>
+      <button class="ctx-item" @click="onInspect">{{ t('titlebar.inspect') }}</button>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -140,5 +183,54 @@ function onPointerDown(e: PointerEvent) {
 .tb-btn.close:hover {
   background: var(--danger);
   color: var(--bg-base);
+}
+</style>
+
+<style>
+.ctx-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: transparent;
+}
+.ctx-menu {
+  position: fixed;
+  z-index: 10000;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface0);
+  border-radius: 6px;
+  min-width: 160px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.ctx-menu .ctx-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.ctx-menu .ctx-item:hover {
+  background: var(--bg-surface0);
+  color: var(--accent);
+}
+.ctx-menu .ctx-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ctx-menu .ctx-item:disabled:hover {
+  background: none;
+  color: var(--text);
+}
+.ctx-menu .ctx-divider {
+  height: 1px;
+  background: var(--bg-surface0);
+  margin: 4px 8px;
 }
 </style>

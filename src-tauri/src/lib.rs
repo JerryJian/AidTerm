@@ -136,6 +136,7 @@ pub fn run() {
             commands::ai_clear_history,
             commands::get_platform,
             commands::detect_shells,
+            commands::open_devtools,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

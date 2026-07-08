@@ -247,7 +247,7 @@ onUnmounted(() => {
 <template>
   <LockScreen v-if="locked" @unlocked="unlockApp" />
 
-  <div class="app" :style="appStyle">
+  <div class="app" :style="appStyle" @contextmenu.prevent>
     <TitleBar />
     <TabBar
       @lock-click="lockApp"

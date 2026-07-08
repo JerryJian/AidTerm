@@ -527,6 +527,13 @@ pub fn ai_clear_history(
 }
 
 #[tauri::command]
+pub async fn open_devtools(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        w.open_devtools();
+    }
+}
+
+#[tauri::command]
 pub fn get_platform() -> String {
     std::env::consts::OS.to_string()
 }

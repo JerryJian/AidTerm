@@ -18,6 +18,7 @@ export default {
     maximize: 'Maximize',
     restore: 'Restore',
     close: 'Close',
+    inspect: 'Inspect (DevTools)',
   },
   context_menu: {
     copy: 'Copy',

@@ -32,6 +32,8 @@ const renameValue = ref('')
 const dragOver = ref(false)
 const unlistens: Array<() => void> = []
 const userDisconnected = ref(false)
+const ctxEntry = ref<FileEntry | null>(null)
+const ctxPos = ref<{ x: number; y: number } | null>(null)
 
 let autoConnecting = false
 
@@ -63,6 +65,18 @@ watch(
   },
   { immediate: true },
 )
+
+function onRowCtxMenu(e: MouseEvent, entry: FileEntry) {
+  e.preventDefault()
+  selectedFile.value = entry.name
+  ctxEntry.value = entry
+  ctxPos.value = { x: e.clientX, y: e.clientY }
+}
+
+function closeCtxMenu() {
+  ctxEntry.value = null
+  ctxPos.value = null
+}
 
 const sortedEntries = computed(() => {
   const sorted = [...store.entries]
@@ -290,6 +304,7 @@ function fileIcon(entry: FileEntry): string {
           :class="{ selected: selectedFile === entry.name }"
           @click="selectedFile = entry.name"
           @dblclick="onEntryDblClick(entry)"
+          @contextmenu="(e) => onRowCtxMenu(e, entry)"
         >
           <span class="col-name">
             <span class="file-icon">{{ fileIcon(entry) }}</span>
@@ -307,6 +322,18 @@ function fileIcon(entry: FileEntry): string {
 
         <div v-if="sortedEntries.length === 0" class="empty">{{ t('sftp.empty_directory') }}</div>
       </div>
+
+      <!-- Context menu -->
+      <div v-if="ctxPos" class="ctx-backdrop" @click="closeCtxMenu" @contextmenu.prevent="closeCtxMenu" />
+      <Teleport to="body">
+        <div v-if="ctxPos" class="ctx-menu" :style="{ left: ctxPos.x + 'px', top: ctxPos.y + 'px' }">
+          <button v-if="!ctxEntry?.is_dir" class="ctx-item" @click="closeCtxMenu; ctxEntry && onEntryDblClick(ctxEntry)">{{ t('sftp.edit') }}</button>
+          <button class="ctx-item" @click="closeCtxMenu; ctxEntry && doDownload(ctxEntry)">{{ t('sftp.download') }}</button>
+          <button class="ctx-item" @click="closeCtxMenu; ctxEntry && startRename(ctxEntry)">{{ t('sftp.rename') }}</button>
+          <div class="ctx-divider" />
+          <button class="ctx-item danger" @click="closeCtxMenu; ctxEntry && doDelete(ctxEntry)">{{ t('sftp.delete') }}</button>
+        </div>
+      </Teleport>
 
       <!-- Drop zone overlay -->
       <div v-if="dragOver" class="drop-zone">
@@ -647,5 +674,49 @@ function fileIcon(entry: FileEntry): string {
   font-weight: 600;
   color: var(--accent);
   pointer-events: none;
+}
+</style>
+
+<style>
+.ctx-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: transparent;
+}
+.ctx-menu {
+  position: fixed;
+  z-index: 10000;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface0);
+  border-radius: 6px;
+  min-width: 140px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.ctx-menu .ctx-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.ctx-menu .ctx-item:hover {
+  background: var(--bg-surface0);
+  color: var(--accent);
+}
+.ctx-menu .ctx-item.danger:hover {
+  color: var(--danger);
+}
+.ctx-menu .ctx-divider {
+  height: 1px;
+  background: var(--bg-surface0);
+  margin: 4px 8px;
 }
 </style>
