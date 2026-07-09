@@ -90,4 +90,5 @@ jobs:
             See [CHANGELOG](https://github.com/${{ github.repository }}/releases) for details.
           releaseDraft: true
           uploadUpdaterJson: false
+          uploadWorkflowArtifacts: true
           args: --target ${{ matrix.target }}
