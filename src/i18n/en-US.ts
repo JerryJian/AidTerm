@@ -231,6 +231,7 @@ export default {
     add: 'Add',
     cancel: 'Cancel',
     no_tunnels: 'No tunnels',
+    using_session: 'Using current SSH session: {0}',
   },
   proxy: {
     title: 'Proxy Settings',

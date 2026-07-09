@@ -67,9 +67,7 @@ impl Tunnel {
 
     fn kill(&mut self) {
         let _ = self.kill_tx.send(());
-        if let Some(h) = self.handle.take() {
-            let _ = h.join();
-        }
+        self.handle.take();
     }
 }
 
@@ -247,6 +245,13 @@ impl TunnelManager {
                     return;
                 }
             };
+
+            {
+                let mut tunnels = report.lock().unwrap();
+                if let Some(t) = tunnels.get_mut(&spawn_id) {
+                    t.info.status = TunnelStatus::Running;
+                }
+            }
 
             let result = rt.block_on(async {
                 let mut kill_rx = kill_rx;

@@ -231,6 +231,7 @@ export default {
     add: '添加',
     cancel: '取消',
     no_tunnels: '暂无隧道',
+    using_session: '使用当前 SSH 会话：{0}',
   },
   proxy: {
     title: '代理配置',

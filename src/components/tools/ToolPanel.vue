@@ -62,7 +62,11 @@ function onCloseTab(e: MouseEvent, tool: ToolTab) {
         @edit-file="(p, c) => emit('editFile', p, c)"
         @close="terminalStore.closeToolTab(tabId, 'sftp')"
       />
-      <TunnelPanel v-show="activeToolTab() === 'tunnel'" />
+      <TunnelPanel
+        v-show="activeToolTab() === 'tunnel'"
+        :tab-id="tabId"
+        :tab="tab"
+      />
       <ProxyPanel v-show="activeToolTab() === 'proxy'" />
       <SnippetPanel v-show="activeToolTab() === 'snippet'" />
       <TriggerPanel v-show="activeToolTab() === 'trigger'" />
