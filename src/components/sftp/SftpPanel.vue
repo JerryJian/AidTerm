@@ -260,11 +260,11 @@ async function doUpload() {
         task.error = String(e)
       }
     }
+    // auto-clear completed/cancelled tasks after 5s
+    setTimeout(() => {
+      uploadTasks.value = uploadTasks.value.filter(t => t.status === 'uploading')
+    }, 5000)
   }
-  // auto-clear completed tasks after 5s
-  setTimeout(() => {
-    uploadTasks.value = uploadTasks.value.filter(t => t.status === 'uploading')
-  }, 5000)
 }
 
 async function doDownload(entry: FileEntry) {
@@ -292,7 +292,11 @@ async function doDownload(entry: FileEntry) {
 
 function doCancel(task: UploadTask) {
   task.status = 'cancelled'
-  store.cancelTransfer(task.id)
+  store.cancelTransfer(task.id).catch(() => {})
+  setTimeout(() => {
+    const list = task.type === 'upload' ? uploadTasks : downloadTasks
+    list.value = list.value.filter(t => t.id !== task.id)
+  }, 1500)
 }
 
 function confirmDelete(entry: FileEntry) {
