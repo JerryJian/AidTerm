@@ -546,7 +546,7 @@ defineExpose({ focusSearch, doFit })
         <div class="ctx-item" @click="doNewTab">{{ t('context_menu.new_tab') }}</div>
         <div class="ctx-item" @click="doNewSsh">{{ t('context_menu.new_ssh') }}</div>
         <div class="ctx-sep" />
-        <div v-if="aiStore.enabled" class="ctx-item" @click="doAskAi">🤖 {{ t('context_menu.ask_ai') }}</div>
+        <div v-if="aiStore.enabled" class="ctx-item" @click="doAskAi">{{ t('context_menu.ask_ai') }}</div>
         <div class="ctx-sep" />
         <div class="ctx-item ctx-danger" @click="doCloseTab">{{ t('context_menu.close_tab') }}</div>
       </div>
