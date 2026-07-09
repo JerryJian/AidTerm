@@ -604,9 +604,15 @@ pub fn detect_shells() -> Vec<String> {
             shells.push("bash.exe".into());
         }
     } else {
+        // macOS default is zsh since Catalina 2019
+        if cfg!(target_os = "macos") {
+            shells.push("zsh".into());
+        }
         shells.push("bash".into());
         shells.push("sh".into());
-        if exe_in_path("zsh") { shells.push("zsh".into()); }
+        if cfg!(not(target_os = "macos")) {
+            if exe_in_path("zsh") { shells.push("zsh".into()); }
+        }
         if exe_in_path("fish") { shells.push("fish".into()); }
     }
 

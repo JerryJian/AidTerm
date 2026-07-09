@@ -49,7 +49,13 @@ impl LocalSession {
 
         let master = pair.master;
         let cmd = shell.unwrap_or_else(|| {
-            if cfg!(target_os = "windows") { "cmd.exe".into() } else { "bash".into() }
+            if cfg!(target_os = "windows") {
+                std::env::var("ComSpec").unwrap_or_else(|_| "cmd.exe".into())
+            } else {
+                std::env::var("SHELL").unwrap_or_else(|_| {
+                    if cfg!(target_os = "macos") { "zsh".into() } else { "bash".into() }
+                })
+            }
         });
 
         let child = pair
