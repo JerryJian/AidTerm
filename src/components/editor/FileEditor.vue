@@ -25,7 +25,7 @@ const fileName = ref('')
 onMounted(async () => {
   fileName.value = props.remotePath.split('/').pop() || props.remotePath
   try {
-    content.value = await sftpStore.readFile(props.remotePath)
+    content.value = await sftpStore.readFile(props.connId, props.remotePath)
   } catch (e: any) {
     error.value = String(e)
   } finally {
@@ -38,7 +38,7 @@ async function doSave() {
   saved.value = false
   error.value = ''
   try {
-    await sftpStore.writeFile(props.remotePath, content.value)
+    await sftpStore.writeFile(props.connId, props.remotePath, content.value)
     saved.value = true
     setTimeout(() => { saved.value = false }, 2000)
   } catch (e: any) {

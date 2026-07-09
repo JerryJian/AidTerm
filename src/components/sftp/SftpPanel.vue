@@ -32,9 +32,10 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  close: []
   editFile: [remotePath: string, connId: string]
 }>()
+
+const s = computed(() => store.tabState(props.tabId))
 
 const host = ref('')
 const port = ref(22)
@@ -82,11 +83,11 @@ function toggleRowMenu(entry: FileEntry, e: MouseEvent) {
   rowMenuPos.value = { x: window.innerWidth - rect.right, y: rect.bottom }
 }
 
-watch(() => store.currentPath, (p) => { pathInput.value = p }, { immediate: true })
+watch(() => s.value.currentPath, (p) => { pathInput.value = p }, { immediate: true })
 
 function onPathSubmit() {
   const p = pathInput.value.trim() || '/'
-  store.listDir(p)
+  store.listDir(props.tabId, p)
 }
 
 let autoConnecting = false
@@ -98,7 +99,7 @@ watch(
     return `${s.id}:${s.status}:${props.tab.sshInfo.host}:${props.tab.sshInfo.port}:${props.tab.sshInfo.username}`
   },
   async (key) => {
-    if (autoConnecting || store.connected) return
+    if (autoConnecting || s.value.connected) return
     if (props.tab.activeToolTab !== 'sftp') return
     if (key && key.includes(':connected:')) {
       const info = props.tab.sshInfo!
@@ -110,7 +111,7 @@ watch(
         autoConnecting = true
         connecting.value = true
         try {
-          await store.connect(info.host, info.port, info.username, info.password || '')
+          await store.connect(props.tabId, info.host, info.port, info.username, info.password || '')
         } catch { /* ignored */ }
         connecting.value = false
         autoConnecting = false
@@ -133,7 +134,7 @@ function closeCtxMenu() {
 }
 
 const sortedEntries = computed(() => {
-  const sorted = [...store.entries]
+  const sorted = [...s.value.entries]
   sorted.sort((a, b) => {
     if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1
     return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
@@ -155,8 +156,8 @@ onMounted(async () => {
     if (type === 'drop' && paths && paths.length > 0) {
       for (const path of paths) {
         const name = path.split('\\').pop()?.split('/').pop() || 'file'
-        const remotePath = store.currentPath.replace(/\/?$/, '/') + name
-        store.upload(genId(), path, remotePath)
+        const remotePath = s.value.currentPath.replace(/\/?$/, '/') + name
+        store.upload(props.tabId, genId(), path, remotePath)
       }
       dragOver.value = false
     }
@@ -213,28 +214,28 @@ async function doConnect() {
   if (!host.value.trim()) return
   connecting.value = true
   try {
-    await store.connect(host.value.trim(), port.value, username.value, password.value)
+    await store.connect(props.tabId, host.value.trim(), port.value, username.value, password.value)
   } catch (e: any) {
-    store.error = String(e)
+    s.value.error = String(e)
   } finally {
     connecting.value = false
   }
 }
 
 function navigateTo(path: string) {
-  store.listDir(path)
+  store.listDir(props.tabId, path)
 }
 
 function goUp() {
-  navigateTo(parentDir(store.currentPath))
+  navigateTo(parentDir(s.value.currentPath))
 }
 
 function onEntryDblClick(entry: FileEntry) {
-  const path = store.currentPath.replace(/\/?$/, '/') + entry.name
+  const path = s.value.currentPath.replace(/\/?$/, '/') + entry.name
   if (entry.is_dir) {
     navigateTo(path)
   } else {
-    emit('editFile', path, store.connId ?? '')
+    emit('editFile', path, s.value.connId ?? '')
   }
 }
 
@@ -248,12 +249,12 @@ async function doUpload() {
   const files = Array.isArray(selected) ? selected : [selected]
   for (const file of files) {
     const name = file.split('\\').pop()?.split('/').pop() || 'file'
-    const remotePath = store.currentPath.replace(/\/?$/, '/') + name
+    const remotePath = s.value.currentPath.replace(/\/?$/, '/') + name
     const id = genId()
     const task: UploadTask = { id, name, status: 'uploading', type: 'upload' }
     uploadTasks.value.push(task)
     try {
-      await store.upload(id, file, remotePath)
+      await store.upload(props.tabId, id, file, remotePath)
       task.status = 'done'
     } catch (e: any) {
       if (String(e).includes('Cancelled')) {
@@ -271,14 +272,14 @@ async function doUpload() {
 }
 
 async function doDownload(entry: FileEntry) {
-  const remotePath = store.currentPath.replace(/\/?$/, '/') + entry.name
+  const remotePath = s.value.currentPath.replace(/\/?$/, '/') + entry.name
   const dest = await save({ defaultPath: entry.name })
   if (!dest) return
   const id = genId()
   const task: UploadTask = { id, name: entry.name, status: 'uploading', type: 'download' }
   downloadTasks.value.push(task)
   try {
-    await store.download(id, remotePath, dest)
+    await store.download(props.tabId, id, remotePath, dest)
     task.status = 'done'
   } catch (e: any) {
     if (String(e).includes('Cancelled')) {
@@ -295,7 +296,7 @@ async function doDownload(entry: FileEntry) {
 
 function doCancel(task: UploadTask) {
   task.status = 'cancelled'
-  store.cancelTransfer(task.id).catch(() => {})
+  store.cancelTransfer(props.tabId, task.id).catch(() => {})
   setTimeout(() => {
     const list = task.type === 'upload' ? uploadTasks : downloadTasks
     list.value = list.value.filter(t => t.id !== task.id)
@@ -312,8 +313,8 @@ function cancelConfirmDelete() {
 
 async function doDelete(entry: FileEntry) {
   deleteConfirm.value = null
-  const path = store.currentPath.replace(/\/?$/, '/') + entry.name
-  await store.remove(path)
+  const path = s.value.currentPath.replace(/\/?$/, '/') + entry.name
+  await store.remove(props.tabId, path)
 }
 
 function startRename(entry: FileEntry) {
@@ -324,9 +325,9 @@ function startRename(entry: FileEntry) {
 
 async function confirmRename() {
   if (!renameEntry.value || !renameValue.value.trim()) return
-  const oldPath = store.currentPath.replace(/\/?$/, '/') + renameEntry.value.name
-  const newPath = store.currentPath.replace(/\/?$/, '/') + renameValue.value.trim()
-  await store.renameItem(oldPath, newPath)
+  const oldPath = s.value.currentPath.replace(/\/?$/, '/') + renameEntry.value.name
+  const newPath = s.value.currentPath.replace(/\/?$/, '/') + renameValue.value.trim()
+  await store.renameItem(props.tabId, oldPath, newPath)
   showRenameDialog.value = false
   renameEntry.value = null
   renameValue.value = ''
@@ -363,16 +364,11 @@ function openCreateDialog(isDir: boolean) {
   showCreateDialog.value = true
 }
 
-async function doClose() {
-  if (store.connected) await store.disconnect()
-  emit('close')
-}
-
 async function doCreateItem() {
   if (!createName.value.trim()) return
-  const path = store.currentPath.replace(/\/?$/, '/') + createName.value.trim()
+  const path = s.value.currentPath.replace(/\/?$/, '/') + createName.value.trim()
   const mode = permsToMode()
-  await store.createFile(path, createIsDir.value, mode)
+  await store.createFile(props.tabId, path, createIsDir.value, mode)
   createName.value = ''
   showCreateDialog.value = false
 }
@@ -392,13 +388,8 @@ function fileIcon(entry: FileEntry): string {
 
 <template>
   <div class="sftp-panel">
-    <div class="panel-header">
-      <span class="panel-title">{{ t('sftp.panel_title') }}</span>
-      <button class="panel-btn" :title="t('sftp.close')" @click="doClose">✕</button>
-    </div>
-
     <!-- Connection form -->
-    <div v-if="!store.connected" class="connect-form">
+    <div v-if="!s.connected" class="connect-form">
       <input v-model="host" :placeholder="t('common.host')" class="sftp-input" />
       <input v-model="port" type="number" :placeholder="t('common.port')" class="sftp-input sftp-input-sm" />
       <input v-model="username" :placeholder="t('common.username')" class="sftp-input" />
@@ -415,7 +406,7 @@ function fileIcon(entry: FileEntry): string {
         <input v-model="pathInput" class="path-input" @keydown.enter="onPathSubmit" @blur="onPathSubmit" />
         <div class="toolbar-actions">
           <button class="tb-btn" :title="t('sftp.go_up')" @click="goUp" v-html="icons.up" />
-          <button class="tb-btn" :title="t('sftp.refresh')" @click="store.listDir(store.currentPath)" v-html="icons.refresh" />
+          <button class="tb-btn" :title="t('sftp.refresh')" @click="store.listDir(props.tabId, s.currentPath)" v-html="icons.refresh" />
           <button class="tb-btn" :title="t('sftp.mkdir')" @click="openCreateDialog(true)" v-html="icons.folderPlus" />
           <button class="tb-btn" :title="t('sftp.new_file')" @click="openCreateDialog(false)" v-html="icons.filePlus" />
           <button class="tb-btn" :title="t('sftp.upload')" @click="doUpload" v-html="icons.upload" />
@@ -423,10 +414,10 @@ function fileIcon(entry: FileEntry): string {
       </div>
 
       <!-- Error -->
-      <div v-if="store.error" class="error-bar">{{ store.error }}</div>
+      <div v-if="s.error" class="error-bar">{{ s.error }}</div>
 
       <!-- Loading -->
-        <div v-if="store.loading" class="loading">{{ t('common.loading') }}...</div>
+        <div v-if="s.loading" class="loading">{{ t('common.loading') }}...</div>
 
       <!-- File list -->
       <div
@@ -605,35 +596,6 @@ function fileIcon(entry: FileEntry): string {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--bg-surface0);
-}
-
-.panel-title {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--text);
-}
-
-.panel-btn {
-  background: none;
-  border: 1px solid transparent;
-  color: var(--text-sub0);
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 13px;
-}
-
-.panel-btn:hover {
-  background: var(--bg-surface0);
-  color: var(--text);
 }
 
 .connect-form {

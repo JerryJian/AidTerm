@@ -122,8 +122,8 @@ function copyToClipboard(text: string) {
     <div class="panel-header">
       <span class="panel-title">🔑 {{ t('keychain.title') }}</span>
       <div class="panel-actions">
-        <button class="panel-btn" @click="showGenerate = !showGenerate">{{ t('keychain.generate') }}</button>
-        <button class="panel-btn" @click="showImport = !showImport">{{ t('keychain.import') }}</button>
+        <button class="panel-btn" @click="showGenerate = true">{{ t('keychain.generate') }}</button>
+        <button class="panel-btn" @click="showImport = true">{{ t('keychain.import') }}</button>
         <button class="panel-btn" @click="emit('close')">✕</button>
       </div>
     </div>
@@ -131,35 +131,64 @@ function copyToClipboard(text: string) {
     <div v-if="notification" class="notification">{{ notification }}</div>
     <div v-if="error" class="error">{{ error }}</div>
 
-    <!-- Generate Form -->
-    <div v-if="showGenerate" class="form-section">
-      <h4>{{ t('keychain.generate_keypair') }}</h4>
-      <select v-model="genType" class="input">
-        <option value="ED25519">{{ t('keychain.ed25519') }}</option>
-        <option value="RSA">RSA</option>
-      </select>
-      <input v-model="genName" :placeholder="t('keychain.key_name')" class="input" />
-      <div v-if="genType === 'RSA'" class="bits-row">
-        <label>{{ t('keychain.bits') }}</label>
-        <select v-model="genBits" class="input">
-          <option :value="2048">2048</option>
-          <option :value="4096">4096</option>
-        </select>
+    <!-- Generate dialog -->
+    <Teleport to="body">
+      <div v-if="showGenerate" class="key-overlay">
+        <div class="key-dialog" @click.stop>
+          <div class="dialog-header">
+            <span>{{ t('keychain.generate_keypair') }}</span>
+            <button class="dialog-close" @click="showGenerate = false">✕</button>
+          </div>
+          <div class="dialog-body">
+            <label class="dialog-label">{{ t('keychain.key_type') }}</label>
+            <select v-model="genType" class="input">
+              <option value="ED25519">{{ t('keychain.ed25519') }}</option>
+              <option value="RSA">RSA</option>
+            </select>
+            <label class="dialog-label">{{ t('keychain.key_name') }}</label>
+            <input v-model="genName" :placeholder="t('keychain.key_name')" class="input" />
+            <div v-if="genType === 'RSA'" class="bits-row">
+              <label>{{ t('keychain.bits') }}</label>
+              <select v-model="genBits" class="input">
+                <option :value="2048">2048</option>
+                <option :value="4096">4096</option>
+              </select>
+            </div>
+            <label class="dialog-label">{{ t('keychain.passphrase') }}</label>
+            <input v-model="genPassphrase" type="password" :placeholder="t('keychain.passphrase')" class="input" />
+            <div class="dialog-actions">
+              <button class="btn btn-cancel" @click="showGenerate = false">{{ t('common.cancel') }}</button>
+              <button class="btn btn-primary" @click="doGenerate">{{ t('keychain.generate') }}</button>
+            </div>
+          </div>
+        </div>
       </div>
-      <input v-model="genPassphrase" type="password" :placeholder="t('keychain.passphrase')" class="input" />
-      <button class="btn btn-primary" @click="doGenerate">{{ t('keychain.generate') }}</button>
-    </div>
+    </Teleport>
 
-    <!-- Import Form -->
-    <div v-if="showImport" class="form-section">
-      <h4>{{ t('keychain.import') }}</h4>
-      <input v-model="importName" :placeholder="t('keychain.key_name')" class="input" />
-      <div class="key-row">
-        <input v-model="importPath" :placeholder="t('keychain.key_path')" class="input key-input" readonly />
-        <button class="btn btn-browse" @click="pickKeyFile">{{ t('keychain.browse') }}</button>
+    <!-- Import dialog -->
+    <Teleport to="body">
+      <div v-if="showImport" class="key-overlay">
+        <div class="key-dialog" @click.stop>
+          <div class="dialog-header">
+            <span>{{ t('keychain.import') }}</span>
+            <button class="dialog-close" @click="showImport = false">✕</button>
+          </div>
+          <div class="dialog-body">
+            <label class="dialog-label">{{ t('keychain.key_name') }}</label>
+            <input v-model="importName" :placeholder="t('keychain.key_name')" class="input" />
+            <label class="dialog-label">{{ t('keychain.key_path') }}</label>
+            <div class="key-row">
+              <input v-model="importPath" :placeholder="t('keychain.key_path')" class="input key-input" readonly />
+              <button class="btn btn-browse" @click="pickKeyFile">{{ t('keychain.browse') }}</button>
+            </div>
+            <div class="dialog-actions">
+              <button class="btn btn-cancel" @click="showImport = false">{{ t('common.cancel') }}</button>
+              <button class="btn btn-primary" @click="doImport">{{ t('keychain.import') }}</button>
+            </div>
+          </div>
+        </div>
       </div>
-      <button class="btn btn-primary" @click="doImport">{{ t('keychain.import') }}</button>
-    </div>
+    </Teleport>
 
     <!-- Key List -->
     <div class="key-list">
@@ -383,4 +412,71 @@ function copyToClipboard(text: string) {
   background: var(--danger);
   color: var(--bg-base);
 }
+
+.key-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.key-dialog {
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface0);
+  border-radius: 8px;
+  width: 400px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.key-dialog .dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--bg-surface0);
+  font-size: 13px;
+  font-weight: 600;
+}
+.key-dialog .dialog-close {
+  border: none;
+  background: none;
+  color: var(--text-sub0);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.key-dialog .dialog-close:hover { background: var(--bg-surface1); color: var(--text); }
+.key-dialog .dialog-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+.key-dialog .dialog-label {
+  font-size: 11px;
+  color: var(--text-sub0);
+}
+.key-dialog .dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.key-dialog .btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.key-dialog .btn-cancel { background: var(--bg-surface0); color: var(--text); }
+.key-dialog .btn-cancel:hover { background: var(--bg-surface1); }
+.key-dialog .btn-primary { background: var(--accent); color: var(--bg-base); font-weight: 600; }
+.key-dialog .btn-primary:hover { opacity: 0.85; }
 </style>
