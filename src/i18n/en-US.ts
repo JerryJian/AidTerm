@@ -265,7 +265,7 @@ export default {
     close: 'Close',
     no_snippets: 'No quick commands',
     variable_hint: 'Enter variable value',
-    variable_usage_hint: 'Use {{变量名}} to define variables, you will be prompted when sending',
+    variable_usage_hint: 'Use double braces to wrap variable names, you will be prompted for values when sending',
     cancel: 'Cancel',
     confirm: 'OK',
   },

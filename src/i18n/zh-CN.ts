@@ -265,7 +265,7 @@ export default {
     close: '关闭',
     no_snippets: '暂无快捷命令',
     variable_hint: '输入变量值',
-    variable_usage_hint: '使用 {{变量名}} 定义变量，发送时会提示输入',
+    variable_usage_hint: '使用双花括号包裹变量名定义变量，发送时会提示输入',
     cancel: '取消',
     confirm: '确定',
   },
