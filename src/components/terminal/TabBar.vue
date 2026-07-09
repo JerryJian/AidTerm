@@ -223,7 +223,11 @@ defineExpose({ onKeydown })
     </div>
     <div class="tab-bar-right">
       <div class="tools-wrapper">
-        <button class="tools-btn" :class="{ active: toolsMenuOpen }" @click="toggleToolsMenu" title="Tools">&#x2699;</button>
+        <button class="tools-btn" :class="{ active: toolsMenuOpen }" @click="toggleToolsMenu" title="Tools">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M4 21C3.44772 21 3 20.5523 3 20V4C3 3.44772 3.44772 3 4 3H20C20.5523 3 21 3.44772 21 4V20C21 20.5523 20.5523 21 20 21H4ZM8 10H5V19H8V10ZM19 10H10V19H19V10ZM19 5H5V8H19V5Z"/>
+          </svg>
+        </button>
         <div v-if="toolsMenuOpen" class="tools-backdrop" @click="toolsMenuOpen = false" />
         <div v-if="toolsMenuOpen" class="tools-dropdown">
           <button v-for="t in toolTabs" :key="t.id" class="tools-item" :class="{ active: isToolOpen(t.id) }" @click="openToolTab(t.id)">

@@ -90,15 +90,13 @@ async function onInspect() {
     <div class="titlebar-center" />
     <div class="titlebar-actions">
       <button class="tb-btn" @click="ui.settingsDialog = true" :title="t('menu.settings')">
-        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="8" cy="8" r="2.5" />
-          <path d="M8 1.5v1.5M8 13v1.5M3.5 3.5l1 1M11.5 11.5l1 1M1.5 8H3M13 8h1.5M3.5 12.5l1-1M11.5 4.5l1-1" />
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+          <path d="M17.5 2.47363L23 11.9999L17.5 21.5262H6.5L1 11.9999L6.5 2.47363H17.5ZM16.3453 4.47363H7.6547L3.3094 11.9999L7.6547 19.5262H16.3453L20.6906 11.9999L16.3453 4.47363ZM8.63398 8.16979L10.366 7.16979L15.366 15.83L13.634 16.83L8.63398 8.16979Z"/>
         </svg>
       </button>
       <button class="tb-btn" @click="emit('lock')" :title="t('menu.lock')">
-        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="4.5" y="7" width="7" height="6" rx="1" />
-          <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+          <path d="M19 10H20C20.5523 10 21 10.4477 21 11V21C21 21.5523 20.5523 22 20 22H4C3.44772 22 3 21.5523 3 21V11C3 10.4477 3.44772 10 4 10H5V9C5 5.13401 8.13401 2 12 2C15.866 2 19 5.13401 19 9V10ZM5 12V20H19V12H5ZM11 14H13V18H11V14ZM17 10V9C17 6.23858 14.7614 4 12 4C9.23858 4 7 6.23858 7 9V10H17Z"/>
         </svg>
       </button>
       <div class="titlebar-sep" />
