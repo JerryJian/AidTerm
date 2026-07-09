@@ -188,8 +188,9 @@ async function toggleFullscreen() {
         <template v-if="activeTab === 'ai'">
         <div class="section">
           <h3>🤖 {{ t('ai.title') }}</h3>
-          <div class="setting-row">
-            <label>{{ t('settings.ai_provider') }}</label>
+
+          <div class="setting-row col">
+            <label>1. {{ t('settings.ai_provider') }}</label>
             <div class="provider-group">
               <button
                 v-for="(_, name) in ai.defaultProviders"
@@ -200,8 +201,19 @@ async function toggleFullscreen() {
               >{{ name }}</button>
             </div>
           </div>
+
           <div class="setting-row col">
-            <label>{{ t('ai.api_key') }}</label>
+            <label>2. {{ t('ai.base_url') }}</label>
+            <input
+              :value="ai.config.base_url"
+              @input="(e: any) => ai.updateConfig({ base_url: e.target.value })"
+              class="text-input"
+              placeholder="https://api.openai.com/v1"
+            />
+          </div>
+
+          <div class="setting-row col">
+            <label>3. {{ t('ai.api_key') }}</label>
             <div class="input-with-toggle">
               <input
                 :type="showAiKey ? 'text' : 'password'"
@@ -213,22 +225,24 @@ async function toggleFullscreen() {
               <button class="toggle-btn" @click="showAiKey = !showAiKey">{{ showAiKey ? t('settings.ai_hide') : t('settings.ai_show') }}</button>
             </div>
           </div>
+
           <div class="setting-row col">
-            <label>{{ t('ai.model') }}</label>
-            <input
-              :value="ai.config.model"
-              @input="(e: any) => ai.updateConfig({ model: e.target.value })"
-              class="text-input"
-            />
+            <label>4. {{ t('ai.model') }}</label>
+            <div class="model-select-row">
+              <select
+                :value="ai.config.model"
+                @change="(e: any) => ai.updateConfig({ model: e.target.value })"
+                class="text-input model-select"
+              >
+              <option v-if="ai.config.model && !ai.modelList.includes(ai.config.model)" :value="ai.config.model">{{ ai.config.model }}</option>
+              <option v-for="m in ai.modelList" :key="m" :value="m">{{ m }}</option>
+              </select>
+              <button class="action-btn" @click="ai.fetchModels()" :disabled="ai.loadingModels">
+                {{ ai.loadingModels ? '...' : '🔄' }}
+              </button>
+            </div>
           </div>
-          <div class="setting-row col">
-            <label>{{ t('ai.base_url') }}</label>
-            <input
-              :value="ai.config.base_url"
-              @input="(e: any) => ai.updateConfig({ base_url: e.target.value })"
-              class="text-input"
-            />
-          </div>
+
           <div class="setting-row">
             <label>{{ t('settings.ai_status') }}</label>
             <span :class="ai.enabled ? 'status-ok' : 'status-ko'">
@@ -583,4 +597,12 @@ async function toggleFullscreen() {
   cursor: pointer; background: var(--accent); color: var(--bg-base); font-weight: 600;
 }
 .dialog-actions .btn-primary:hover { opacity: 0.85; }
+
+.model-select-row {
+  display: flex;
+  gap: 4px;
+}
+.model-select-row .model-select {
+  flex: 1;
+}
 </style>

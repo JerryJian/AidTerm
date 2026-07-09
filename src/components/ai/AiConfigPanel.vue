@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useAiStore } from '../../stores/aiStore'
 
 const ai = useAiStore()
 const emit = defineEmits<{ close: [] }>()
+const showAiKey = ref(false)
 
 function selectProvider(name: string) {
   ai.setProvider(name)
@@ -17,7 +19,7 @@ function selectProvider(name: string) {
     </div>
     <div class="panel-body">
       <div class="section">
-        <h3>提供商</h3>
+        <h3>1. 提供商</h3>
         <div class="provider-list">
           <button
             v-for="(_, name) in ai.defaultProviders"
@@ -32,32 +34,52 @@ function selectProvider(name: string) {
       </div>
 
       <div class="section">
-        <h3>API 配置</h3>
-        <div class="field">
-          <label>API Key</label>
-          <input
-            v-model="ai.config.api_key"
-            type="password"
-            class="input"
-            placeholder="sk-..."
-            @change="ai.saveConfig()"
-          />
-        </div>
-        <div class="field">
-          <label>Model</label>
-          <input
-            v-model="ai.config.model"
-            class="input"
-            @change="ai.saveConfig()"
-          />
-        </div>
+        <h3>2. 服务地址</h3>
         <div class="field">
           <label>Base URL</label>
           <input
-            v-model="ai.config.base_url"
+            :value="ai.config.base_url"
+            @input="(e: any) => ai.updateConfig({ base_url: e.target.value })"
             class="input"
-            @change="ai.saveConfig()"
+            placeholder="https://api.openai.com/v1"
           />
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>3. API 配置</h3>
+        <div class="field">
+          <label>API Key</label>
+          <div class="input-with-toggle">
+            <input
+              :type="showAiKey ? 'text' : 'password'"
+              :value="ai.config.api_key"
+              @input="(e: any) => ai.updateConfig({ api_key: e.target.value })"
+              class="input"
+              placeholder="sk-..."
+            />
+            <button class="toggle-btn" @click="showAiKey = !showAiKey">{{ showAiKey ? '隐藏' : '显示' }}</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>4. 模型</h3>
+        <div class="field">
+          <label>Model</label>
+          <div class="model-select-row">
+            <select
+              :value="ai.config.model"
+              @change="(e: any) => ai.updateConfig({ model: e.target.value })"
+              class="input model-select"
+            >
+              <option v-if="ai.config.model && !ai.modelList.includes(ai.config.model)" :value="ai.config.model">{{ ai.config.model }}</option>
+              <option v-for="m in ai.modelList" :key="m" :value="m">{{ m }}</option>
+            </select>
+            <button class="refresh-btn" @click="ai.fetchModels()" :disabled="ai.loadingModels">
+              {{ ai.loadingModels ? '...' : '🔄' }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -186,6 +208,54 @@ function selectProvider(name: string) {
 }
 .input:focus {
   border-color: var(--accent);
+}
+
+.input-with-toggle {
+  display: flex;
+  gap: 4px;
+}
+.input-with-toggle .input {
+  flex: 1;
+}
+
+.toggle-btn {
+  padding: 4px 8px;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-surface0);
+  color: var(--text-sub0);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.toggle-btn:hover {
+  background: var(--bg-surface1);
+}
+
+.model-select-row {
+  display: flex;
+  gap: 4px;
+}
+.model-select-row .model-select {
+  flex: 1;
+}
+
+.refresh-btn {
+  padding: 8px 10px;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-surface0);
+  color: var(--text);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.refresh-btn:hover {
+  background: var(--bg-surface1);
+}
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .status {

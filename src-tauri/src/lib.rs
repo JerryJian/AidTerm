@@ -135,6 +135,7 @@ pub fn run() {
             commands::ai_execute,
             commands::ai_continue,
             commands::ai_clear_history,
+            commands::fetch_ai_models,
             commands::get_platform,
             commands::detect_shells,
             commands::open_devtools,

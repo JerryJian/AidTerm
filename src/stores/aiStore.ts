@@ -36,6 +36,8 @@ export const useAiStore = defineStore('ai', () => {
   const pendingToolCall = ref<ToolCall | null>(null)
   const thinking = ref(false)
   const autoMode = ref(false)
+  const modelList = ref<string[]>([])
+  const loadingModels = ref(false)
 
   function loadConfig(): AiConfig {
     try {
@@ -64,6 +66,8 @@ export const useAiStore = defineStore('ai', () => {
     openai: { model: 'gpt-4o', base_url: 'https://api.openai.com/v1' },
     deepseek: { model: 'deepseek-chat', base_url: 'https://api.deepseek.com/v1' },
     dashscope: { model: 'qwen-plus', base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+    ollama: { model: 'llama3', base_url: 'http://localhost:11434' },
+    anthropic: { model: 'claude-sonnet-4-20250514', base_url: 'https://api.anthropic.com' },
   }
 
   function setProvider(name: string) {
@@ -73,6 +77,23 @@ export const useAiStore = defineStore('ai', () => {
       config.value.model = p.model
       config.value.base_url = p.base_url
       saveConfig()
+    }
+    modelList.value = []
+  }
+
+  async function fetchModels() {
+    loadingModels.value = true
+    modelList.value = []
+    try {
+      modelList.value = await invoke<string[]>('fetch_ai_models', {
+        provider: config.value.provider,
+        baseUrl: config.value.base_url,
+        apiKey: config.value.api_key,
+      })
+    } catch (e: any) {
+      console.error('Failed to fetch models:', e)
+    } finally {
+      loadingModels.value = false
     }
   }
 
@@ -183,11 +204,14 @@ export const useAiStore = defineStore('ai', () => {
     pendingToolCall,
     thinking,
     autoMode,
+    modelList,
+    loadingModels,
     defaultProviders,
     updateConfig,
     setProvider,
     saveConfig,
     isNaturalLanguage,
+    fetchModels,
     chat,
     executeCommand,
     continueWithResult,

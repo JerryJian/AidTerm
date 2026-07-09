@@ -386,6 +386,7 @@ export default {
     configured: '✅ 已配置',
     not_configured: '❌ 未配置 (请输入 API Key)',
     clear_history: '清除对话历史',
+    select_model: '选择模型',
     explain_selection: '🤖 AI 解释选中内容',
   },
   common: {

@@ -142,6 +142,142 @@ fn parse_response(body: &str) -> Result<AiResponse, String> {
     })
 }
 
+/// Fetch available models from the provider's API
+async fn fetch_openai_models(
+    base_url: &str,
+    api_key: &str,
+) -> Result<Vec<String>, String> {
+    let url = format!("{}/models", base_url.trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let request = client.get(&url);
+    let request = if api_key.is_empty() {
+        request
+    } else {
+        request.header("Authorization", format!("Bearer {}", api_key))
+    };
+
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch models: {}", e))?;
+
+    let status = response.status();
+    let text = response.text().await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    if !status.is_success() {
+        return Err(format!("API error ({}): {}", status, text));
+    }
+
+    let v: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    let models = v["data"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m["id"].as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(models)
+}
+
+async fn fetch_ollama_models(base_url: &str) -> Result<Vec<String>, String> {
+    let url = format!("{}/api/tags", base_url.trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch Ollama models: {}", e))?;
+
+    let status = response.status();
+    let text = response.text().await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    if !status.is_success() {
+        return Err(format!("Ollama API error ({}): {}", status, text));
+    }
+
+    let v: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    let models = v["models"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m["name"].as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(models)
+}
+
+async fn fetch_anthropic_models(base_url: &str, api_key: &str) -> Result<Vec<String>, String> {
+    let url = format!("{}/v1/models", base_url.trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let request = client.get(&url);
+    let request = if api_key.is_empty() {
+        request
+    } else {
+        request.header("x-api-key", api_key)
+    };
+
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch Anthropic models: {}", e))?;
+
+    let status = response.status();
+    let text = response.text().await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    if !status.is_success() {
+        return Err(format!("Anthropic API error ({}): {}", status, text));
+    }
+
+    let v: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    let models = v["data"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m["id"].as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(models)
+}
+
+pub async fn fetch_models(
+    provider: &str,
+    base_url: &str,
+    api_key: &str,
+) -> Result<Vec<String>, String> {
+    match provider {
+        "ollama" => fetch_ollama_models(base_url).await,
+        "anthropic" => fetch_anthropic_models(base_url, api_key).await,
+        _ => fetch_openai_models(base_url, api_key).await,
+    }
+}
+
 /// Send a chat completion request to the AI API
 pub async fn chat_completion(
     messages: Vec<ChatMessage>,

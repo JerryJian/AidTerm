@@ -386,6 +386,7 @@ export default {
     configured: '✅ Configured',
     not_configured: '❌ Not configured (enter API Key)',
     clear_history: 'Clear Chat History',
+    select_model: 'Select a model',
     explain_selection: '🤖 AI Explain Selection',
   },
   common: {
