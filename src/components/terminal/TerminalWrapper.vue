@@ -230,6 +230,14 @@ async function initTerminal() {
   terminal.loadAddon(searchAddon.value)
   terminal.loadAddon(new WebLinksAddon())
 
+  terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+    if (e.ctrlKey && e.key === 'Enter') {
+      aiConv.forceAIInput()
+      return false
+    }
+    return true
+  })
+
   terminal.onData((data: string) => {
     handleTerminalData(data)
   })

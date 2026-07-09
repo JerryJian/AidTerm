@@ -388,6 +388,12 @@ export default {
     clear_history: 'Clear Chat History',
     select_model: 'Select a model',
     explain_selection: '🤖 AI Explain Selection',
+    mode: 'Trigger Mode',
+    mode_auto: 'Auto',
+    mode_prefix: 'Prefix',
+    mode_keybinding: 'Keybinding (Ctrl+Enter)',
+    prefix: 'Trigger Prefix',
+    prefix_desc: 'Lines starting with any of these characters trigger AI response; each character is a separate trigger prefix',
   },
   common: {
     name: 'Name',

@@ -15,7 +15,7 @@ const showAiKey = ref(false)
     </div>
     <div class="panel-body">
       <div class="section">
-        <h3>1. 提供商</h3>
+        <h3>提供商</h3>
         <div class="field">
           <select
             :value="ai.currentProviderId"
@@ -28,7 +28,7 @@ const showAiKey = ref(false)
       </div>
 
       <div class="section">
-        <h3>2. 服务地址</h3>
+        <h3>服务地址</h3>
         <div class="field">
           <label>Base URL</label>
           <input
@@ -41,7 +41,7 @@ const showAiKey = ref(false)
       </div>
 
       <div class="section">
-        <h3>3. API 配置</h3>
+        <h3>API Key</h3>
         <div class="field">
           <label>API Key</label>
           <div class="input-with-toggle">
@@ -58,7 +58,7 @@ const showAiKey = ref(false)
       </div>
 
       <div class="section">
-        <h3>4. 模型</h3>
+        <h3>模型</h3>
         <div class="field">
           <label>Model</label>
           <div class="model-select-row">
@@ -74,6 +74,32 @@ const showAiKey = ref(false)
               {{ ai.loadingModels ? '...' : '🔄' }}
             </button>
           </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>自然语言识别</h3>
+        <div class="field">
+          <label>模式</label>
+          <select
+            :value="ai.config.mode || 'auto'"
+            @change="(e: any) => ai.updateConfig({ mode: e.target.value })"
+            class="input"
+          >
+            <option value="auto">自动识别</option>
+            <option value="prefix">前缀触发</option>
+            <option value="keybinding">按键发送 (Ctrl+Enter)</option>
+          </select>
+        </div>
+        <div class="field" v-if="ai.config.mode === 'prefix'">
+          <label>触发前缀</label>
+          <input
+            :value="ai.config.prefix || ':'"
+            @input="(e: any) => ai.updateConfig({ prefix: e.target.value })"
+            class="input"
+            placeholder=":"
+          />
+          <p class="field-desc">输入任一字符开头的文本触发 AI 应答，每个字符均为独立触发前缀</p>
         </div>
       </div>
 
@@ -299,5 +325,11 @@ const showAiKey = ref(false)
 }
 .btn-primary:hover {
   background: var(--accent-hover);
+}
+
+.field-desc {
+  font-size: 11px;
+  color: var(--text-sub0);
+  margin: 2px 0 0;
 }
 </style>

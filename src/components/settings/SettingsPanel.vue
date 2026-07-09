@@ -112,7 +112,7 @@ async function toggleFullscreen() {
         <h3>🤖 {{ t('ai.title') }}</h3>
 
         <div class="setting-row col">
-          <label>1. {{ t('ai.provider') }}</label>
+          <label>{{ t('ai.provider') }}</label>
           <select
             :value="ai.currentProviderId"
             @change="(e: any) => ai.setProvider(e.target.value)"
@@ -123,7 +123,7 @@ async function toggleFullscreen() {
         </div>
 
         <div class="setting-row col">
-          <label>2. {{ t('ai.base_url') }}</label>
+          <label>{{ t('ai.base_url') }}</label>
           <input
             :value="ai.config.base_url"
             @input="(e: any) => ai.updateConfig({ base_url: e.target.value })"
@@ -133,7 +133,7 @@ async function toggleFullscreen() {
         </div>
 
         <div class="setting-row col">
-          <label>3. {{ t('ai.api_key') }}</label>
+          <label>{{ t('ai.api_key') }}</label>
           <div class="input-with-toggle">
             <input
               :type="showAiKey ? 'text' : 'password'"
@@ -147,7 +147,7 @@ async function toggleFullscreen() {
         </div>
 
         <div class="setting-row col">
-          <label>4. {{ t('ai.model') }}</label>
+          <label>{{ t('ai.model') }}</label>
           <div class="model-select-row">
             <select
               :value="ai.config.model"
@@ -163,8 +163,34 @@ async function toggleFullscreen() {
           </div>
         </div>
 
+      </div>
+      <div class="section">
+        <h3>🌐 {{ t('ai.mode') }}</h3>
+        <div class="setting-row col">
+          <select
+            :value="ai.config.mode || 'auto'"
+            @change="(e: any) => ai.updateConfig({ mode: e.target.value })"
+            class="text-input"
+          >
+            <option value="auto">{{ t('ai.mode_auto') }}</option>
+            <option value="prefix">{{ t('ai.mode_prefix') }}</option>
+            <option value="keybinding">{{ t('ai.mode_keybinding') }}</option>
+          </select>
+        </div>
+        <div class="setting-row col" v-if="ai.config.mode === 'prefix'">
+          <label>{{ t('ai.prefix') }}</label>
+          <input
+            :value="ai.config.prefix || ':'"
+            @input="(e: any) => ai.updateConfig({ prefix: e.target.value })"
+            class="text-input"
+            placeholder=":"
+          />
+          <span class="field-desc">{{ t('ai.prefix_desc') }}</span>
+        </div>
+      </div>
+      <div class="section">
+        <h3>{{ t('ai.status') }}</h3>
         <div class="setting-row">
-          <label>{{ t('ai.status') }}</label>
           <span :class="ai.enabled ? 'status-ok' : 'status-ko'">
             {{ ai.enabled ? t('ai.configured') : t('ai.not_configured') }}
           </span>
@@ -383,6 +409,11 @@ async function toggleFullscreen() {
 }
 .toggle-btn:hover {
   background: var(--bg-surface1);
+}
+
+.field-desc {
+  font-size: 11px;
+  color: var(--text-sub0);
 }
 
 .status-ok {

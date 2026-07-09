@@ -388,6 +388,12 @@ export default {
     clear_history: '清除对话历史',
     select_model: '选择模型',
     explain_selection: '🤖 AI 解释选中内容',
+    mode: '触发方式',
+    mode_auto: '自动识别',
+    mode_prefix: '前缀触发',
+    mode_keybinding: '按键发送 (Ctrl+Enter)',
+    prefix: '触发前缀',
+    prefix_desc: '输入此字符开头的文本将触发 AI 应答，每字符均为独立触发前缀',
   },
   common: {
     name: '名称',

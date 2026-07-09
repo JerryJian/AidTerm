@@ -343,10 +343,20 @@ export function useAiConversation(
             }
           }
         } catch {}
+        // Strip prefix in prefix mode
+        let aiLine = line
+        if (ai.config.mode === 'prefix') {
+          const prefixes = (ai.config.prefix || ':').split('')
+          const trimmed = aiLine.trim()
+          const matched = prefixes.find(p => trimmed.startsWith(p))
+          if (matched) {
+            aiLine = trimmed.slice(matched.length).trimStart()
+          }
+        }
         // Cancel buffered text in shell while suppressing the "^C" + new prompt output
         setOutputSuppression?.(true)
         writeToBackend?.('\x03')
-        startConversation(line)
+    startConversation(line.trim())
         setTimeout(() => setOutputSuppression?.(false), 200)
         return true
       }
@@ -387,6 +397,33 @@ export function useAiConversation(
     return false
   }
 
+  function forceAIInput(): void {
+    const t = getTerminal()
+    if (!t || busy.value) return
+    if (!ai.enabled) {
+      t.write(`\r\n\x1b[33m⚠ 请在设置 → AI 中配置 API Key 后使用 AI 助手\x1b[0m\r\n`)
+      writeToBackend?.('\r')
+      return
+    }
+    const line = inputBuffer.value
+    inputBuffer.value = ''
+    if (!line.trim()) return
+    try {
+      const buf = t.buffer.active
+      const ln = buf.getLine(buf.baseY + buf.cursorY)
+      if (ln) {
+        const text = ln.translateToString()
+        if (text.endsWith(line)) {
+          savedPrompt.value = text.slice(0, -line.length)
+        }
+      }
+    } catch {}
+    setOutputSuppression?.(true)
+    writeToBackend?.('\x03')
+    startConversation(line.trim())
+    setTimeout(() => setOutputSuppression?.(false), 200)
+  }
+
   function clearInputBuffer() {
     inputBuffer.value = ''
   }
@@ -414,5 +451,6 @@ export function useAiConversation(
     commandHistory,
     clearInputBuffer,
     submitLine,
+    forceAIInput,
   }
 }

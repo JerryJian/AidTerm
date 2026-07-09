@@ -8,6 +8,8 @@ export interface AiConfig {
   model: string
   base_url: string
   provider_id?: string
+  mode?: string
+  prefix?: string
 }
 
 export interface ProviderOption {
@@ -136,10 +138,29 @@ export const useAiStore = defineStore('ai', () => {
     }
   }
 
+  function getPrefixes(cfg: AiConfig): string[] {
+    const raw = cfg.prefix || ':'
+    return raw.split('')
+  }
+
   function isNaturalLanguage(input: string): boolean {
+    const cfg = config.value
+
+    // Keybinding mode: Enter never triggers AI
+    if (cfg.mode === 'keybinding') {
+      return false
+    }
+
+    // Prefix mode: only trigger on prefix
+    if (cfg.mode === 'prefix') {
+      const trimmed = input.trim()
+      const prefixes = getPrefixes(cfg)
+      return prefixes.some(p => trimmed.startsWith(p))
+    }
+
+    // Auto mode: existing heuristic
     const trimmed = input.trim().toLowerCase()
 
-    // Common command prefixes - treat as command
     const commandPrefixes = [
       'cd ', 'ls ', 'cat ', 'echo ', 'rm ', 'cp ', 'mv ', 'mkdir ',
       'grep ', 'find ', 'chmod ', 'chown ', 'ps ', 'kill ', 'top ',
@@ -155,7 +176,6 @@ export const useAiStore = defineStore('ai', () => {
       return false
     }
 
-    // Single word commands
     const commonCommands = new Set([
       'ls', 'cat', 'echo', 'pwd', 'cd', 'clear', 'exit', 'help',
       'date', 'whoami', 'id', 'uname', 'uptime', 'env', 'which',
@@ -172,12 +192,10 @@ export const useAiStore = defineStore('ai', () => {
       return false
     }
 
-    // Contains Chinese characters → natural language
     if (/[\u4e00-\u9fff]/.test(trimmed)) {
       return true
     }
 
-    // Questions or requests in English → natural language
     const nlPatterns = [
       /^(what|how|why|when|where|who|which|can|could|would|should|do|does|is|are|show|tell|list|find|explain|help|check|fix|install|create|setup|configure|describe|summarize|analyze|compare|generate|write|make|run|start|stop|restart|update|upgrade|remove|delete|add|search|grep|count|sort|filter|convert|download|upload|backup|restore|monitor|watch|follow|tail|head|less|more)/i,
       /[?？]$/,
