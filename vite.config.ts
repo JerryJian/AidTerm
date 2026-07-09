@@ -28,5 +28,13 @@ export default defineConfig(async () => ({
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
+    // 4. prevent serving Rust build artifacts
+    fs: {
+      deny: [".env", ".env.*", "src-tauri/target/"],
+    },
+  },
+  // 5. restrict dep-scan to only index.html + source (avoid crawling Rust target/doc/)
+  optimizeDeps: {
+    entries: ["index.html", "src/**/*.{ts,js,vue,mjs}"],
   },
 }));
