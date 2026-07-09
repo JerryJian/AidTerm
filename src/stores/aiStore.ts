@@ -3,10 +3,17 @@ import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 export interface AiConfig {
-  provider: string
+  api_type: string
   api_key: string
   model: string
   base_url: string
+}
+
+export interface ApiTypePreset {
+  label: string
+  defaultBaseUrl: string
+  defaultModel: string
+  presets?: Record<string, { model: string; base_url: string }>
 }
 
 export interface AiMessage {
@@ -41,10 +48,23 @@ export const useAiStore = defineStore('ai', () => {
 
   function loadConfig(): AiConfig {
     try {
-      return JSON.parse(localStorage.getItem('aidterm_ai_config') || '{}')
+      const raw = JSON.parse(localStorage.getItem('aidterm_ai_config') || '{}')
+      if (raw.api_type) return raw
+      const oldMap: Record<string, string> = { openai: 'openai-compatible', deepseek: 'openai-compatible', dashscope: 'openai-compatible', ollama: 'ollama', anthropic: 'anthropic' }
+      if (raw.provider && oldMap[raw.provider]) {
+        raw.api_type = oldMap[raw.provider]
+        delete raw.provider
+        return raw
+      }
+      return {
+        api_type: 'openai-compatible',
+        api_key: '',
+        model: 'gpt-4o',
+        base_url: 'https://api.openai.com/v1',
+      }
     } catch {
       return {
-        provider: 'openai',
+        api_type: 'openai-compatible',
         api_key: '',
         model: 'gpt-4o',
         base_url: 'https://api.openai.com/v1',
@@ -62,21 +82,49 @@ export const useAiStore = defineStore('ai', () => {
     saveConfig()
   }
 
-  const defaultProviders: Record<string, { model: string; base_url: string }> = {
-    openai: { model: 'gpt-4o', base_url: 'https://api.openai.com/v1' },
-    deepseek: { model: 'deepseek-chat', base_url: 'https://api.deepseek.com/v1' },
-    dashscope: { model: 'qwen-plus', base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
-    ollama: { model: 'llama3', base_url: 'http://localhost:11434' },
-    anthropic: { model: 'claude-sonnet-4-20250514', base_url: 'https://api.anthropic.com' },
+  const apiTypes: Record<string, ApiTypePreset> = {
+    'openai-compatible': {
+      label: 'OpenAI Compatible',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+      defaultModel: 'gpt-4o',
+      presets: {
+        openai: { model: 'gpt-4o', base_url: 'https://api.openai.com/v1' },
+        deepseek: { model: 'deepseek-chat', base_url: 'https://api.deepseek.com/v1' },
+        dashscope: { model: 'qwen-plus', base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+      },
+    },
+    ollama: {
+      label: 'Ollama',
+      defaultBaseUrl: 'http://localhost:11434',
+      defaultModel: 'llama3',
+    },
+    anthropic: {
+      label: 'Anthropic',
+      defaultBaseUrl: 'https://api.anthropic.com',
+      defaultModel: 'claude-sonnet-4-20250514',
+    },
   }
 
-  function setProvider(name: string) {
-    const p = defaultProviders[name]
-    if (p) {
-      config.value.provider = name
-      config.value.model = p.model
-      config.value.base_url = p.base_url
+  function setApiType(name: string) {
+    const t = apiTypes[name]
+    if (t) {
+      config.value.api_type = name
+      config.value.model = t.defaultModel
+      config.value.base_url = t.defaultBaseUrl
       saveConfig()
+    }
+    modelList.value = []
+  }
+
+  function applyPreset(name: string) {
+    const t = apiTypes[config.value.api_type]
+    if (t?.presets) {
+      const p = t.presets[name]
+      if (p) {
+        config.value.model = p.model
+        config.value.base_url = p.base_url
+        saveConfig()
+      }
     }
     modelList.value = []
   }
@@ -86,7 +134,7 @@ export const useAiStore = defineStore('ai', () => {
     modelList.value = []
     try {
       modelList.value = await invoke<string[]>('fetch_ai_models', {
-        provider: config.value.provider,
+        apiType: config.value.api_type,
         baseUrl: config.value.base_url,
         apiKey: config.value.api_key,
       })
@@ -206,9 +254,10 @@ export const useAiStore = defineStore('ai', () => {
     autoMode,
     modelList,
     loadingModels,
-    defaultProviders,
+    apiTypes,
     updateConfig,
-    setProvider,
+    setApiType,
+    applyPreset,
     saveConfig,
     isNaturalLanguage,
     fetchModels,

@@ -546,11 +546,11 @@ pub async fn ai_continue(
 
 #[tauri::command]
 pub async fn fetch_ai_models(
-    provider: String,
+    api_type: String,
     base_url: String,
     api_key: String,
 ) -> Result<Vec<String>, String> {
-    ai::fetch_models(&provider, &base_url, &api_key).await
+    ai::fetch_models(&api_type, &base_url, &api_key).await
 }
 
 #[tauri::command]

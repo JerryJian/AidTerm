@@ -112,14 +112,22 @@ async function toggleFullscreen() {
         <h3>🤖 {{ t('ai.title') }}</h3>
 
         <div class="setting-row col">
-          <label>1. {{ t('ai.provider') }}</label>
+          <label>1. API 类型</label>
           <div class="provider-group">
             <button
-              v-for="(_, name) in ai.defaultProviders"
+              v-for="(info, name) in ai.apiTypes"
               :key="name"
               class="provider-chip"
-              :class="{ active: ai.config.provider === name }"
-              @click="ai.setProvider(name)"
+              :class="{ active: ai.config.api_type === name }"
+              @click="ai.setApiType(name)"
+            >{{ info.label }}</button>
+          </div>
+          <div v-if="ai.config.api_type === 'openai-compatible' && ai.apiTypes['openai-compatible']?.presets" class="preset-group">
+            <button
+              v-for="(_, name) in ai.apiTypes['openai-compatible'].presets"
+              :key="name"
+              class="preset-chip"
+              @click="ai.applyPreset(name)"
             >{{ name }}</button>
           </div>
         </div>
@@ -325,6 +333,30 @@ async function toggleFullscreen() {
   border-color: var(--accent);
   background: var(--bg-mantle);
   color: var(--accent);
+}
+
+.preset-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--bg-surface1);
+}
+
+.preset-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-mantle);
+  color: var(--text-sub0);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  text-transform: capitalize;
+}
+.preset-chip:hover {
+  background: var(--bg-surface1);
+  color: var(--text);
 }
 
 .text-input {

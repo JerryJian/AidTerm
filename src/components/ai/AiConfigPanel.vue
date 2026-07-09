@@ -5,10 +5,6 @@ import { useAiStore } from '../../stores/aiStore'
 const ai = useAiStore()
 const emit = defineEmits<{ close: [] }>()
 const showAiKey = ref(false)
-
-function selectProvider(name: string) {
-  ai.setProvider(name)
-}
 </script>
 
 <template>
@@ -19,17 +15,25 @@ function selectProvider(name: string) {
     </div>
     <div class="panel-body">
       <div class="section">
-        <h3>1. 提供商</h3>
+        <h3>1. API 类型</h3>
         <div class="provider-list">
           <button
-            v-for="(_, name) in ai.defaultProviders"
+            v-for="(info, name) in ai.apiTypes"
             :key="name"
             class="provider-btn"
-            :class="{ active: ai.config.provider === name }"
-            @click="selectProvider(name)"
+            :class="{ active: ai.config.api_type === name }"
+            @click="ai.setApiType(name)"
           >
-            {{ name }}
+            {{ info.label }}
           </button>
+        </div>
+        <div v-if="ai.config.api_type === 'openai-compatible' && ai.apiTypes['openai-compatible']?.presets" class="preset-group">
+          <button
+            v-for="(_, name) in ai.apiTypes['openai-compatible'].presets"
+            :key="name"
+            class="preset-chip"
+            @click="ai.applyPreset(name)"
+          >{{ name }}</button>
         </div>
       </div>
 
@@ -183,6 +187,30 @@ function selectProvider(name: string) {
   border-color: var(--accent);
   background: var(--bg-mantle);
   color: var(--accent);
+}
+
+.preset-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 2px solid var(--bg-surface1);
+}
+
+.preset-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--bg-surface1);
+  background: var(--bg-mantle);
+  color: var(--text-sub0);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  text-transform: capitalize;
+}
+.preset-chip:hover {
+  background: var(--bg-surface1);
+  color: var(--text);
 }
 
 .field {

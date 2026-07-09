@@ -267,11 +267,11 @@ async fn fetch_anthropic_models(base_url: &str, api_key: &str) -> Result<Vec<Str
 }
 
 pub async fn fetch_models(
-    provider: &str,
+    api_type: &str,
     base_url: &str,
     api_key: &str,
 ) -> Result<Vec<String>, String> {
-    match provider {
+    match api_type {
         "ollama" => fetch_ollama_models(base_url).await,
         "anthropic" => fetch_anthropic_models(base_url, api_key).await,
         _ => fetch_openai_models(base_url, api_key).await,
