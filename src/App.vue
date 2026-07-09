@@ -11,8 +11,6 @@ import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { save } from '@tauri-apps/plugin-dialog'
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut'
-import { Splitpanes, Pane } from 'splitpanes'
-import 'splitpanes/dist/splitpanes.css'
 import TabBar from './components/terminal/TabBar.vue'
 import TitleBar from './components/titlebar/TitleBar.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
@@ -175,6 +173,26 @@ function onEditSession(session: SavedSession) {
   showSessionDialog.value = true
 }
 
+const leftDragging = ref(false)
+
+function onLeftDividerDown(e: MouseEvent) {
+  leftDragging.value = true
+  const startX = e.clientX
+  const startW = ui.leftSidebarWidth
+  function onMove(ev: MouseEvent) {
+    const delta = ev.clientX - startX
+    const newW = Math.min(Math.max(startW + delta, 200), 500)
+    ui.leftSidebarWidth = newW
+  }
+  function onUp() {
+    leftDragging.value = false
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
 function onSaveSession(data: { name: string; type: 'ssh' | 'telnet'; host: string; port: number; username: string; password: string; savePassword: boolean; groupName: string }) {
   const existing = editingSession.value
   const groupId = sessionStore.ensureGroup(data.groupName)
@@ -330,7 +348,7 @@ onUnmounted(() => {
 <template>
   <LockScreen v-if="locked" @unlocked="unlockApp" />
 
-  <div class="app" :style="appStyle" @contextmenu.prevent>
+  <div class="app" :class="{ 'left-dragging': leftDragging }" :style="appStyle" @contextmenu.prevent>
     <TitleBar />
     <TabBar
       @lock-click="lockApp"
@@ -339,17 +357,17 @@ onUnmounted(() => {
       @connect-session="onConnectSession"
     />
     <div class="content-area">
-      <Splitpanes>
-        <Pane v-if="ui.leftSidebar" :size="ui.leftSidebarPct" :min-size="15" :max-size="50">
+      <div class="content-body">
+        <div v-if="ui.leftSidebar" class="left-sidebar" :style="{ width: ui.leftSidebarWidth + 'px' }">
+          <div class="left-sidebar-divider" @mousedown="onLeftDividerDown" />
           <LeftSidebar
             @connect-session="onConnectSession"
             @new-session="onNewSession"
             @edit-session="onEditSession"
             @close="ui.leftSidebar = false"
           />
-        </Pane>
-        <Pane>
-          <div class="terminal-area">
+        </div>
+        <div class="terminal-area">
           <FileEditor
             v-if="editorFile"
             :conn-id="editorFile.connId"
@@ -364,9 +382,8 @@ onUnmounted(() => {
             @newSsh="ui.sshDialog = true"
             @edit-file="onEditFile"
           />
-          </div>
-        </Pane>
-      </Splitpanes>
+        </div>
+      </div>
     </div>
     <StatusBar />
   </div>
@@ -491,36 +508,6 @@ body,
   background: var(--text-overlay0);
 }
 
-.splitpanes__pane {
-  display: flex;
-  flex-direction: column;
-}
-
-.splitpanes--vertical > .splitpanes__splitter {
-  background: transparent;
-  border: none;
-  width: 5px;
-  min-width: 5px;
-}
-.splitpanes--vertical > .splitpanes__splitter:hover {
-  background: var(--accent-glass);
-}
-.splitpanes__splitter {
-  position: relative;
-}
-.splitpanes--vertical > .splitpanes__splitter::before {
-  content: '';
-  position: absolute;
-  left: 1.5px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--bg-surface0);
-  pointer-events: none;
-}
-.splitpanes--vertical > .splitpanes__splitter:hover::before {
-  background: var(--accent);
-}
 </style>
 
 <style scoped>
@@ -534,7 +521,49 @@ body,
 .content-area {
   flex: 1;
   display: flex;
+  flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.content-body {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.left-sidebar {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.left-sidebar-divider {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  order: 1;
+}
+
+.left-sidebar-divider:hover {
+  background: var(--accent-glass);
+}
+
+.app.left-dragging {
+  user-select: none;
+}
+
+.left-sidebar > :not(.left-sidebar-divider) {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
 }

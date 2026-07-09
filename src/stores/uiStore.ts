@@ -6,13 +6,13 @@ export const useUiStore = defineStore('ui', () => {
   const quickConnect = ref(false)
   const sshDialog = ref(false)
   const settingsDialog = ref(false)
-  const leftSidebarPct = ref(18)
+  const leftSidebarWidth = ref(280)
 
   return {
     leftSidebar,
     quickConnect,
     sshDialog,
     settingsDialog,
-    leftSidebarPct,
+    leftSidebarWidth,
   }
 })
