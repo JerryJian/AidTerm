@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, computed, reactive, nextTick, onMounted, onUnmounted } from 'vue'
 import { useTerminalStore } from './stores/terminal'
 import { useSessionStore } from './stores/sessionStore'
 import { useSettingsStore } from './stores/settingsStore'
@@ -273,6 +273,10 @@ async function handleCliArgs() {
 const unlisteners: Array<() => void> = []
 
 onMounted(async () => {
+  // show window after Vue has rendered the first frame
+  await nextTick()
+  try { await getCurrentWindow().show() } catch { /* ignore */ }
+
   const f11Handler = (e: KeyboardEvent) => {
     if (e.key === 'F11') {
       e.preventDefault()
