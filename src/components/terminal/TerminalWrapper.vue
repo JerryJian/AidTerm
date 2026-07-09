@@ -219,7 +219,7 @@ async function initTerminal() {
     cursorBlink: true,
     cursorStyle: 'block',
     fontSize: 14,
-    fontFamily: 'Consolas, "Courier New", monospace',
+    fontFamily: 'Consolas, "Courier New", Menlo, "SF Mono", monospace',
     allowTransparency: true,
     cols: 80,
     rows: 24,
@@ -231,7 +231,7 @@ async function initTerminal() {
   terminal.loadAddon(new WebLinksAddon())
 
   terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-    if (e.ctrlKey && e.key === 'Enter') {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       aiConv.forceAIInput()
       return false
     }

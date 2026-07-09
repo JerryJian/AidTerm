@@ -10,7 +10,6 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { save } from '@tauri-apps/plugin-dialog'
-import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut'
 import TabBar from './components/terminal/TabBar.vue'
 import TitleBar from './components/titlebar/TitleBar.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
@@ -274,22 +273,6 @@ async function handleCliArgs() {
 const unlisteners: Array<() => void> = []
 
 onMounted(async () => {
-  try {
-    if (!(await isRegistered('Ctrl+2'))) {
-      await register('Ctrl+2', async () => {
-        const win = getCurrentWindow()
-        if (await win.isVisible()) {
-          await win.hide()
-        } else {
-          await win.show()
-          await win.setFocus()
-        }
-      })
-    }
-  } catch {
-    // ignore
-  }
-
   const f11Handler = (e: KeyboardEvent) => {
     if (e.key === 'F11') {
       e.preventDefault()
@@ -341,7 +324,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   unlisteners.forEach(fn => fn())
-  try { unregister('Ctrl+2') } catch { /* ignore */ }
 })
 </script>
 
