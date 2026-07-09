@@ -12,13 +12,11 @@ const sessionStore = useSessionStore()
 const ui = useUiStore()
 
 const emit = defineEmits<{
-  lockClick: []
   quickSsh: [host: string, port: number, username: string]
   quickTelnet: [host: string, port: number]
   connectSession: [session: SavedSession]
 }>()
 
-const menuOpen = ref(false)
 const quickConnectVisible = ref(false)
 const newTabMenuOpen = ref(false)
 const batchInput = ref('')
@@ -26,7 +24,6 @@ const batchFocused = ref(false)
 
 const availableShells = ref<string[]>([])
 const toolsMenuOpen = ref(false)
-const viewsMenuOpen = ref(false)
 
 const activeTabSessionType = computed(() => store.activeTab?.session?.type)
 
@@ -43,7 +40,6 @@ const toolTabs = computed<{ id: ToolTab; icon: string }[]>(() => {
 
 function toggleToolsMenu() {
   toolsMenuOpen.value = !toolsMenuOpen.value
-  menuOpen.value = false
   newTabMenuOpen.value = false
 }
 
@@ -51,18 +47,12 @@ function openToolTab(tab: ToolTab) {
   if (store.activeTabId) {
     store.addToolTab(store.activeTabId, tab)
   }
-  menuOpen.value = false
   toolsMenuOpen.value = false
 }
 
 function isToolOpen(tab: ToolTab): boolean {
   if (!store.activeTabId) return false
   return store.isToolOpen(store.activeTabId, tab)
-}
-
-function toggleSessions() {
-  ui.leftSidebar = !ui.leftSidebar
-  menuOpen.value = false
 }
 
 const savedSessions = computed(() => sessionStore.sessions)
@@ -109,17 +99,13 @@ function openTelnet() {
 
 function onNewTabClick() {
   newTabMenuOpen.value = !newTabMenuOpen.value
-  menuOpen.value = false
   toolsMenuOpen.value = false
-  viewsMenuOpen.value = false
 }
 
 function onDocClick(e: MouseEvent) {
   const target = e.target as HTMLElement
-  if (target?.closest('.tools-wrapper') || target?.closest('.new-tab-wrapper') || target?.closest('.menu-wrapper')) return
+  if (target?.closest('.tools-wrapper') || target?.closest('.new-tab-wrapper')) return
   newTabMenuOpen.value = false
-  menuOpen.value = false
-  viewsMenuOpen.value = false
   toolsMenuOpen.value = false
 }
 
@@ -183,28 +169,7 @@ defineExpose({ onKeydown })
 <template>
   <div class="tab-bar" @keydown="onKeydown">
     <div class="tab-bar-left">
-      <div class="menu-wrapper">
-        <button class="menu-btn" @click="menuOpen = !menuOpen; viewsMenuOpen = false; newTabMenuOpen = false" title="Menu">{{ '\u2630' }}</button>
-        <div v-if="menuOpen" class="menu-dropdown">
-          <button @click="ui.settingsDialog = true; menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\u2699' }}</span><span>{{ $t('menu.settings') }}</span></button>
-          <button @click="emit('lockClick'); menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>{{ $t('menu.lock') }}</span></button>
-          <button @click="store.toggleBatch(); menuOpen = false" class="menu-item" :class="{ active: store.batchMode }"><span class="mi-icon">{{ '\uD83D\uDCE1' }}</span><span>{{ $t('menu.batch_mode') }}</span></button>
-          <div class="menu-divider" />
-          <button class="menu-item has-submenu" @click="viewsMenuOpen = !viewsMenuOpen">
-            <span class="mi-icon">{{ '\u25B6' }}</span><span>{{ $t('menu.views') }}</span><span class="sub-arrow">{{ '\u25B6' }}</span>
-          </button>
-          <div v-if="viewsMenuOpen" class="submenu-dropdown">
-            <button class="menu-item" @click="toggleSessions()"><span class="mi-icon">{{ '\uD83D\uDCCB' }}</span><span>{{ $t('menu.sessions') }}</span></button>
-            <div class="menu-divider" />
-            <button v-for="t in toolTabs" :key="t.id" class="menu-item" @click="openToolTab(t.id)">
-              <span class="mi-icon">{{ t.icon }}</span><span>{{ $t('tool_panel.' + t.id) }}</span>
-            </button>
-          </div>
-          <div class="menu-divider" />
-          <button @click="quickConnectVisible = !quickConnectVisible; menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\uD83D\uDD0C' }}</span><span>{{ $t('menu.quick_connect') }}</span></button>
-          <button @click="ui.sshDialog = true; menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>{{ $t('menu.new_ssh') }}</span></button>
-        </div>
-      </div>
+      <button class="sidebar-toggle" :class="{ active: ui.leftSidebar }" @click="ui.leftSidebar = !ui.leftSidebar" title="Toggle Sidebar">{{ '\u2630' }}</button>
       <div
         v-for="tab in store.tabs"
         :key="tab.id"
@@ -309,11 +274,7 @@ defineExpose({ onKeydown })
   min-width: 0;
 }
 
-.menu-wrapper {
-  position: relative;
-}
-
-.menu-btn {
+.sidebar-toggle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -326,82 +287,15 @@ defineExpose({ onKeydown })
   border-radius: 4px;
   font-size: 14px;
   margin: 0 2px;
-}
-.menu-btn:hover {
-  background: var(--bg-surface0);
-  color: var(--text);
-}
-
-.menu-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 2px;
-  z-index: 1000;
-  background: var(--bg-base);
-  border: 1px solid var(--bg-surface0);
-  border-radius: 6px;
-  min-width: 180px;
-  padding: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-.submenu-dropdown {
-  position: absolute;
-  left: 100%;
-  top: 85px;
-  z-index: 1001;
-  background: var(--bg-base);
-  border: 1px solid var(--bg-surface0);
-  border-radius: 6px;
-  min-width: 150px;
-  padding: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  margin-left: 2px;
-}
-
-.menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  padding: 6px 12px;
-  border: none;
-  background: none;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 12px;
-  border-radius: 4px;
-  white-space: nowrap;
-}
-.menu-item:hover {
-  background: var(--bg-surface0);
-  color: var(--accent);
-}
-.menu-item.active {
-  color: var(--success);
-}
-
-.mi-icon {
-  width: 18px;
-  text-align: center;
   flex-shrink: 0;
 }
-
-.has-submenu {
-  justify-content: space-between;
-}
-
-.sub-arrow {
-  font-size: 8px;
-  color: var(--text-overlay0);
-  margin-left: auto;
-}
-
-.menu-divider {
-  height: 1px;
+.sidebar-toggle:hover {
   background: var(--bg-surface0);
-  margin: 4px 8px;
+  color: var(--text);
+}
+.sidebar-toggle.active {
+  background: var(--accent-glass);
+  color: var(--accent);
 }
 
 .tab {
@@ -640,6 +534,41 @@ defineExpose({ onKeydown })
 .batch-count {
   font-size: 11px;
   color: var(--text-sub0);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.menu-item:hover {
+  background: var(--bg-surface0);
+  color: var(--accent);
+}
+.menu-item.active {
+  color: var(--success);
+}
+
+.mi-icon {
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--bg-surface0);
+  margin: 4px 8px;
 }
 
 .new-tab-wrapper {
