@@ -7,8 +7,6 @@ import { useTerminalStore } from '../../stores/terminal'
 
 const { t } = useI18n()
 
-const emit = defineEmits<{ close: [] }>()
-
 const store = useSnippetStore()
 const termStore = useTerminalStore()
 
@@ -91,13 +89,12 @@ function submitVariables() {
 
 <template>
   <div class="panel">
-    <div class="panel-header">
-      <span>{{ t('snippet.title') }}</span>
-      <button class="panel-close" @click="emit('close')">✕</button>
+    <div class="toolbar">
+      <span class="toolbar-title">{{ t('snippet.title') }}</span>
+      <button class="tb-btn" @click="resetForm">+ {{ t('snippet.add') }}</button>
     </div>
 
     <div class="panel-body">
-      <button class="btn btn-add" @click="resetForm">+ {{ t('snippet.add') }}</button>
 
       <div v-for="s in store.snippets.value" :key="s.id" class="snippet-item">
         <div class="snippet-info" @click="sendSnippet(s.command)" :title="s.command">
@@ -171,29 +168,29 @@ function submitVariables() {
   overflow-y: auto;
 }
 
-.panel-header {
+.toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--bg-surface0);
-  font-size: 13px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border, var(--bg-surface0));
+  background: var(--bg-mantle);
+}
+.toolbar-title {
+  font-size: 12px;
   font-weight: 600;
-}
-
-.panel-close {
-  border: none;
-  background: none;
-  color: var(--text-sub0);
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 14px;
-}
-.panel-close:hover {
-  background: var(--bg-surface0);
   color: var(--text);
 }
+.tb-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--border, var(--bg-surface0));
+  border-radius: 4px;
+  background: var(--bg-surface0);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 11px;
+}
+.tb-btn:hover { background: var(--bg-surface1); }
 
 .panel-body {
   flex: 1;
@@ -270,15 +267,6 @@ function submitVariables() {
   border-radius: 4px;
   font-size: 13px;
   cursor: pointer;
-}
-.btn-add {
-  background: var(--bg-surface0);
-  color: var(--accent);
-  border: 1px solid var(--bg-surface1);
-  width: 100%;
-}
-.btn-add:hover {
-  background: var(--bg-surface1);
 }
 .btn-cancel {
   background: var(--bg-surface0);
