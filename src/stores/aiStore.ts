@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 export interface AiConfig {
-  api_type: string
+  provider: string
   api_key: string
   model: string
   base_url: string
@@ -13,7 +13,7 @@ export interface AiConfig {
 export interface ProviderOption {
   id: string
   label: string
-  apiType: string
+  provider: string
   model: string
   baseUrl: string
 }
@@ -51,22 +51,26 @@ export const useAiStore = defineStore('ai', () => {
   function loadConfig(): AiConfig {
     try {
       const raw = JSON.parse(localStorage.getItem('aidterm_ai_config') || '{}')
-      if (raw.api_type) return raw
-      const oldMap: Record<string, string> = { openai: 'openai-compatible', deepseek: 'openai-compatible', dashscope: 'openai-compatible', ollama: 'ollama', anthropic: 'anthropic' }
-      if (raw.provider && oldMap[raw.provider]) {
-        raw.api_type = oldMap[raw.provider]
-        delete raw.provider
+      if (raw.provider) return raw
+      if (raw.api_type) {
+        raw.provider = raw.api_type
+        delete raw.api_type
+        return raw
+      }
+      const providerNameMap: Record<string, string> = { openai: 'openai-compatible', deepseek: 'openai-compatible', dashscope: 'openai-compatible', ollama: 'ollama', anthropic: 'anthropic' }
+      if (raw.provider && providerNameMap[raw.provider]) {
+        raw.provider = providerNameMap[raw.provider]
         return raw
       }
       return {
-        api_type: 'openai-compatible',
+        provider: 'openai-compatible',
         api_key: '',
         model: 'gpt-4o',
         base_url: 'https://api.openai.com/v1',
       }
     } catch {
       return {
-        api_type: 'openai-compatible',
+        provider: 'openai-compatible',
         api_key: '',
         model: 'gpt-4o',
         base_url: 'https://api.openai.com/v1',
@@ -85,19 +89,19 @@ export const useAiStore = defineStore('ai', () => {
   }
 
   const providerList = ref<ProviderOption[]>([
-    { id: 'openai', label: 'OpenAI', apiType: 'openai-compatible', model: 'gpt-4o', baseUrl: 'https://api.openai.com/v1' },
-    { id: 'deepseek', label: 'DeepSeek', apiType: 'openai-compatible', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' },
-    { id: 'dashscope', label: 'DashScope', apiType: 'openai-compatible', model: 'qwen-plus', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
-    { id: 'openai-compatible', label: 'OpenAI Compatible', apiType: 'openai-compatible', model: 'gpt-4o', baseUrl: 'https://api.openai.com/v1' },
-    { id: 'ollama', label: 'Ollama', apiType: 'ollama', model: 'llama3', baseUrl: 'http://localhost:11434' },
-    { id: 'anthropic', label: 'Anthropic', apiType: 'anthropic', model: 'claude-sonnet-4-20250514', baseUrl: 'https://api.anthropic.com' },
+    { id: 'openai', label: 'OpenAI', provider: 'openai-compatible', model: 'gpt-4o', baseUrl: 'https://api.openai.com/v1' },
+    { id: 'deepseek', label: 'DeepSeek', provider: 'openai-compatible', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' },
+    { id: 'dashscope', label: 'DashScope', provider: 'openai-compatible', model: 'qwen-plus', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+    { id: 'openai-compatible', label: 'OpenAI Compatible', provider: 'openai-compatible', model: 'gpt-4o', baseUrl: 'https://api.openai.com/v1' },
+    { id: 'ollama', label: 'Ollama', provider: 'ollama', model: 'llama3', baseUrl: 'http://localhost:11434' },
+    { id: 'anthropic', label: 'Anthropic', provider: 'anthropic', model: 'claude-sonnet-4-20250514', baseUrl: 'https://api.anthropic.com' },
   ])
 
   const currentProviderId = computed(() => {
     const c = config.value
     if (c.provider_id) return c.provider_id
     for (const p of providerList.value) {
-      if (p.apiType === c.api_type && p.model === c.model && p.baseUrl === c.base_url) {
+      if (p.provider === c.provider && p.model === c.model && p.baseUrl === c.base_url) {
         return p.id
       }
     }
@@ -107,7 +111,7 @@ export const useAiStore = defineStore('ai', () => {
   function setProvider(id: string) {
     const p = providerList.value.find(x => x.id === id)
     if (p) {
-      config.value.api_type = p.apiType
+      config.value.provider = p.provider
       config.value.model = p.model
       config.value.base_url = p.baseUrl
       config.value.provider_id = id
@@ -121,7 +125,7 @@ export const useAiStore = defineStore('ai', () => {
     modelList.value = []
     try {
       modelList.value = await invoke<string[]>('fetch_ai_models', {
-        apiType: config.value.api_type,
+        provider: config.value.provider,
         baseUrl: config.value.base_url,
         apiKey: config.value.api_key,
       })

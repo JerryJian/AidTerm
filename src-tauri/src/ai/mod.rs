@@ -65,163 +65,248 @@ pub struct AiResponse {
     pub tool_calls: Vec<ToolCall>,
 }
 
-/// Build the OpenAI-compatible request body
-fn build_request_body(messages: &[ChatMessage]) -> serde_json::Value {
-    let api_messages: Vec<serde_json::Value> = messages.iter().map(|m| {
-        let mut msg = serde_json::json!({
-            "role": m.role,
-            "content": m.content,
-        });
-        if let Some(ref id) = m.tool_call_id {
-            msg["tool_call_id"] = serde_json::json!(id);
-        }
-        if let Some(ref calls) = m.tool_calls {
-            msg["tool_calls"] = serde_json::to_value(calls).unwrap_or_default();
-        }
-        msg
-    }).collect();
+// --- OpenAI compatible (async-openai) ---
 
-    serde_json::json!({
-        "model": "", // will be filled by caller
-        "messages": api_messages,
-        "tools": [{
-            "type": "function",
-            "function": {
-                "name": "execute_command",
-                "description": "在服务器上执行一条 shell 命令，返回命令的输出结果。执行命令后，系统会将输出结果返回给你，请根据结果继续推理。",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "command": {
-                            "type": "string",
-                            "description": "要执行的 shell 命令"
-                        }
-                    },
-                    "required": ["command"]
-                }
-            }
-        }],
-        "tool_choice": "auto"
-    })
-}
-
-/// Parse the API response into our AiResponse
-fn parse_response(body: &str) -> Result<AiResponse, String> {
-    let v: serde_json::Value = serde_json::from_str(body)
-        .map_err(|e| format!("Failed to parse AI response: {}", e))?;
-
-    let choice = v["choices"][0]
-        .as_object()
-        .ok_or("No choices in AI response")?;
-
-    let message = choice["message"]
-        .as_object()
-        .ok_or("No message in AI response")?;
-
-    let content = message.get("content").and_then(|c| c.as_str()).map(|s| s.to_string());
-
-    let tool_calls = message.get("tool_calls")
-        .and_then(|tc| tc.as_array())
-        .map(|arr| {
-            arr.iter().filter_map(|tc| {
-                let id = tc["id"].as_str()?.to_string();
-                let func = tc["function"].as_object()?;
-                let name = func["name"].as_str()?.to_string();
-                let args = func["arguments"].as_str()?.to_string();
-                Some(ToolCall {
-                    id,
-                    function: ToolCallFunction { name, arguments: args },
-                })
-            }).collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-
-    Ok(AiResponse {
-        text: content,
-        tool_calls,
-    })
-}
-
-/// Fetch available models from the provider's API
-async fn fetch_openai_models(
-    base_url: &str,
-    api_key: &str,
-) -> Result<Vec<String>, String> {
-    let url = format!("{}/models", base_url.trim_end_matches('/'));
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-
-    let request = client.get(&url);
-    let request = if api_key.is_empty() {
-        request
-    } else {
-        request.header("Authorization", format!("Bearer {}", api_key))
+async fn chat_openai(messages: Vec<ChatMessage>, config: &AiConfig) -> Result<AiResponse, String> {
+    use async_openai::Client;
+    use async_openai::config::OpenAIConfig;
+    use async_openai::types::chat::{
+        ChatCompletionRequestMessage, ChatCompletionRequestSystemMessage,
+        ChatCompletionRequestUserMessage, ChatCompletionRequestAssistantMessage,
+        ChatCompletionRequestToolMessage,
+        ChatCompletionRequestSystemMessageContent, ChatCompletionRequestUserMessageContent,
+        ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestToolMessageContent,
+        CreateChatCompletionRequestArgs, ChatCompletionTools, ChatCompletionTool,
+        FunctionObject, ChatCompletionToolChoiceOption,
+        ChatCompletionMessageToolCalls, ChatCompletionMessageToolCall,
+        FunctionCall,
     };
 
-    let response = request
-        .send()
+    let openai_config = OpenAIConfig::new()
+        .with_api_base(config.base_url.trim_end_matches('/'))
+        .with_api_key(&config.api_key);
+    let client = Client::with_config(openai_config);
+
+    let mut api_messages: Vec<ChatCompletionRequestMessage> = Vec::new();
+    for m in &messages {
+        match m.role.as_str() {
+            "system" => {
+                api_messages.push(ChatCompletionRequestMessage::System(
+                    ChatCompletionRequestSystemMessage {
+                        content: ChatCompletionRequestSystemMessageContent::Text(m.content.clone()),
+                        name: None,
+                    },
+                ));
+            }
+            "user" => {
+                api_messages.push(ChatCompletionRequestMessage::User(
+                    ChatCompletionRequestUserMessage {
+                        content: ChatCompletionRequestUserMessageContent::Text(m.content.clone()),
+                        name: None,
+                    },
+                ));
+            }
+            "assistant" => {
+                let content = if m.content.is_empty() {
+                    None
+                } else {
+                    Some(ChatCompletionRequestAssistantMessageContent::Text(m.content.clone()))
+                };
+                let tc = m.tool_calls.as_ref().map(|calls| {
+                    calls.iter().map(|tc| {
+                        ChatCompletionMessageToolCalls::Function(ChatCompletionMessageToolCall {
+                            id: tc.id.clone(),
+                            function: FunctionCall {
+                                name: tc.function.name.clone(),
+                                arguments: tc.function.arguments.clone(),
+                            },
+                        })
+                    }).collect()
+                });
+                api_messages.push(ChatCompletionRequestMessage::Assistant(
+                    ChatCompletionRequestAssistantMessage {
+                        content,
+                        refusal: None,
+                        name: None,
+                        audio: None,
+                        tool_calls: tc,
+                        #[allow(deprecated)]
+                        function_call: None,
+                    },
+                ));
+            }
+            "tool" => {
+                if let Some(ref id) = m.tool_call_id {
+                    api_messages.push(ChatCompletionRequestMessage::Tool(
+                        ChatCompletionRequestToolMessage {
+                            content: ChatCompletionRequestToolMessageContent::Text(m.content.clone()),
+                            tool_call_id: id.clone(),
+                        },
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let tool = ChatCompletionTools::Function(ChatCompletionTool {
+        function: FunctionObject {
+            name: "execute_command".to_string(),
+            description: Some("在服务器上执行一条 shell 命令，返回命令的输出结果。执行命令后，系统会将输出结果返回给你，请根据结果继续推理。".to_string()),
+            parameters: Some(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "要执行的 shell 命令"
+                    }
+                },
+                "required": ["command"]
+            })),
+            strict: None,
+        },
+    });
+
+    let request = CreateChatCompletionRequestArgs::default()
+        .model(&config.model)
+        .messages(api_messages)
+        .tools(vec![tool])
+        .tool_choice(ChatCompletionToolChoiceOption::Mode(
+            async_openai::types::chat::ToolChoiceOptions::Auto,
+        ))
+        .build()
+        .map_err(|e| format!("Failed to build request: {}", e))?;
+
+    let response = client.chat().create(request)
+        .await
+        .map_err(|e| format!("OpenAI API error: {}", e))?;
+
+    let choice = response.choices.into_iter().next()
+        .ok_or("No choices in AI response")?;
+
+    let text = choice.message.content;
+    let tool_calls = choice.message.tool_calls.unwrap_or_default()
+        .into_iter()
+        .filter_map(|tc| match tc {
+            ChatCompletionMessageToolCalls::Function(f) => Some(ToolCall {
+                id: f.id,
+                function: ToolCallFunction {
+                    name: f.function.name,
+                    arguments: f.function.arguments,
+                },
+            }),
+            _ => None,
+        })
+        .collect();
+
+    Ok(AiResponse { text, tool_calls })
+}
+
+async fn fetch_openai_models(base_url: &str, api_key: &str) -> Result<Vec<String>, String> {
+    use async_openai::Client;
+    use async_openai::config::OpenAIConfig;
+
+    let openai_config = OpenAIConfig::new()
+        .with_api_base(base_url.trim_end_matches('/'))
+        .with_api_key(api_key);
+    let client = Client::with_config(openai_config);
+
+    let response = client.models().list()
         .await
         .map_err(|e| format!("Failed to fetch models: {}", e))?;
 
-    let status = response.status();
-    let text = response.text().await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
+    Ok(response.data.into_iter().map(|m| m.id).collect())
+}
 
-    if !status.is_success() {
-        return Err(format!("API error ({}): {}", status, text));
-    }
+// --- Ollama (ollama-rs) ---
 
-    let v: serde_json::Value = serde_json::from_str(&text)
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+async fn chat_ollama(messages: Vec<ChatMessage>, config: &AiConfig) -> Result<AiResponse, String> {
+    use ollama_rs::Ollama;
+    use ollama_rs::generation::chat::{ChatMessage as OllamaChatMessage, MessageRole};
+    use ollama_rs::generation::chat::request::ChatMessageRequest;
 
-    let models = v["data"]
-        .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|m| m["id"].as_str().map(|s| s.to_string()))
-                .collect()
-        })
-        .unwrap_or_default();
+    let ollama = Ollama::builder()
+        .url(config.base_url.trim_end_matches('/'))
+        .build();
 
-    Ok(models)
+    let history: Vec<OllamaChatMessage> = messages.iter().map(|m| {
+        let role = match m.role.as_str() {
+            "user" => MessageRole::User,
+            "assistant" => MessageRole::Assistant,
+            "system" => MessageRole::System,
+            "tool" => MessageRole::Tool,
+            _ => MessageRole::User,
+        };
+        OllamaChatMessage::new(role, m.content.clone())
+    }).collect();
+
+    let request = ChatMessageRequest::new(config.model.clone(), history);
+
+    let response = ollama.send_chat_messages(request)
+        .await
+        .map_err(|e| format!("Ollama API error: {}", e))?;
+
+    let text = response.message.content;
+
+    Ok(AiResponse { text: Some(text), tool_calls: vec![] })
 }
 
 async fn fetch_ollama_models(base_url: &str) -> Result<Vec<String>, String> {
-    let url = format!("{}/api/tags", base_url.trim_end_matches('/'));
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    use ollama_rs::Ollama;
 
-    let response = client
-        .get(&url)
-        .send()
+    let ollama = Ollama::builder()
+        .url(base_url.trim_end_matches('/'))
+        .build();
+
+    let models = ollama.list_local_models()
         .await
         .map_err(|e| format!("Failed to fetch Ollama models: {}", e))?;
 
-    let status = response.status();
-    let text = response.text().await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
+    Ok(models.into_iter().map(|m| m.name).collect())
+}
 
-    if !status.is_success() {
-        return Err(format!("Ollama API error ({}): {}", status, text));
+// --- Anthropic (anthropic-ai-sdk) ---
+
+async fn chat_anthropic(messages: Vec<ChatMessage>, config: &AiConfig) -> Result<AiResponse, String> {
+    use anthropic_ai_sdk::client::AnthropicClient;
+    use anthropic_ai_sdk::types::message::{
+        CreateMessageParams, Message as AnthropicMessage, RequiredMessageParams,
+        Role, ContentBlock, MessageClient,
+    };
+
+    let client = AnthropicClient::new::<anthropic_ai_sdk::types::model::ModelError>(
+        &config.api_key, "2023-06-01",
+    )
+    .map_err(|e| format!("Failed to create Anthropic client: {}", e))?;
+
+    let mut anthropic_messages: Vec<AnthropicMessage> = Vec::new();
+    for m in &messages {
+        let role = match m.role.as_str() {
+            "user" => Role::User,
+            "assistant" => Role::Assistant,
+            _ => continue,
+        };
+        anthropic_messages.push(AnthropicMessage::new_text(role, m.content.clone()));
     }
 
-    let v: serde_json::Value = serde_json::from_str(&text)
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    let params = CreateMessageParams::new(RequiredMessageParams {
+        model: config.model.clone(),
+        messages: anthropic_messages,
+        max_tokens: 4096,
+    });
 
-    let models = v["models"]
-        .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|m| m["name"].as_str().map(|s| s.to_string()))
-                .collect()
-        })
-        .unwrap_or_default();
+    let response = client.create_message(Some(&params))
+        .await
+        .map_err(|e| format!("Anthropic API error: {}", e))?;
 
-    Ok(models)
+    let mut text = String::new();
+    for block in response.content {
+        if let ContentBlock::Text { text: t } = block {
+            text.push_str(&t);
+        }
+    }
+
+    Ok(AiResponse { text: Some(text), tool_calls: vec![] })
 }
 
 async fn fetch_anthropic_models(base_url: &str, api_key: &str) -> Result<Vec<String>, String> {
@@ -231,14 +316,10 @@ async fn fetch_anthropic_models(base_url: &str, api_key: &str) -> Result<Vec<Str
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-    let request = client.get(&url);
-    let request = if api_key.is_empty() {
-        request
-    } else {
-        request.header("x-api-key", api_key)
-    };
-
-    let response = request
+    let response = client
+        .get(&url)
+        .header("x-api-key", api_key)
+        .header("anthropic-version", "2023-06-01")
         .send()
         .await
         .map_err(|e| format!("Failed to fetch Anthropic models: {}", e))?;
@@ -266,51 +347,29 @@ async fn fetch_anthropic_models(base_url: &str, api_key: &str) -> Result<Vec<Str
     Ok(models)
 }
 
+// --- Public API ---
+
 pub async fn fetch_models(
-    api_type: &str,
+    provider: &str,
     base_url: &str,
     api_key: &str,
 ) -> Result<Vec<String>, String> {
-    match api_type {
+    match provider {
         "ollama" => fetch_ollama_models(base_url).await,
         "anthropic" => fetch_anthropic_models(base_url, api_key).await,
         _ => fetch_openai_models(base_url, api_key).await,
     }
 }
 
-/// Send a chat completion request to the AI API
 pub async fn chat_completion(
     messages: Vec<ChatMessage>,
     config: &AiConfig,
 ) -> Result<AiResponse, String> {
-    let mut body = build_request_body(&messages);
-    body["model"] = serde_json::json!(config.model);
-
-    let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(120))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-
-    let response = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {}", config.api_key))
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("AI API request failed: {}", e))?;
-
-    let status = response.status();
-    let text = response.text().await
-        .map_err(|e| format!("Failed to read AI response: {}", e))?;
-
-    if !status.is_success() {
-        return Err(format!("AI API error ({}): {}", status, text));
+    match config.provider.as_str() {
+        "ollama" => chat_ollama(messages, config).await,
+        "anthropic" => chat_anthropic(messages, config).await,
+        _ => chat_openai(messages, config).await,
     }
-
-    parse_response(&text)
 }
 
 /// Execute a shell command and return its output
