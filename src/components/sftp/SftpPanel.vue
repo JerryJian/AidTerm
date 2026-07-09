@@ -188,8 +188,17 @@ onMounted(async () => {
   unlistens.push(un2)
 })
 
+watch(() => props.tab.openToolTabs, (tabs) => {
+  if (tabs && !tabs.includes('sftp') && s.value.connected) {
+    store.disconnect(props.tabId)
+  }
+})
+
 onUnmounted(() => {
   unlistens.forEach(fn => fn())
+  if (s.value.connected) {
+    store.disconnect(props.tabId)
+  }
 })
 
 function formatSize(size: number): string {
