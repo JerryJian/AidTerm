@@ -35,10 +35,10 @@ const firstInput = ref<HTMLInputElement>()
 
 onMounted(async () => {
   firstInput.value?.focus()
-  await proxyStore.refresh()
   const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
   document.addEventListener('keydown', onKey)
   onUnmounted(() => document.removeEventListener('keydown', onKey))
+  await proxyStore.refresh()
 })
 
 async function pickKey() {
