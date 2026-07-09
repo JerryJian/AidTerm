@@ -190,24 +190,14 @@ async function toggleFullscreen() {
           <h3>🤖 {{ t('ai.title') }}</h3>
 
           <div class="setting-row col">
-            <label>1. API 类型</label>
-            <div class="provider-group">
-              <button
-                v-for="(info, name) in ai.apiTypes"
-                :key="name"
-                class="provider-chip"
-                :class="{ active: ai.config.api_type === name }"
-                @click="ai.setApiType(name)"
-              >{{ info.label }}</button>
-            </div>
-            <div v-if="ai.config.api_type === 'openai-compatible' && ai.apiTypes['openai-compatible']?.presets" class="preset-group">
-              <button
-                v-for="(_, name) in ai.apiTypes['openai-compatible'].presets"
-                :key="name"
-                class="preset-chip"
-                @click="ai.applyPreset(name)"
-              >{{ name }}</button>
-            </div>
+            <label>1. {{ t('settings.ai_provider') }}</label>
+            <select
+              :value="ai.currentProviderId"
+              @change="(e: any) => ai.setProvider(e.target.value)"
+              class="text-input"
+            >
+              <option v-for="p in ai.providerList" :key="p.id" :value="p.id">{{ p.label }}</option>
+            </select>
           </div>
 
           <div class="setting-row col">

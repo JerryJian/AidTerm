@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
 export interface AiConfig {
@@ -7,13 +7,15 @@ export interface AiConfig {
   api_key: string
   model: string
   base_url: string
+  provider_id?: string
 }
 
-export interface ApiTypePreset {
+export interface ProviderOption {
+  id: string
   label: string
-  defaultBaseUrl: string
-  defaultModel: string
-  presets?: Record<string, { model: string; base_url: string }>
+  apiType: string
+  model: string
+  baseUrl: string
 }
 
 export interface AiMessage {
@@ -82,49 +84,34 @@ export const useAiStore = defineStore('ai', () => {
     saveConfig()
   }
 
-  const apiTypes: Record<string, ApiTypePreset> = {
-    'openai-compatible': {
-      label: 'OpenAI Compatible',
-      defaultBaseUrl: 'https://api.openai.com/v1',
-      defaultModel: 'gpt-4o',
-      presets: {
-        openai: { model: 'gpt-4o', base_url: 'https://api.openai.com/v1' },
-        deepseek: { model: 'deepseek-chat', base_url: 'https://api.deepseek.com/v1' },
-        dashscope: { model: 'qwen-plus', base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
-      },
-    },
-    ollama: {
-      label: 'Ollama',
-      defaultBaseUrl: 'http://localhost:11434',
-      defaultModel: 'llama3',
-    },
-    anthropic: {
-      label: 'Anthropic',
-      defaultBaseUrl: 'https://api.anthropic.com',
-      defaultModel: 'claude-sonnet-4-20250514',
-    },
-  }
+  const providerList = ref<ProviderOption[]>([
+    { id: 'openai', label: 'OpenAI', apiType: 'openai-compatible', model: 'gpt-4o', baseUrl: 'https://api.openai.com/v1' },
+    { id: 'deepseek', label: 'DeepSeek', apiType: 'openai-compatible', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' },
+    { id: 'dashscope', label: 'DashScope', apiType: 'openai-compatible', model: 'qwen-plus', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+    { id: 'openai-compatible', label: 'OpenAI Compatible', apiType: 'openai-compatible', model: 'gpt-4o', baseUrl: 'https://api.openai.com/v1' },
+    { id: 'ollama', label: 'Ollama', apiType: 'ollama', model: 'llama3', baseUrl: 'http://localhost:11434' },
+    { id: 'anthropic', label: 'Anthropic', apiType: 'anthropic', model: 'claude-sonnet-4-20250514', baseUrl: 'https://api.anthropic.com' },
+  ])
 
-  function setApiType(name: string) {
-    const t = apiTypes[name]
-    if (t) {
-      config.value.api_type = name
-      config.value.model = t.defaultModel
-      config.value.base_url = t.defaultBaseUrl
-      saveConfig()
-    }
-    modelList.value = []
-  }
-
-  function applyPreset(name: string) {
-    const t = apiTypes[config.value.api_type]
-    if (t?.presets) {
-      const p = t.presets[name]
-      if (p) {
-        config.value.model = p.model
-        config.value.base_url = p.base_url
-        saveConfig()
+  const currentProviderId = computed(() => {
+    const c = config.value
+    if (c.provider_id) return c.provider_id
+    for (const p of providerList.value) {
+      if (p.apiType === c.api_type && p.model === c.model && p.baseUrl === c.base_url) {
+        return p.id
       }
+    }
+    return 'openai'
+  })
+
+  function setProvider(id: string) {
+    const p = providerList.value.find(x => x.id === id)
+    if (p) {
+      config.value.api_type = p.apiType
+      config.value.model = p.model
+      config.value.base_url = p.baseUrl
+      config.value.provider_id = id
+      saveConfig()
     }
     modelList.value = []
   }
@@ -254,10 +241,10 @@ export const useAiStore = defineStore('ai', () => {
     autoMode,
     modelList,
     loadingModels,
-    apiTypes,
+    providerList,
+    currentProviderId,
     updateConfig,
-    setApiType,
-    applyPreset,
+    setProvider,
     saveConfig,
     isNaturalLanguage,
     fetchModels,

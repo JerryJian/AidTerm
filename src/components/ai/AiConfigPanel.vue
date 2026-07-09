@@ -15,25 +15,15 @@ const showAiKey = ref(false)
     </div>
     <div class="panel-body">
       <div class="section">
-        <h3>1. API 类型</h3>
-        <div class="provider-list">
-          <button
-            v-for="(info, name) in ai.apiTypes"
-            :key="name"
-            class="provider-btn"
-            :class="{ active: ai.config.api_type === name }"
-            @click="ai.setApiType(name)"
+        <h3>1. 提供商</h3>
+        <div class="field">
+          <select
+            :value="ai.currentProviderId"
+            @change="(e: any) => ai.setProvider(e.target.value)"
+            class="input"
           >
-            {{ info.label }}
-          </button>
-        </div>
-        <div v-if="ai.config.api_type === 'openai-compatible' && ai.apiTypes['openai-compatible']?.presets" class="preset-group">
-          <button
-            v-for="(_, name) in ai.apiTypes['openai-compatible'].presets"
-            :key="name"
-            class="preset-chip"
-            @click="ai.applyPreset(name)"
-          >{{ name }}</button>
+            <option v-for="p in ai.providerList" :key="p.id" :value="p.id">{{ p.label }}</option>
+          </select>
         </div>
       </div>
 
