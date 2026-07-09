@@ -196,6 +196,18 @@ pub async fn sftp_cancel_transfer(
 }
 
 #[tauri::command]
+#[allow(dead_code)]
+pub async fn sftp_create(
+    manager: State<'_, sftp::SftpManager>,
+    conn_id: String,
+    path: String,
+    is_dir: bool,
+    mode: u32,
+) -> Result<(), String> {
+    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::Create { path, is_dir, mode, resp: tx }).await
+}
+
+#[tauri::command]
 pub async fn sftp_remove(
     manager: State<'_, sftp::SftpManager>,
     conn_id: String,

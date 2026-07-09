@@ -8,6 +8,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use russh::client;
 use russh::keys::*;
 use russh_sftp::client::SftpSession;
+use russh_sftp::protocol::{FileAttributes, OpenFlags};
 use tauri::AppHandle;
 use tauri::Emitter;
 use tokio::runtime::Runtime;
@@ -50,6 +51,7 @@ pub(crate) enum SftpCmd {
     CancelTransfer { id: String, resp: Resp<()> },
     Remove { path: String, resp: Resp<()> },
     Rename { old: String, new: String, resp: Resp<()> },
+    Create { path: String, is_dir: bool, mode: u32, resp: Resp<()> },
     Mkdir { path: String, resp: Resp<()> },
     ReadFile { remote: String, resp: Resp<String> },
     WriteFile { remote: String, content: String, resp: Resp<()> },
@@ -274,6 +276,11 @@ impl SftpConnection {
                         let result = Self::do_rename(&s, &old, &new).await;
                         let _ = resp.send(result);
                     }
+                    SftpCmd::Create { path, is_dir, mode, resp } => {
+                        let s = session.clone();
+                        let result = Self::do_create(&s, &path, is_dir, mode).await;
+                        let _ = resp.send(result);
+                    }
                     SftpCmd::Mkdir { path, resp } => {
                         let s = session.clone();
                         let result = Self::do_mkdir(&s, &path).await;
@@ -418,6 +425,26 @@ impl SftpConnection {
             .map_err(|e| format!("rename failed: {}", e))
     }
 
+    async fn do_create(session: &SftpSession, path: &str, is_dir: bool, mode: u32) -> Result<(), String> {
+        let attrs = FileAttributes {
+            permissions: Some(mode),
+            ..FileAttributes::empty()
+        };
+        if is_dir {
+            session.create_dir(path).await
+                .map_err(|e| format!("mkdir failed: {}", e))?;
+            session.set_metadata(path, attrs).await
+                .map_err(|e| format!("set permissions failed: {}", e))?;
+        } else {
+            let _file = session.open_with_flags_and_attributes(
+                path,
+                OpenFlags::CREATE | OpenFlags::WRITE | OpenFlags::TRUNCATE,
+                attrs,
+            ).await.map_err(|e| format!("create file failed: {}", e))?;
+        }
+        Ok(())
+    }
+
     async fn do_mkdir(session: &SftpSession, path: &str) -> Result<(), String> {
         session.create_dir(path).await
             .map_err(|e| format!("mkdir failed: {}", e))
@@ -478,6 +505,14 @@ impl SftpConnection {
         let (tx, rx) = mpsc::channel();
         self.cmd_tx
             .send(SftpCmd::Rename { old: old.to_string(), new: new.to_string(), resp: tx })
+            .map_err(|e| format!("Send error: {}", e))?;
+        rx.recv().map_err(|e| format!("Receive error: {}", e))?
+    }
+
+    pub fn create(&self, path: &str, is_dir: bool, mode: u32) -> Result<(), String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd_tx
+            .send(SftpCmd::Create { path: path.to_string(), is_dir, mode, resp: tx })
             .map_err(|e| format!("Send error: {}", e))?;
         rx.recv().map_err(|e| format!("Receive error: {}", e))?
     }

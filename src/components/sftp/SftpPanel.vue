@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, reactive, onMounted, onUnmounted } from 'vue'
 import { useSftpStore } from '../../stores/sftpStore'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
@@ -12,6 +12,7 @@ const icons = {
   up: svg('<path d="M5 3h14"/><path d="m18 13-6-6-6 6"/><path d="M12 7v14"/>'),
   refresh: svg('<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>'),
   folderPlus: svg('<path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>'),
+  filePlus: svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>'),
   upload: svg('<path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'),
   download: svg('<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>'),
   close: svg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
@@ -41,13 +42,19 @@ const username = ref('')
 const password = ref('')
 const connecting = ref(false)
 const selectedFile = ref<string | null>(null)
-const newDirName = ref('')
-const showNewDir = ref(false)
+const showCreateDialog = ref(false)
+const createName = ref('')
+const createIsDir = ref(true)
+const createPerms = reactive({
+  owner_r: true, owner_w: true, owner_x: true,
+  group_r: true, group_w: false, group_x: false,
+  other_r: true, other_w: false, other_x: false,
+})
 const renameTarget = ref<FileEntry | null>(null)
 const renameValue = ref('')
 const dragOver = ref(false)
 const unlistens: Array<() => void> = []
-const userDisconnected = ref(false)
+
 const uploadTasks = ref<UploadTask[]>([])
 const downloadTasks = ref<UploadTask[]>([])
 const ctxEntry = ref<FileEntry | null>(null)
@@ -201,11 +208,6 @@ function parentDir(path: string): string {
   return idx <= 0 ? '/' : p.slice(0, idx)
 }
 
-function handleDisconnect() {
-  userDisconnected.value = true
-  store.disconnect()
-}
-
 async function doConnect() {
   if (!host.value.trim()) return
   connecting.value = true
@@ -327,12 +329,49 @@ async function confirmRename() {
   renameValue.value = ''
 }
 
-async function doMkdir() {
-  if (!newDirName.value.trim()) return
-  const path = store.currentPath.replace(/\/?$/, '/') + newDirName.value.trim()
-  await store.mkdir(path)
-  newDirName.value = ''
-  showNewDir.value = false
+function permsToMode(): number {
+  const p = createPerms
+  let mode = 0
+  if (p.owner_r) mode |= 0o400
+  if (p.owner_w) mode |= 0o200
+  if (p.owner_x) mode |= 0o100
+  if (p.group_r) mode |= 0o040
+  if (p.group_w) mode |= 0o020
+  if (p.group_x) mode |= 0o010
+  if (p.other_r) mode |= 0o004
+  if (p.other_w) mode |= 0o002
+  if (p.other_x) mode |= 0o001
+  return mode
+}
+
+function openCreateDialog(isDir: boolean) {
+  createName.value = ''
+  createIsDir.value = isDir
+  // default perms: 755 for dirs, 644 for files
+  createPerms.owner_r = true
+  createPerms.owner_w = true
+  createPerms.owner_x = isDir
+  createPerms.group_r = true
+  createPerms.group_w = false
+  createPerms.group_x = isDir
+  createPerms.other_r = true
+  createPerms.other_w = false
+  createPerms.other_x = isDir
+  showCreateDialog.value = true
+}
+
+async function doClose() {
+  if (store.connected) await store.disconnect()
+  emit('close')
+}
+
+async function doCreateItem() {
+  if (!createName.value.trim()) return
+  const path = store.currentPath.replace(/\/?$/, '/') + createName.value.trim()
+  const mode = permsToMode()
+  await store.createFile(path, createIsDir.value, mode)
+  createName.value = ''
+  showCreateDialog.value = false
 }
 
 function fileIcon(entry: FileEntry): string {
@@ -352,7 +391,7 @@ function fileIcon(entry: FileEntry): string {
   <div class="sftp-panel">
     <div class="panel-header">
       <span class="panel-title">{{ t('sftp.panel_title') }}</span>
-      <button class="panel-btn" :title="t('sftp.close')" @click="emit('close')">✕</button>
+      <button class="panel-btn" :title="t('sftp.close')" @click="doClose">✕</button>
     </div>
 
     <!-- Connection form -->
@@ -374,16 +413,10 @@ function fileIcon(entry: FileEntry): string {
         <div class="toolbar-actions">
           <button class="tb-btn" :title="t('sftp.go_up')" @click="goUp" v-html="icons.up" />
           <button class="tb-btn" :title="t('sftp.refresh')" @click="store.listDir(store.currentPath)" v-html="icons.refresh" />
-          <button class="tb-btn" :title="t('sftp.mkdir')" @click="showNewDir = !showNewDir" v-html="icons.folderPlus" />
+          <button class="tb-btn" :title="t('sftp.mkdir')" @click="openCreateDialog(true)" v-html="icons.folderPlus" />
+          <button class="tb-btn" :title="t('sftp.new_file')" @click="openCreateDialog(false)" v-html="icons.filePlus" />
           <button class="tb-btn" :title="t('sftp.upload')" @click="doUpload" v-html="icons.upload" />
-          <button class="tb-btn" :title="t('sftp.disconnect')" @click="handleDisconnect" v-html="icons.close" />
         </div>
-      </div>
-
-      <!-- New dir input -->
-      <div v-if="showNewDir" class="inline-form">
-        <input v-model="newDirName" :placeholder="t('sftp.folder_name')" @keydown.enter="doMkdir" @keydown.escape="showNewDir = false" />
-        <button @click="doMkdir">{{ t('sftp.ok') }}</button>
       </div>
 
       <!-- Error -->
@@ -472,6 +505,53 @@ function fileIcon(entry: FileEntry): string {
             <div class="confirm-actions">
               <button class="btn btn-cancel" @click="cancelConfirmDelete">{{ t('common.cancel') }}</button>
               <button class="btn btn-danger" @click="doDelete(deleteConfirm)">{{ t('common.delete') }}</button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+
+      <!-- Create dialog -->
+      <Teleport to="body">
+        <div v-if="showCreateDialog" class="confirm-overlay" @click="showCreateDialog = false">
+          <div class="confirm-box create-box" @click.stop>
+            <div class="confirm-msg">{{ t('sftp.create_title', [createIsDir ? t('sftp.dir') : t('sftp.file')]) }}</div>
+            <div class="create-name-row">
+              <input v-model="createName" class="create-name-input" :placeholder="t('sftp.enter_name')" @keydown.enter="doCreateItem" />
+            </div>
+            <div class="create-type-row">
+              <label><input type="radio" v-model="createIsDir" :value="true" /> {{ t('sftp.dir') }}</label>
+              <label><input type="radio" v-model="createIsDir" :value="false" /> {{ t('sftp.file') }}</label>
+            </div>
+            <div class="create-perms">
+              <div class="perm-row perm-header">
+                <span class="perm-label"></span>
+                <span class="perm-col">r</span>
+                <span class="perm-col">w</span>
+                <span class="perm-col">x</span>
+              </div>
+              <div class="perm-row">
+                <span class="perm-label">{{ t('sftp.owner') }}</span>
+                <span class="perm-col"><input type="checkbox" v-model="createPerms.owner_r" /></span>
+                <span class="perm-col"><input type="checkbox" v-model="createPerms.owner_w" /></span>
+                <span class="perm-col"><input type="checkbox" v-model="createPerms.owner_x" /></span>
+              </div>
+              <div class="perm-row">
+                <span class="perm-label">{{ t('sftp.group') }}</span>
+                <span class="perm-col"><input type="checkbox" v-model="createPerms.group_r" /></span>
+                <span class="perm-col"><input type="checkbox" v-model="createPerms.group_w" /></span>
+                <span class="perm-col"><input type="checkbox" v-model="createPerms.group_x" /></span>
+              </div>
+              <div class="perm-row">
+                <span class="perm-label">{{ t('sftp.other') }}</span>
+                <span class="perm-col"><input type="checkbox" v-model="createPerms.other_r" /></span>
+                <span class="perm-col"><input type="checkbox" v-model="createPerms.other_w" /></span>
+                <span class="perm-col"><input type="checkbox" v-model="createPerms.other_x" /></span>
+              </div>
+              <div class="perm-mode">chmod {{ permsToMode().toString(8) }}</div>
+            </div>
+            <div class="confirm-actions">
+              <button class="btn btn-cancel" @click="showCreateDialog = false">{{ t('common.cancel') }}</button>
+              <button class="btn btn-primary" @click="doCreateItem" :disabled="!createName.trim()">{{ t('sftp.ok') }}</button>
             </div>
           </div>
         </div>
@@ -1060,7 +1140,87 @@ function fileIcon(entry: FileEntry): string {
 .confirm-actions .btn-danger:hover {
   opacity: 0.85;
 }
-
+.confirm-actions .btn-primary {
+  background: var(--accent);
+  color: var(--bg-base);
+}
+.confirm-actions .btn-primary:hover {
+  opacity: 0.85;
+}
+.confirm-actions .btn-primary:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.create-box {
+  min-width: 300px;
+}
+.create-name-row {
+  margin-bottom: 12px;
+}
+.create-name-input {
+  width: 100%;
+  background: var(--bg-surface0);
+  border: 1px solid var(--bg-surface1);
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 13px;
+  outline: none;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+.create-name-input:focus {
+  border-color: var(--accent);
+}
+.create-type-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.create-type-row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--text);
+}
+.create-perms {
+  margin-bottom: 12px;
+}
+.perm-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+.perm-row .perm-label {
+  width: 48px;
+  flex-shrink: 0;
+  color: var(--text-sub0);
+}
+.perm-col {
+  width: 28px;
+  flex-shrink: 0;
+  text-align: center;
+}
+.perm-header .perm-col {
+  color: var(--text-overlay0);
+  font-weight: 600;
+}
+.perm-row input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  display: block;
+  margin: 0 auto;
+}
+.perm-mode {
+  margin-top: 4px;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-overlay0);
+}
 .row-menu {
   position: fixed;
   z-index: 10001;

@@ -85,6 +85,13 @@ export const useSftpStore = defineStore('sftp', () => {
     await listDir(currentPath.value)
   }
 
+  async function createFile(path: string, isDir: boolean, mode: number) {
+    if (!connId.value) return
+    error.value = ''
+    await invoke('sftp_create', { connId: connId.value, path, isDir, mode })
+    await listDir(currentPath.value)
+  }
+
   async function mkdir(path: string) {
     if (!connId.value) return
     error.value = ''
@@ -107,6 +114,6 @@ export const useSftpStore = defineStore('sftp', () => {
   return {
     connId, connected, currentPath, entries, loading, error,
     connect, disconnect, listDir, download, upload, cancelTransfer, remove, renameItem, mkdir,
-    readFile, writeFile,
+    createFile, readFile, writeFile,
   }
 })
