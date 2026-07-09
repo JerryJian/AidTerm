@@ -3,11 +3,6 @@ import { useTerminalStore } from '../../stores/terminal'
 import type { ToolTab, TerminalTab } from '../../types'
 import SftpPanel from '../sftp/SftpPanel.vue'
 import TunnelPanel from '../tunnel/TunnelPanel.vue'
-import ProxyPanel from '../proxy/ProxyPanel.vue'
-import SnippetPanel from '../snippet/SnippetPanel.vue'
-import TriggerPanel from '../trigger/TriggerPanel.vue'
-import KeyManagerPanel from '../keychain/KeyManagerPanel.vue'
-import KnownHostsPanel from '../keychain/KnownHostsPanel.vue'
 
 const props = defineProps<{
   tabId: string
@@ -20,14 +15,9 @@ const emit = defineEmits<{
 
 const terminalStore = useTerminalStore()
 
-const toolMeta: Record<ToolTab, { icon: string }> = {
+const toolMeta: Record<string, { icon: string }> = {
   sftp: { icon: '\uD83D\uDCC2' },
   tunnel: { icon: '\uD83D\uDD0C' },
-  proxy: { icon: '\uD83C\uDF10' },
-  snippet: { icon: '\u26A1' },
-  trigger: { icon: '\uD83D\uDD2B' },
-  key: { icon: '\uD83D\uDD11' },
-  knownHosts: { icon: '\uD83D\uDDC2' },
 }
 
 const openToolTabs = () => props.tab.openToolTabs ?? []
@@ -66,11 +56,6 @@ function onCloseTab(e: MouseEvent, tool: ToolTab) {
         :tab-id="tabId"
         :tab="tab"
       />
-      <ProxyPanel v-show="activeToolTab() === 'proxy'" />
-      <SnippetPanel v-show="activeToolTab() === 'snippet'" />
-      <TriggerPanel v-show="activeToolTab() === 'trigger'" />
-      <KeyManagerPanel v-show="activeToolTab() === 'key'" />
-      <KnownHostsPanel v-show="activeToolTab() === 'knownHosts'" />
     </div>
   </div>
 </template>

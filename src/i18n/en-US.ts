@@ -368,6 +368,7 @@ export default {
     copy_path: 'Copy Private Key Path',
     delete: 'Delete',
     refresh: 'Refresh',
+    known_hosts: 'Known Hosts',
     known_hosts_empty: '~/.ssh/known_hosts is empty',
   },
   ai: {

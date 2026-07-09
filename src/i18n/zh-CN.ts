@@ -368,6 +368,7 @@ export default {
     copy_path: '复制私钥路径',
     delete: '删除',
     refresh: '刷新',
+    known_hosts: '已知主机',
     known_hosts_empty: '~/.ssh/known_hosts 为空',
   },
   ai: {

@@ -16,7 +16,7 @@ import 'splitpanes/dist/splitpanes.css'
 import TabBar from './components/terminal/TabBar.vue'
 import TitleBar from './components/titlebar/TitleBar.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
-import SessionPanel from './components/session/SessionPanel.vue'
+import LeftSidebar from './components/sidebar/LeftSidebar.vue'
 
 import StatusBar from './components/status/StatusBar.vue'
 import SshDialog from './components/session/SshDialog.vue'
@@ -341,7 +341,7 @@ onUnmounted(() => {
     <div class="content-area">
       <Splitpanes>
         <Pane v-if="ui.leftSidebar" :size="ui.leftSidebarPct" :min-size="15" :max-size="50">
-          <SessionPanel
+          <LeftSidebar
             @connect-session="onConnectSession"
             @new-session="onNewSession"
             @edit-session="onEditSession"

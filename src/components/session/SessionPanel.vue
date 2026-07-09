@@ -12,7 +12,6 @@ const emit = defineEmits<{
   connectSession: [session: SavedSession]
   newSession: []
   editSession: [session: SavedSession]
-  close: []
 }>()
 
 onMounted(() => {
@@ -40,12 +39,9 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
 
 <template>
   <div class="session-panel">
-    <div class="panel-header">
-      <span class="panel-title">{{ t('session_panel.title') }}</span>
-      <div class="panel-actions">
-        <button class="panel-btn" :title="t('session_panel.connect')" @click="emit('newSession')">＋</button>
-        <button class="panel-btn" :title="t('sftp.close')" @click="emit('close')">✕</button>
-      </div>
+    <div class="toolbar">
+      <span class="toolbar-title">{{ t('session_panel.title') }}</span>
+      <button class="tb-btn" @click="emit('newSession')">+ {{ t('session_panel.connect') }}</button>
     </div>
 
     <div class="session-list">
@@ -100,51 +96,35 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
 
 <style scoped>
 .session-panel {
-  min-width: 180px;
   height: 100%;
-  background: var(--bg-mantle);
-  border-right: 1px solid var(--bg-surface0);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.panel-header {
+.toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--bg-surface0);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border, var(--bg-surface0));
+  background: var(--bg-mantle);
 }
-
-.panel-title {
+.toolbar-title {
+  font-size: 12px;
   font-weight: 600;
-  font-size: 13px;
   color: var(--text);
 }
-
-.panel-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.panel-btn {
-  background: none;
-  border: 1px solid transparent;
-  color: var(--text-sub0);
-  cursor: pointer;
-  width: 24px;
-  height: 24px;
+.tb-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--border, var(--bg-surface0));
   border-radius: 4px;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.panel-btn:hover {
   background: var(--bg-surface0);
   color: var(--text);
+  cursor: pointer;
+  font-size: 11px;
 }
+.tb-btn:hover { background: var(--bg-surface1); }
 
 .session-list {
   flex: 1;

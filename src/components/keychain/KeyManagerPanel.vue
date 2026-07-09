@@ -5,10 +5,6 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { useI18n } from 'vue-i18n'
 import type { KeyInfo } from '../../types'
 
-const emit = defineEmits<{
-  close: []
-}>()
-
 const { t } = useI18n()
 
 const keys = ref<KeyInfo[]>([])
@@ -119,12 +115,11 @@ function copyToClipboard(text: string) {
 
 <template>
   <div class="key-panel">
-    <div class="panel-header">
-      <span class="panel-title">🔑 {{ t('keychain.title') }}</span>
-      <div class="panel-actions">
-        <button class="panel-btn" @click="showGenerate = true">{{ t('keychain.generate') }}</button>
-        <button class="panel-btn" @click="showImport = true">{{ t('keychain.import') }}</button>
-        <button class="panel-btn" @click="emit('close')">✕</button>
+    <div class="toolbar">
+      <span class="toolbar-title">{{ t('keychain.title') }}</span>
+      <div class="toolbar-actions">
+        <button class="tb-btn" @click="showGenerate = true">{{ t('keychain.generate') }}</button>
+        <button class="tb-btn" @click="showImport = true">{{ t('keychain.import') }}</button>
       </div>
     </div>
 
@@ -219,38 +214,33 @@ function copyToClipboard(text: string) {
   height: 100%;
 }
 
-.panel-header {
+.toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border, var(--bg-surface0));
   background: var(--bg-mantle);
-  border-bottom: 1px solid var(--bg-surface0);
 }
-
-.panel-title {
-  font-size: 13px;
+.toolbar-title {
+  font-size: 12px;
   font-weight: 600;
   color: var(--text);
 }
-
-.panel-actions {
+.toolbar-actions {
   display: flex;
   gap: 4px;
 }
-
-.panel-btn {
-  border: 1px solid var(--bg-surface1);
+.tb-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--border, var(--bg-surface0));
+  border-radius: 4px;
   background: var(--bg-surface0);
   color: var(--text);
   cursor: pointer;
-  padding: 4px 10px;
-  border-radius: 4px;
   font-size: 11px;
 }
-.panel-btn:hover {
-  background: var(--bg-surface1);
-}
+.tb-btn:hover { background: var(--bg-surface1); }
 
 .notification {
   padding: 8px 12px;

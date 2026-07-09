@@ -5,13 +5,16 @@ import { setLanguage } from '../../i18n'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { useAiStore } from '../../stores/aiStore'
+import { useProxyStore } from '../../stores/proxyStore'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { open } from '@tauri-apps/plugin-dialog'
+import type { ProxyConfig, ProxyType } from '../../types'
 
 const { t, locale } = useI18n()
 const settings = useSettingsStore()
 const theme = useThemeStore()
 const ai = useAiStore()
+const proxyStore = useProxyStore()
 
 const emit = defineEmits<{
   close: []
@@ -21,7 +24,59 @@ const escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close')
 onMounted(() => document.addEventListener('keydown', escHandler))
 onUnmounted(() => document.removeEventListener('keydown', escHandler))
 
-const activeTab = ref<'general' | 'ai'>('general')
+onMounted(() => proxyStore.refresh())
+
+const activeTab = ref<'general' | 'ai' | 'proxy'>('general')
+const showProxyForm = ref(false)
+const editProxyId = ref<string | null>(null)
+const proxyForm = ref({
+  name: '',
+  proxy_type: 'Http' as ProxyType,
+  host: '',
+  port: 3128,
+  username: '',
+  password: '',
+  private_key_path: '',
+})
+
+function resetProxyForm() {
+  editProxyId.value = null
+  proxyForm.value = { name: '', proxy_type: 'Http', host: '', port: 3128, username: '', password: '', private_key_path: '' }
+  showProxyForm.value = true
+}
+
+function editProxy(p: ProxyConfig) {
+  editProxyId.value = p.id
+  proxyForm.value = { name: p.name, proxy_type: p.proxy_type, host: p.host, port: p.port, username: p.username ?? '', password: p.password ?? '', private_key_path: p.private_key_path ?? '' }
+  showProxyForm.value = true
+}
+
+async function saveProxy() {
+  const f = proxyForm.value
+  if (!f.name || !f.host || !f.port) return
+  const config: ProxyConfig = {
+    id: editProxyId.value ?? crypto.randomUUID(),
+    name: f.name,
+    proxy_type: f.proxy_type,
+    host: f.host,
+    port: f.port,
+    username: f.username || null,
+    password: f.password || null,
+    private_key_path: f.private_key_path || null,
+  }
+  await proxyStore.save(config)
+  showProxyForm.value = false
+}
+
+async function deleteProxy(id: string) {
+  await proxyStore.remove(id)
+}
+
+function proxyTypeLabel(t: ProxyType): string {
+  if (t === 'Http') return 'HTTP CONNECT'
+  if (t === 'Socks5') return 'SOCKS5'
+  return 'Jump Host'
+}
 const showAiKey = ref(false)
 const aiKeyBuffer = ref(ai.config.api_key)
 
@@ -65,6 +120,7 @@ async function toggleFullscreen() {
       <div class="settings-tabs">
         <button class="st-tab" :class="{ active: activeTab === 'general' }" @click="activeTab = 'general'">⚙️ {{ t('settings.general') }}</button>
         <button class="st-tab" :class="{ active: activeTab === 'ai' }" @click="activeTab = 'ai'">🤖 {{ t('ai.title') }}</button>
+        <button class="st-tab" :class="{ active: activeTab === 'proxy' }" @click="activeTab = 'proxy'">🌐 {{ t('proxy.title') }}</button>
       </div>
       <div class="modal-body">
         <template v-if="activeTab === 'general'">
@@ -183,6 +239,57 @@ async function toggleFullscreen() {
             <button class="action-btn" @click="ai.clearHistory()">{{ t('settings.ai_clear_history') }}</button>
           </div>
         </div>
+        </template>
+
+        <template v-if="activeTab === 'proxy'">
+          <div class="section">
+            <div class="section-header">
+              <h3>🌐 {{ t('proxy.title') }}</h3>
+              <button class="action-btn" @click="resetProxyForm">+ {{ t('proxy.add') }}</button>
+            </div>
+            <div v-for="p in proxyStore.proxies.value" :key="p.id" class="proxy-item">
+              <div class="proxy-info">
+                <strong>{{ p.name }}</strong>
+                <span class="proxy-meta">{{ proxyTypeLabel(p.proxy_type) }} — {{ p.host }}:{{ p.port }}</span>
+              </div>
+              <div class="proxy-actions">
+                <button class="action-btn" @click="editProxy(p)">✎</button>
+                <button class="action-btn danger" @click="deleteProxy(p.id)">🗑</button>
+              </div>
+            </div>
+            <div v-if="proxyStore.proxies.value.length === 0" class="empty-item">{{ t('proxy.no_proxies') }}</div>
+          </div>
+
+          <div v-if="showProxyForm" class="proxy-overlay">
+            <div class="proxy-dialog" @click.stop>
+              <div class="dialog-hdr">
+                <span>{{ editProxyId ? t('common.edit') : t('proxy.add') }}</span>
+                <button class="dialog-close" @click="showProxyForm = false">✕</button>
+              </div>
+              <div class="dialog-bd">
+                <label class="fld-label">{{ t('proxy.name') }}</label>
+                <input v-model="proxyForm.name" class="fld-input" />
+                <label class="fld-label">{{ t('proxy.type') }}</label>
+                <select v-model="proxyForm.proxy_type" class="fld-input">
+                  <option value="Http">HTTP</option>
+                  <option value="Socks5">SOCKS5</option>
+                  <option value="JumpHost">Jump Host</option>
+                </select>
+                <label class="fld-label">{{ t('proxy.host') }}</label>
+                <input v-model="proxyForm.host" class="fld-input" />
+                <label class="fld-label">{{ t('proxy.port') }}</label>
+                <input v-model.number="proxyForm.port" type="number" class="fld-input" min="1" max="65535" />
+                <label class="fld-label">{{ t('proxy.username') }}</label>
+                <input v-model="proxyForm.username" class="fld-input" />
+                <label class="fld-label">{{ t('proxy.password') }}</label>
+                <input v-model="proxyForm.password" type="password" class="fld-input" />
+                <div class="dialog-actions">
+                  <button class="action-btn" @click="showProxyForm = false">{{ t('common.cancel') }}</button>
+                  <button class="btn-primary" @click="saveProxy">{{ t('common.save') }}</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </template>
       </div>
     </div>
@@ -419,4 +526,61 @@ async function toggleFullscreen() {
   color: var(--danger);
   font-size: 12px;
 }
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.section-header h3 { margin: 0; border: none; padding: 0; }
+.proxy-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  background: var(--bg-mantle);
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+.proxy-info { display: flex; flex-direction: column; gap: 2px; }
+.proxy-info strong { font-size: 13px; color: var(--text); }
+.proxy-meta { font-size: 11px; color: var(--text-sub0); }
+.proxy-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.empty-item { padding: 16px; text-align: center; color: var(--text-overlay0); font-size: 12px; }
+.proxy-overlay {
+  position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+}
+.proxy-dialog {
+  background: var(--bg-base); border: 1px solid var(--bg-surface0); border-radius: 8px;
+  width: 380px; max-height: 80vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.dialog-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-bottom: 1px solid var(--bg-surface0);
+  font-size: 13px; font-weight: 600;
+}
+.dialog-close {
+  border: none; background: none; color: var(--text-sub0);
+  cursor: pointer; padding: 2px 6px; border-radius: 4px; font-size: 14px;
+}
+.dialog-close:hover { background: var(--bg-surface1); color: var(--text); }
+.dialog-bd {
+  padding: 14px; display: flex; flex-direction: column; gap: 8px;
+}
+.fld-label { font-size: 11px; color: var(--text-sub0); }
+.fld-input {
+  padding: 6px 8px; background: var(--bg-mantle); border: 1px solid var(--bg-surface1);
+  border-radius: 4px; color: var(--text); font-size: 12px; outline: none;
+}
+.fld-input:focus { border-color: var(--accent); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.dialog-actions .btn-primary {
+  padding: 6px 16px; border: none; border-radius: 4px; font-size: 13px;
+  cursor: pointer; background: var(--accent); color: var(--bg-base); font-weight: 600;
+}
+.dialog-actions .btn-primary:hover { opacity: 0.85; }
 </style>

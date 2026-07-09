@@ -44,7 +44,7 @@ export interface SystemInfo {
   shell: string
 }
 
-export type ToolTab = 'sftp' | 'tunnel' | 'proxy' | 'snippet' | 'trigger' | 'key' | 'knownHosts'
+export type ToolTab = 'sftp' | 'tunnel'
 
 export interface TerminalTab {
   id: string

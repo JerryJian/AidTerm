@@ -5,7 +5,7 @@ import { useTriggerStore } from '../../stores/triggerStore'
 
 const { t } = useI18n()
 
-const emit = defineEmits<{ close: [] }>()
+
 
 const store = useTriggerStore()
 
@@ -56,13 +56,12 @@ function toggleEnabled(t: { id: string; enabled: boolean }) {
 
 <template>
   <div class="panel">
-    <div class="panel-header">
-      <span>{{ t('trigger.title') }}</span>
-      <button class="panel-close" @click="emit('close')">✕</button>
+    <div class="toolbar">
+      <span class="toolbar-title">{{ t('trigger.title') }}</span>
+      <button class="tb-btn" @click="resetForm">+ {{ t('trigger.add') }}</button>
     </div>
 
     <div class="panel-body">
-      <button class="btn btn-add" @click="resetForm">+ {{ t('trigger.add') }}</button>
 
       <div v-for="tr in store.triggers.value" :key="tr.id" class="trigger-item" :class="{ disabled: !tr.enabled }">
         <div class="trigger-info">
@@ -129,15 +128,29 @@ function toggleEnabled(t: { id: string; enabled: boolean }) {
   overflow-y: auto;
 }
 
-.panel-header {
+.toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--bg-surface0);
-  font-size: 13px;
-  font-weight: 600;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border, var(--bg-surface0));
+  background: var(--bg-mantle);
 }
+.toolbar-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.tb-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--border, var(--bg-surface0));
+  border-radius: 4px;
+  background: var(--bg-surface0);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 11px;
+}
+.tb-btn:hover { background: var(--bg-surface1); }
 
 .panel-close {
   border: none;
