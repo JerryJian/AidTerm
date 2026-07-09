@@ -10,7 +10,7 @@ import { useTerminal } from '../../hooks/useTerminal'
 import { useTerminalStore } from '../../stores/terminal'
 import { useThemeStore } from '../../stores/themeStore'
 import { useAiConversation } from '../../hooks/useAiConversation'
-import type { SshConnectionInfo, TelnetConnectionInfo, SystemInfo } from '../../types'
+import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SystemInfo } from '../../types'
 import AiConfirmOverlay from '../ai/AiConfirmOverlay.vue'
 import { useAiStore } from '../../stores/aiStore'
 import { useI18n } from 'vue-i18n'
@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 const props = defineProps<{
   sshInfo?: SshConnectionInfo
   telnetInfo?: TelnetConnectionInfo
+  serialInfo?: SerialConnectionInfo
 }>()
 
 const emit = defineEmits<{
@@ -46,7 +47,7 @@ let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 let lastSize = { w: 0, h: 0 }
 const suppressOutput = ref(false)
 
-const { createSession, sshConnect, telnetConnect, writeInput, resize, onOutput, killSession } = useTerminal()
+const { createSession, sshConnect, telnetConnect, serialConnect, writeInput, resize, onOutput, killSession } = useTerminal()
 
 function getXtermTheme() {
   const s = getComputedStyle(document.documentElement)
@@ -296,7 +297,9 @@ async function initTerminal() {
         )
       : props.telnetInfo
         ? await telnetConnect(props.telnetInfo.host, props.telnetInfo.port)
-        : await createSession(rows, cols, store.activeTab?.session?.subshell)
+        : props.serialInfo
+          ? await serialConnect(props.serialInfo)
+          : await createSession(rows, cols, store.activeTab?.session?.subshell)
 
     sessionId = id
     store.updateSessionId(store.activeTabId ?? '', id)

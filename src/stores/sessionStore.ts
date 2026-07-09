@@ -59,7 +59,7 @@ export const useSessionStore = defineStore('sessions', () => {
   function addSession(
     name: string,
     type: SavedSession['session_type'],
-    config: { host?: string; port?: number; username?: string; password?: string; privateKeyPath?: string },
+    config: { host?: string; port?: number; username?: string; password?: string; privateKeyPath?: string; data_bits?: number; stop_bits?: number; parity?: string; flow_control?: string },
     groupId?: string | null,
   ) {
     const session: SavedSession = {
@@ -75,6 +75,10 @@ export const useSessionStore = defineStore('sessions', () => {
       proxy_id: null,
       last_connected: null,
       created_at: new Date().toISOString(),
+      data_bits: config.data_bits ?? null,
+      stop_bits: config.stop_bits ?? null,
+      parity: config.parity ?? null,
+      flow_control: config.flow_control ?? null,
     }
     sessions.value.push(session)
     save()

@@ -34,6 +34,11 @@ const statusText = computed(() => {
       parts.push(`${telnet.host}:${telnet.port}`)
     }
 
+    const serial = tab.serialInfo
+    if (serial) {
+      parts.push(`${serial.portName} @ ${serial.baudRate} baud`)
+    }
+
     if (s.status === 'connected' && tab.systemInfo) {
       parts.push(`${tab.systemInfo.hostname} (${tab.systemInfo.os} ${tab.systemInfo.arch})`)
     }
@@ -80,6 +85,13 @@ const statusTooltip = computed(() => {
   if (telnet) {
     lines.push(`${t('status.host')}: ${telnet.host}`)
     lines.push(`${t('status.port')}: ${telnet.port}`)
+  }
+
+  const serial = tab.serialInfo
+  if (serial) {
+    lines.push(`Port: ${serial.portName}`)
+    lines.push(`Baud: ${serial.baudRate}`)
+    lines.push(`Data: ${serial.dataBits}${serial.stopBits}${serial.parity[0]}${serial.flowControl[0]}`)
   }
 
   if (tab.systemInfo) {

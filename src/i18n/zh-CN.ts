@@ -12,6 +12,7 @@ export default {
     local: '本地',
     ssh: 'SSH',
     telnet: 'Telnet',
+    serial: '串口',
   },
   titlebar: {
     minimize: '最小化',
@@ -63,6 +64,18 @@ export default {
     connect: '连接',
     cancel: '取消',
   },
+  serial_dialog: {
+    title: '串口连接',
+    port: '端口',
+    select_port: '选择串口...',
+    baud_rate: '波特率',
+    data_bits: '数据位',
+    stop_bits: '停止位',
+    parity: '校验位',
+    flow_control: '流控制',
+    connect: '连接',
+    cancel: '取消',
+  },
   session_panel: {
     title: '会话管理',
     groups: '分组',
@@ -98,6 +111,7 @@ export default {
     remote_connection: '远程连接',
     ssh: 'SSH...',
     telnet: 'Telnet...',
+    serial: '串口...',
   },
   tool_panel: {
     sftp: 'SFTP',

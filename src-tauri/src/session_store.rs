@@ -18,6 +18,14 @@ pub struct SavedSession {
     pub private_key_path: Option<String>,
     pub last_connected: Option<String>,
     pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_bits: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_bits: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flow_control: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

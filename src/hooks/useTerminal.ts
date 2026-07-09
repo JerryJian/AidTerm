@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import type { TerminalOutputPayload } from '../types'
+import type { TerminalOutputPayload, SerialConnectionInfo } from '../types'
 
 export function useTerminal() {
   const sessionId = ref<string | null>(null)
@@ -19,6 +19,24 @@ export function useTerminal() {
     sessionId.value = id
     isConnected.value = true
     return id
+  }
+
+  async function serialConnect(info: SerialConnectionInfo) {
+    const id = await invoke<string>('serial_connect', {
+      portName: info.portName,
+      baudRate: info.baudRate,
+      dataBits: info.dataBits,
+      stopBits: info.stopBits,
+      parity: info.parity,
+      flowControl: info.flowControl,
+    })
+    sessionId.value = id
+    isConnected.value = true
+    return id
+  }
+
+  async function listSerialPorts() {
+    return await invoke<{ port_name: string }[]>('serial_list_ports')
   }
 
   async function sshConnect(
@@ -103,6 +121,8 @@ export function useTerminal() {
     createSession,
     sshConnect,
     telnetConnect,
+    serialConnect,
+    listSerialPorts,
     writeInput,
     resize,
     killSession,

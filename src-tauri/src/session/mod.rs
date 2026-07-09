@@ -6,12 +6,14 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::AppHandle;
 use tokio::sync::oneshot;
+use crate::serial;
 use crate::proxy;
 
 pub(crate) enum Session {
     Local(local::LocalSession),
     Ssh(ssh::SshConnection),
     Telnet(telnet::TelnetConnection),
+    Serial(serial::SerialConnection),
 }
 
 pub(crate) struct SessionManager {
@@ -50,6 +52,18 @@ impl SessionManager {
         Ok(())
     }
 
+    pub fn connect_serial(
+        &self,
+        id: String,
+        config: serial::SerialConfig,
+        app_handle: AppHandle,
+    ) -> Result<(), String> {
+        let session = serial::SerialConnection::connect(id.clone(), config, app_handle)?;
+        let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+        sessions.insert(id, Session::Serial(session));
+        Ok(())
+    }
+
     pub fn connect_ssh(
         &self,
         id: String,
@@ -81,6 +95,7 @@ impl SessionManager {
             Session::Local(s) => s.write(data),
             Session::Ssh(s) => s.write(data),
             Session::Telnet(s) => s.write(data),
+            Session::Serial(s) => s.write(data),
         }
     }
 
@@ -91,6 +106,7 @@ impl SessionManager {
             Session::Local(s) => s.resize(rows, cols),
             Session::Ssh(s) => s.resize(rows, cols),
             Session::Telnet(_) => Ok(()),
+            Session::Serial(_) => Ok(()),
         }
     }
 
@@ -116,6 +132,7 @@ impl SessionManager {
                 Session::Local(s) => s.kill(),
                 Session::Ssh(mut s) => s.kill(),
                 Session::Telnet(mut s) => s.kill(),
+                Session::Serial(mut s) => s.kill(),
             }
         }
         Ok(())

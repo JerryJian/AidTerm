@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { TerminalTab, TerminalSession, SshConnectionInfo, TelnetConnectionInfo, SystemInfo, ToolTab } from '../types'
+import type { TerminalTab, TerminalSession, SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SystemInfo, ToolTab } from '../types'
 
 let nextId = 1
 function generateId(): string {
@@ -18,7 +18,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     return tabs.value.find(t => t.id === activeTabId.value) ?? null
   })
 
-  function addTab(type: TerminalSession['type'] = 'local', sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo, subshell?: string) {
+  function addTab(type: TerminalSession['type'] = 'local', sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo, subshell?: string, serialInfo?: SerialConnectionInfo) {
     const id = generateId()
     const title = subshell ? subshell.replace(/\.exe$/, '') : (type === 'local' ? 'Local' : type.toUpperCase())
     const tab: TerminalTab = {
@@ -33,6 +33,7 @@ export const useTerminalStore = defineStore('terminal', () => {
       },
       sshInfo,
       telnetInfo,
+      serialInfo,
     }
     tabs.value.push(tab)
     activeTabId.value = id

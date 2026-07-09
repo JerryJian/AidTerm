@@ -38,3 +38,4 @@ base64 = "0.22"
 async-openai = { version = "0.41", default-features = false, features = ["chat-completion", "model"] }
 ollama-rs = "0.3"
 anthropic-ai-sdk = "0.2"
+tokio-serial = "5.5"

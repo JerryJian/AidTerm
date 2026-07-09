@@ -12,6 +12,7 @@ export default {
     local: 'Local',
     ssh: 'SSH',
     telnet: 'Telnet',
+    serial: 'Serial',
   },
   titlebar: {
     minimize: 'Minimize',
@@ -63,6 +64,18 @@ export default {
     connect: 'Connect',
     cancel: 'Cancel',
   },
+  serial_dialog: {
+    title: 'Serial Connection',
+    port: 'Port',
+    select_port: 'Select port...',
+    baud_rate: 'Baud Rate',
+    data_bits: 'Data Bits',
+    stop_bits: 'Stop Bits',
+    parity: 'Parity',
+    flow_control: 'Flow Control',
+    connect: 'Connect',
+    cancel: 'Cancel',
+  },
   session_panel: {
     title: 'Session Manager',
     groups: 'Groups',
@@ -98,6 +111,7 @@ export default {
     remote_connection: 'Remote Connection',
     ssh: 'SSH...',
     telnet: 'Telnet...',
+    serial: 'Serial...',
   },
   tool_panel: {
     sftp: 'SFTP',

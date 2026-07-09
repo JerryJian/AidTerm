@@ -28,6 +28,15 @@ export interface TelnetConnectionInfo {
   port: number
 }
 
+export interface SerialConnectionInfo {
+  portName: string
+  baudRate: number
+  dataBits: number
+  stopBits: number
+  parity: string
+  flowControl: string
+}
+
 export interface TerminalSession {
   id: string
   title: string
@@ -52,6 +61,7 @@ export interface TerminalTab {
   session: TerminalSession | null
   sshInfo?: SshConnectionInfo
   telnetInfo?: TelnetConnectionInfo
+  serialInfo?: SerialConnectionInfo
   splitDirection?: 'horizontal' | 'vertical'
   children?: TerminalTab[]
   systemInfo?: SystemInfo
@@ -84,6 +94,10 @@ export interface SavedSession {
   proxy_id: string | null
   last_connected: string | null
   created_at: string
+  data_bits?: number | null
+  stop_bits?: number | null
+  parity?: string | null
+  flow_control?: string | null
 }
 
 export interface SavedSessionGroup {

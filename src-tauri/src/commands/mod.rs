@@ -4,6 +4,7 @@ use crate::ai;
 use crate::keychain;
 use crate::known_hosts;
 use crate::proxy;
+use crate::serial;
 use crate::session::SessionManager;
 use crate::session_store;
 use crate::sftp;
@@ -33,6 +34,35 @@ pub async fn telnet_connect(
     let id = uuid::Uuid::new_v4().to_string();
     manager.connect_telnet(id.clone(), host, port, app)?;
     Ok(id)
+}
+
+#[tauri::command]
+pub async fn serial_connect(
+    app: tauri::AppHandle,
+    manager: State<'_, SessionManager>,
+    port_name: String,
+    baud_rate: u32,
+    data_bits: u8,
+    stop_bits: u8,
+    parity: String,
+    flow_control: String,
+) -> Result<String, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let config = serial::SerialConfig {
+        port_name,
+        baud_rate,
+        data_bits,
+        stop_bits,
+        parity,
+        flow_control,
+    };
+    manager.connect_serial(id.clone(), config, app)?;
+    Ok(id)
+}
+
+#[tauri::command]
+pub fn serial_list_ports() -> Result<Vec<serial::SerialPortInfo>, String> {
+    serial::list_available_ports()
 }
 
 #[tauri::command]

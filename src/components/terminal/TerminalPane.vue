@@ -38,7 +38,7 @@ function onDividerDown(e: MouseEvent) {
 <template>
   <div class="terminal-pane-root" :class="{ dragging }">
     <div class="terminal-pane">
-      <TerminalWrapper :ssh-info="tab.sshInfo" :telnet-info="tab.telnetInfo" @newSsh="$emit('newSsh')" />
+      <TerminalWrapper :ssh-info="tab.sshInfo" :telnet-info="tab.telnetInfo" :serial-info="tab.serialInfo" @newSsh="$emit('newSsh')" />
     </div>
     <div v-if="tab.toolSidebarOpen" class="tool-pane" :style="{ width: toolWidth + 'px' }">
       <div class="divider" @mousedown="onDividerDown" />

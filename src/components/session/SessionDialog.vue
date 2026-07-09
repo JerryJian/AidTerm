@@ -11,22 +11,26 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  save: [data: { name: string; type: 'ssh' | 'telnet'; host: string; port: number; username: string; password: string; savePassword: boolean; groupName: string }]
+  save: [data: { name: string; type: 'ssh' | 'telnet' | 'serial'; host: string; port: number; username: string; password: string; savePassword: boolean; groupName: string; dataBits?: number; stopBits?: number; parity?: string; flowControl?: string }]
   close: []
 }>()
 
 const store = useSessionStore()
 
 const name = ref(props.session?.name || '')
-const sessionType = ref<'ssh' | 'telnet'>(props.session?.session_type === 'telnet' ? 'telnet' : 'ssh')
+const sessionType = ref<'ssh' | 'telnet' | 'serial'>(props.session?.session_type === 'telnet' ? 'telnet' : props.session?.session_type === 'serial' ? 'serial' : 'ssh')
 const host = ref(props.session?.host || '')
-const port = ref(props.session?.port || 22)
+const port = ref(props.session?.port || (props.session?.session_type === 'serial' ? 115200 : 22))
 const username = ref(props.session?.username || '')
 const password = ref(props.session?.password || '')
 const savePassword = ref(!!props.session?.password)
 const groupName = ref('')
 const showNewGroup = ref(false)
 const groupSelect = ref('')
+const serialDataBits = ref(props.session?.data_bits ?? 8)
+const serialStopBits = ref(props.session?.stop_bits ?? 1)
+const serialParity = ref(props.session?.parity ?? 'None')
+const serialFlowControl = ref(props.session?.flow_control ?? 'None')
 
 const existingGroupNames = computed(() => store.groups.map(g => g.name))
 const isEditing = computed(() => !!props.session)
@@ -59,7 +63,7 @@ function onGroupChange() {
 
 function onSubmit() {
   if (!name.value.trim() || !host.value.trim()) return
-  emit('save', {
+  const payload: any = {
     name: name.value.trim(),
     type: sessionType.value,
     host: host.value.trim(),
@@ -68,7 +72,14 @@ function onSubmit() {
     password: password.value,
     savePassword: savePassword.value,
     groupName: groupName.value.trim(),
-  })
+  }
+  if (sessionType.value === 'serial') {
+    payload.dataBits = serialDataBits.value
+    payload.stopBits = serialStopBits.value
+    payload.parity = serialParity.value
+    payload.flowControl = serialFlowControl.value
+  }
+  emit('save', payload)
 }
 
 </script>
@@ -90,6 +101,7 @@ function onSubmit() {
           <select v-model="sessionType" class="input">
             <option value="ssh">SSH</option>
             <option value="telnet">Telnet</option>
+            <option value="serial">Serial</option>
           </select>
         </label>
         <label class="field">
@@ -113,6 +125,41 @@ function onSubmit() {
             <input type="checkbox" v-model="savePassword" />
             {{ t('session_dialog.remember_password') }}
           </label>
+        </template>
+        <template v-if="sessionType === 'serial'">
+          <div class="field-row">
+            <label class="field">
+              <span class="field-label">{{ t('serial_dialog.data_bits') }}</span>
+              <select v-model.number="serialDataBits" class="input">
+                <option :value="5">5</option><option :value="6">6</option>
+                <option :value="7">7</option><option :value="8">8</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field-label">{{ t('serial_dialog.stop_bits') }}</span>
+              <select v-model.number="serialStopBits" class="input">
+                <option :value="1">1</option><option :value="2">2</option>
+              </select>
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span class="field-label">{{ t('serial_dialog.parity') }}</span>
+              <select v-model="serialParity" class="input">
+                <option value="None">None</option>
+                <option value="Odd">Odd</option>
+                <option value="Even">Even</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field-label">{{ t('serial_dialog.flow_control') }}</span>
+              <select v-model="serialFlowControl" class="input">
+                <option value="None">None</option>
+                <option value="Software">Software</option>
+                <option value="Hardware">Hardware</option>
+              </select>
+            </label>
+          </div>
         </template>
         <label class="field">
           <span class="field-label">{{ t('session_dialog.group') }}</span>

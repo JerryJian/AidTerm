@@ -5,7 +5,7 @@ import { useSessionStore } from './stores/sessionStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useUiStore } from './stores/uiStore'
 import { useThemeStore } from './stores/themeStore'
-import type { SshConnectionInfo, TelnetConnectionInfo, SavedSession } from './types'
+import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SavedSession } from './types'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -17,6 +17,7 @@ import LeftSidebar from './components/sidebar/LeftSidebar.vue'
 
 import StatusBar from './components/status/StatusBar.vue'
 import SshDialog from './components/session/SshDialog.vue'
+import SerialDialog from './components/session/SerialDialog.vue'
 import SessionDialog from './components/session/SessionDialog.vue'
 import SettingsDialog from './components/settings/SettingsDialog.vue'
 import FileEditor from './components/editor/FileEditor.vue'
@@ -138,6 +139,15 @@ function onQuickTelnet(host: string, port: number) {
   store.addTab('telnet', undefined, info)
 }
 
+function onSerialConnect(info: SerialConnectionInfo) {
+  ui.serialDialog = false
+  store.addTab('serial', undefined, undefined, undefined, info)
+}
+
+function onQuickSerial() {
+  ui.serialDialog = true
+}
+
 function onEditFile(remotePath: string, connId: string) {
   editorFile.value = { connId, remotePath }
 }
@@ -158,6 +168,17 @@ function onConnectSession(session: SavedSession) {
       port: session.port ?? 23,
     }
     store.addTab('telnet', undefined, info)
+    sessionStore.updateLastConnected(session.id)
+  } else if (session.session_type === 'serial') {
+    const info: SerialConnectionInfo = {
+      portName: session.host ?? '',
+      baudRate: session.port ?? 115200,
+      dataBits: session.data_bits ?? 8,
+      stopBits: session.stop_bits ?? 1,
+      parity: session.parity ?? 'None',
+      flowControl: session.flow_control ?? 'None',
+    }
+    store.addTab('serial', undefined, undefined, undefined, info)
     sessionStore.updateLastConnected(session.id)
   }
 }
@@ -192,9 +213,16 @@ function onLeftDividerDown(e: MouseEvent) {
   document.addEventListener('mouseup', onUp)
 }
 
-function onSaveSession(data: { name: string; type: 'ssh' | 'telnet'; host: string; port: number; username: string; password: string; savePassword: boolean; groupName: string }) {
+function onSaveSession(data: { name: string; type: 'ssh' | 'telnet' | 'serial'; host: string; port: number; username: string; password: string; savePassword: boolean; groupName: string; dataBits?: number; stopBits?: number; parity?: string; flowControl?: string }) {
   const existing = editingSession.value
   const groupId = sessionStore.ensureGroup(data.groupName)
+  const extra: Record<string, any> = {}
+  if (data.type === 'serial') {
+    extra.data_bits = data.dataBits
+    extra.stop_bits = data.stopBits
+    extra.parity = data.parity
+    extra.flow_control = data.flowControl
+  }
   if (existing) {
     sessionStore.updateSession(existing.id, {
       name: data.name,
@@ -204,6 +232,7 @@ function onSaveSession(data: { name: string; type: 'ssh' | 'telnet'; host: strin
       username: data.username,
       password: data.savePassword ? data.password : null,
       group_id: groupId,
+      ...extra,
     })
   } else {
     sessionStore.addSession(data.name, data.type, {
@@ -211,6 +240,7 @@ function onSaveSession(data: { name: string; type: 'ssh' | 'telnet'; host: strin
       port: data.port,
       username: data.username,
       password: data.savePassword ? data.password : undefined,
+      ...extra,
     }, groupId)
   }
   showSessionDialog.value = false
@@ -340,6 +370,7 @@ onUnmounted(() => {
       @lock-click="lockApp"
       @quick-ssh="onQuickSsh"
       @quick-telnet="onQuickTelnet"
+      @quick-serial="onQuickSerial"
       @connect-session="onConnectSession"
     />
     <div class="content-area">
@@ -382,6 +413,11 @@ onUnmounted(() => {
     :initial-password="sshDialogPrefill?.password"
     @connect="onSshConnect"
     @close="ui.sshDialog = false"
+  />
+  <SerialDialog
+    v-if="ui.serialDialog"
+    @connect="onSerialConnect"
+    @close="ui.serialDialog = false"
   />
   <SettingsDialog
     v-if="ui.settingsDialog"

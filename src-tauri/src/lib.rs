@@ -4,6 +4,7 @@ mod crypto;
 mod keychain;
 mod known_hosts;
 mod proxy;
+mod serial;
 mod session;
 mod session_store;
 mod sftp;
@@ -102,6 +103,8 @@ pub fn run() {
             commands::spawn_terminal,
             commands::ssh_connect,
             commands::telnet_connect,
+            commands::serial_connect,
+            commands::serial_list_ports,
             commands::write_terminal,
             commands::resize_terminal,
             commands::kill_terminal,
