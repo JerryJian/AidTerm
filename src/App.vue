@@ -349,7 +349,7 @@ onUnmounted(() => {
   <LockScreen v-if="locked" @unlocked="unlockApp" />
 
   <div class="app" :class="{ 'left-dragging': leftDragging }" :style="appStyle" @contextmenu.prevent>
-    <TitleBar />
+    <TitleBar @lock="lockApp" />
     <TabBar
       @lock-click="lockApp"
       @quick-ssh="onQuickSsh"

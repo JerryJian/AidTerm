@@ -3,8 +3,14 @@ import { ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useI18n } from 'vue-i18n'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { useUiStore } from '../../stores/uiStore'
 
 const { t } = useI18n()
+const ui = useUiStore()
+
+const emit = defineEmits<{
+  lock: []
+}>()
 
 const win = getCurrentWindow()
 const isMaximized = ref(false)
@@ -83,6 +89,19 @@ async function onInspect() {
     </div>
     <div class="titlebar-center" />
     <div class="titlebar-actions">
+      <button class="tb-btn" @click="ui.settingsDialog = true" :title="t('menu.settings')">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="8" cy="8" r="2.5" />
+          <path d="M8 1.5v1.5M8 13v1.5M3.5 3.5l1 1M11.5 11.5l1 1M1.5 8H3M13 8h1.5M3.5 12.5l1-1M11.5 4.5l1-1" />
+        </svg>
+      </button>
+      <button class="tb-btn" @click="emit('lock')" :title="t('menu.lock')">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4.5" y="7" width="7" height="6" rx="1" />
+          <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+        </svg>
+      </button>
+      <div class="titlebar-sep" />
       <button class="tb-btn minimize" @click="onMinimize" :title="t('titlebar.minimize')">
         <svg viewBox="0 0 12 12" width="12" height="12">
           <rect x="2" y="5.5" width="8" height="1" fill="currentColor" />
@@ -183,6 +202,13 @@ async function onInspect() {
 .tb-btn.close:hover {
   background: var(--danger);
   color: var(--bg-base);
+}
+
+.titlebar-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--bg-surface0);
+  margin: auto 2px;
 }
 </style>
 
