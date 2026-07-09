@@ -2,8 +2,23 @@ import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import type { ProxyConfig } from '../types'
 
-const proxies = ref<ProxyConfig[]>([])
+const STORAGE_KEY = 'aidterm_proxies'
+
+function loadFromStorage(): ProxyConfig[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+
+function saveToStorage(list: ProxyConfig[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+}
+
+const proxies = ref<ProxyConfig[]>(loadFromStorage())
 const loading = ref(false)
+let synced = false
 
 function genId(): string {
   return crypto.randomUUID()
@@ -13,7 +28,13 @@ export function useProxyStore() {
   async function refresh() {
     loading.value = true
     try {
-      proxies.value = await invoke<ProxyConfig[]>('proxy_list')
+      proxies.value = loadFromStorage()
+      if (!synced) {
+        synced = true
+        for (const p of proxies.value) {
+          await invoke('proxy_save', { config: p })
+        }
+      }
     } finally {
       loading.value = false
     }
@@ -29,6 +50,7 @@ export function useProxyStore() {
       } else {
         proxies.value.push(config)
       }
+      saveToStorage(proxies.value)
     } finally {
       loading.value = false
     }
@@ -39,6 +61,7 @@ export function useProxyStore() {
     try {
       await invoke('proxy_delete', { id })
       proxies.value = proxies.value.filter(p => p.id !== id)
+      saveToStorage(proxies.value)
     } finally {
       loading.value = false
     }
