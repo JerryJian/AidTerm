@@ -50,8 +50,9 @@ const createPerms = reactive({
   group_r: true, group_w: false, group_x: false,
   other_r: true, other_w: false, other_x: false,
 })
-const renameTarget = ref<FileEntry | null>(null)
+const renameEntry = ref<FileEntry | null>(null)
 const renameValue = ref('')
+const showRenameDialog = ref(false)
 const dragOver = ref(false)
 const unlistens: Array<() => void> = []
 
@@ -316,16 +317,18 @@ async function doDelete(entry: FileEntry) {
 }
 
 function startRename(entry: FileEntry) {
-  renameTarget.value = entry
+  renameEntry.value = entry
   renameValue.value = entry.name
+  showRenameDialog.value = true
 }
 
 async function confirmRename() {
-  if (!renameTarget.value || !renameValue.value.trim()) return
-  const oldPath = store.currentPath.replace(/\/?$/, '/') + renameTarget.value.name
+  if (!renameEntry.value || !renameValue.value.trim()) return
+  const oldPath = store.currentPath.replace(/\/?$/, '/') + renameEntry.value.name
   const newPath = store.currentPath.replace(/\/?$/, '/') + renameValue.value.trim()
   await store.renameItem(oldPath, newPath)
-  renameTarget.value = null
+  showRenameDialog.value = false
+  renameEntry.value = null
   renameValue.value = ''
 }
 
@@ -438,13 +441,6 @@ function fileIcon(entry: FileEntry): string {
           <span class="col-actions">{{ t('sftp.actions') }}</span>
         </div>
 
-        <!-- Rename inline -->
-        <div v-if="renameTarget" class="rename-row">
-          <input v-model="renameValue" class="rename-input" @keydown.enter="confirmRename" @keydown.escape="renameTarget = null" />
-          <button @click="confirmRename">{{ t('sftp.ok') }}</button>
-          <button @click="renameTarget = null">{{ t('common.cancel') }}</button>
-        </div>
-
         <div
           v-for="entry in sortedEntries"
           :key="entry.name"
@@ -552,6 +548,22 @@ function fileIcon(entry: FileEntry): string {
             <div class="confirm-actions">
               <button class="btn btn-cancel" @click="showCreateDialog = false">{{ t('common.cancel') }}</button>
               <button class="btn btn-primary" @click="doCreateItem" :disabled="!createName.trim()">{{ t('sftp.ok') }}</button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+
+      <!-- Rename dialog -->
+      <Teleport to="body">
+        <div v-if="showRenameDialog" class="confirm-overlay">
+          <div class="confirm-box create-box" @click.stop>
+            <div class="confirm-msg">{{ t('sftp.rename_title') }}</div>
+            <div class="create-name-row">
+              <input v-model="renameValue" class="create-name-input" :placeholder="t('sftp.enter_name')" @keydown.enter="confirmRename" />
+            </div>
+            <div class="confirm-actions">
+              <button class="btn btn-cancel" @click="showRenameDialog = false; renameEntry = null">{{ t('common.cancel') }}</button>
+              <button class="btn btn-primary" @click="confirmRename" :disabled="!renameValue.trim()">{{ t('sftp.ok') }}</button>
             </div>
           </div>
         </div>
@@ -869,34 +881,6 @@ function fileIcon(entry: FileEntry): string {
 .row-menu-btn:hover {
   color: var(--text);
   background: var(--bg-surface1);
-}
-
-.rename-row {
-  display: flex;
-  padding: 4px 12px;
-  gap: 4px;
-  background: var(--bg-base);
-  border-bottom: 1px solid var(--bg-surface0);
-  align-items: center;
-}
-
-.rename-input {
-  flex: 1;
-  background: var(--bg-surface0);
-  border: 1px solid var(--accent);
-  color: var(--text);
-  padding: 3px 6px;
-  font-size: 12px;
-  outline: none;
-}
-
-.rename-row button {
-  background: var(--bg-surface0);
-  border: 1px solid var(--bg-surface1);
-  color: var(--text);
-  cursor: pointer;
-  padding: 3px 8px;
-  font-size: 11px;
 }
 
 .empty {

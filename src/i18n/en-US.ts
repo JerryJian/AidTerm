@@ -187,6 +187,7 @@ export default {
     upload_failed: 'Failed',
     cancelled: 'Cancelled',
     confirm_delete: 'Delete {name}?',
+    rename_title: 'Rename',
     create_title: 'Create {0}',
     enter_name: 'Enter name',
     owner: 'Owner',
