@@ -145,7 +145,4 @@ function onCloseTab(e: MouseEvent, tool: ToolTab) {
   flex-direction: column;
 }
 
-.tool-body :deep(.panel-header) {
-  display: none;
-}
 </style>
