@@ -295,6 +295,10 @@ export default {
     loading: 'Loading...',
     close: 'Close',
     error: 'Error',
+    cut: 'Cut',
+    copy: 'Copy',
+    paste: 'Paste',
+    select_all: 'Select All',
   },
   lock_screen: {
     title: 'Locked',

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useTerminalStore } from './stores/terminal'
 import { useSessionStore } from './stores/sessionStore'
 import { useSettingsStore } from './stores/settingsStore'
@@ -38,6 +38,60 @@ const editingSession = ref<SavedSession | undefined>()
 const editorFile = ref<{ connId: string; remotePath: string } | null>(null)
 const locked = ref(false)
 const isFullscreen = ref(false)
+
+const inputCtx = reactive({
+  show: false,
+  x: 0,
+  y: 0,
+  el: null as HTMLElement | null,
+})
+
+function showInputCtx(e: MouseEvent) {
+  e.preventDefault()
+  inputCtx.x = e.clientX
+  inputCtx.y = e.clientY
+  inputCtx.el = e.target as HTMLElement
+  inputCtx.show = true
+}
+
+function hideInputCtx() {
+  inputCtx.show = false
+  inputCtx.el = null
+}
+
+function inputCtxAction(action: 'cut' | 'copy' | 'paste' | 'selectAll') {
+  const el = inputCtx.el
+  hideInputCtx()
+  if (!el) return
+  if (action === 'selectAll') {
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+      (el as HTMLInputElement).select()
+    } else if (el.isContentEditable) {
+      const r = document.createRange()
+      r.selectNodeContents(el)
+      const s = window.getSelection()
+      s?.removeAllRanges()
+      s?.addRange(r)
+    }
+    return
+  }
+  if (action === 'cut') { document.execCommand('cut'); return }
+  if (action === 'copy') { document.execCommand('copy'); return }
+  if (action === 'paste') {
+    if (document.execCommand('paste')) return
+    navigator.clipboard.readText().then(text => {
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        const input = el as HTMLInputElement
+        const start = input.selectionStart ?? input.value.length
+        const end = input.selectionEnd ?? start
+        input.setRangeText(text, start, end, 'end')
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      } else if (el.isContentEditable) {
+        document.execCommand('insertText', false, text)
+      }
+    }).catch(() => {})
+  }
+}
 
 const appStyle = computed(() => {
   const style: Record<string, string> = {}
@@ -214,6 +268,17 @@ onMounted(async () => {
   document.addEventListener('keydown', f11Handler)
   unlisteners.push(() => document.removeEventListener('keydown', f11Handler))
 
+  const ctxHandler = (e: MouseEvent) => {
+    const el = e.target as HTMLElement
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable) {
+      showInputCtx(e)
+      return
+    }
+    e.preventDefault()
+  }
+  document.addEventListener('contextmenu', ctxHandler)
+  unlisteners.push(() => document.removeEventListener('contextmenu', ctxHandler))
+
   const un1 = await listen<{ session_id: string }>('zmodem-start', async (event) => {
     const path = await save({ title: 'Save Zmodem file' })
     await invoke('zmodem_respond', {
@@ -307,6 +372,17 @@ onUnmounted(() => {
     @save="onSaveSession"
     @close="showSessionDialog = false; editingSession = undefined"
   />
+
+  <Teleport to="body">
+    <div v-if="inputCtx.show" class="input-ctx-overlay" @click="hideInputCtx" @contextmenu.prevent="hideInputCtx" />
+    <div v-if="inputCtx.show" class="input-ctx-menu" :style="{ left: inputCtx.x + 'px', top: inputCtx.y + 'px' }">
+      <button class="ictx-item" @click="inputCtxAction('cut')">{{ $t('editor.cut') }}</button>
+      <button class="ictx-item" @click="inputCtxAction('copy')">{{ $t('editor.copy') }}</button>
+      <button class="ictx-item" @click="inputCtxAction('paste')">{{ $t('editor.paste') }}</button>
+      <div class="ictx-divider" />
+      <button class="ictx-item" @click="inputCtxAction('selectAll')">{{ $t('editor.select_all') }}</button>
+    </div>
+  </Teleport>
 </template>
 
 <style>
@@ -451,5 +527,42 @@ body,
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+}
+
+.input-ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+}
+.input-ctx-menu {
+  position: fixed;
+  z-index: 100000;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-surface0);
+  border-radius: 6px;
+  min-width: 120px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.ictx-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.ictx-item:hover {
+  background: var(--bg-surface0);
+  color: var(--accent);
+}
+.ictx-divider {
+  height: 1px;
+  background: var(--bg-surface0);
+  margin: 4px 8px;
 }
 </style>

@@ -295,6 +295,10 @@ export default {
     loading: '加载中...',
     close: '关闭',
     error: '错误',
+    cut: '剪切',
+    copy: '复制',
+    paste: '粘贴',
+    select_all: '全选',
   },
   lock_screen: {
     title: '已锁定',
