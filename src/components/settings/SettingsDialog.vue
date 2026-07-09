@@ -21,6 +21,7 @@ const escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close')
 onMounted(() => document.addEventListener('keydown', escHandler))
 onUnmounted(() => document.removeEventListener('keydown', escHandler))
 
+const activeTab = ref<'general' | 'ai'>('general')
 const showAiKey = ref(false)
 const aiKeyBuffer = ref(ai.config.api_key)
 
@@ -61,7 +62,12 @@ async function toggleFullscreen() {
         <span class="modal-title">{{ t('settings.title') }}</span>
         <button class="modal-close" @click="emit('close')">✕</button>
       </div>
+      <div class="settings-tabs">
+        <button class="st-tab" :class="{ active: activeTab === 'general' }" @click="activeTab = 'general'">⚙️ {{ t('settings.general') }}</button>
+        <button class="st-tab" :class="{ active: activeTab === 'ai' }" @click="activeTab = 'ai'">🤖 {{ t('ai.title') }}</button>
+      </div>
       <div class="modal-body">
+        <template v-if="activeTab === 'general'">
         <div class="section">
           <h3>{{ t('settings.general') }}</h3>
           <div class="setting-row">
@@ -121,7 +127,9 @@ async function toggleFullscreen() {
             </label>
           </div>
         </div>
+        </template>
 
+        <template v-if="activeTab === 'ai'">
         <div class="section">
           <h3>🤖 {{ t('ai.title') }}</h3>
           <div class="setting-row">
@@ -175,6 +183,7 @@ async function toggleFullscreen() {
             <button class="action-btn" @click="ai.clearHistory()">{{ t('settings.ai_clear_history') }}</button>
           </div>
         </div>
+        </template>
       </div>
     </div>
   </div>
@@ -195,8 +204,8 @@ async function toggleFullscreen() {
   background: var(--bg-base);
   border: 1px solid var(--bg-surface0);
   border-radius: 8px;
-  width: 480px;
-  max-height: 80vh;
+  width: 560px;
+  height: 540px;
   display: flex;
   flex-direction: column;
   box-shadow: 0 8px 32px var(--overlay);
@@ -230,6 +239,32 @@ async function toggleFullscreen() {
 .modal-close:hover {
   background: var(--bg-surface1);
   color: var(--text);
+}
+
+.settings-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--bg-surface0);
+  background: var(--bg-mantle);
+}
+.st-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: var(--text-sub0);
+  cursor: pointer;
+  font-size: 12px;
+  border-bottom: 2px solid transparent;
+  transition: none;
+}
+.st-tab:hover {
+  color: var(--text);
+  background: var(--bg-base);
+}
+.st-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--bg-base);
 }
 
 .modal-body {
