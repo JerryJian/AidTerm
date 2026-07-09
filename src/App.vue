@@ -59,6 +59,19 @@ function hideInputCtx() {
   inputCtx.el = null
 }
 
+function onInputCtxDocClick(e: MouseEvent) {
+  if (!inputCtx.show) return
+  const target = e.target as HTMLElement
+  if (target.closest('.input-ctx-menu') || target.closest('.input-ctx-overlay')) return
+  hideInputCtx()
+}
+
+function onInputCtxKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && inputCtx.show) {
+    hideInputCtx()
+  }
+}
+
 function inputCtxAction(action: 'cut' | 'copy' | 'paste' | 'selectAll') {
   const el = inputCtx.el
   hideInputCtx()
@@ -278,6 +291,11 @@ onMounted(async () => {
   }
   document.addEventListener('contextmenu', ctxHandler)
   unlisteners.push(() => document.removeEventListener('contextmenu', ctxHandler))
+
+  document.addEventListener('click', onInputCtxDocClick, true)
+  unlisteners.push(() => document.removeEventListener('click', onInputCtxDocClick, true))
+  document.addEventListener('keydown', onInputCtxKeydown)
+  unlisteners.push(() => document.removeEventListener('keydown', onInputCtxKeydown))
 
   const un1 = await listen<{ session_id: string }>('zmodem-start', async (event) => {
     const path = await save({ title: 'Save Zmodem file' })

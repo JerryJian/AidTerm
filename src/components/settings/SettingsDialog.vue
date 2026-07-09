@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { setLanguage } from '../../i18n'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -16,6 +16,10 @@ const ai = useAiStore()
 const emit = defineEmits<{
   close: []
 }>()
+
+const escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
+onMounted(() => document.addEventListener('keydown', escHandler))
+onUnmounted(() => document.removeEventListener('keydown', escHandler))
 
 const showAiKey = ref(false)
 const aiKeyBuffer = ref(ai.config.api_key)
@@ -51,7 +55,7 @@ async function toggleFullscreen() {
 </script>
 
 <template>
-  <div class="modal-overlay">
+  <div class="modal-overlay" @click.self="emit('close')">
     <div class="modal-dialog">
       <div class="modal-header">
         <span class="modal-title">{{ t('settings.title') }}</span>

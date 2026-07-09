@@ -51,6 +51,7 @@ const toolTabs = computed<{ id: ToolTab; icon: string }[]>(() => {
 function toggleToolsMenu() {
   toolsMenuOpen.value = !toolsMenuOpen.value
   menuOpen.value = false
+  newTabMenuOpen.value = false
 }
 
 function openToolTab(tab: ToolTab) {
@@ -115,6 +116,9 @@ function openTelnet() {
 
 function onNewTabClick() {
   newTabMenuOpen.value = !newTabMenuOpen.value
+  menuOpen.value = false
+  toolsMenuOpen.value = false
+  viewsMenuOpen.value = false
 }
 
 function onDocClick(e: MouseEvent) {
@@ -187,7 +191,7 @@ defineExpose({ onKeydown })
   <div class="tab-bar" @keydown="onKeydown">
     <div class="tab-bar-left">
       <div class="menu-wrapper">
-        <button class="menu-btn" @click="menuOpen = !menuOpen; viewsMenuOpen = false" title="Menu">{{ '\u2630' }}</button>
+        <button class="menu-btn" @click="menuOpen = !menuOpen; viewsMenuOpen = false; newTabMenuOpen = false" title="Menu">{{ '\u2630' }}</button>
         <div v-if="menuOpen" class="menu-dropdown">
           <button @click="ui.settingsDialog = true; menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\u2699' }}</span><span>{{ $t('menu.settings') }}</span></button>
           <button @click="emit('lockClick'); menuOpen = false" class="menu-item"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>{{ $t('menu.lock') }}</span></button>

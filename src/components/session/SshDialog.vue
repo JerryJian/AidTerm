@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useI18n } from 'vue-i18n'
 import { useProxyStore } from '../../stores/proxyStore'
@@ -36,6 +36,9 @@ const firstInput = ref<HTMLInputElement>()
 onMounted(async () => {
   firstInput.value?.focus()
   await proxyStore.refresh()
+  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
+  document.addEventListener('keydown', onKey)
+  onUnmounted(() => document.removeEventListener('keydown', onKey))
 })
 
 async function pickKey() {
@@ -65,7 +68,7 @@ function onSubmit() {
 </script>
 
 <template>
-  <div class="overlay">
+  <div class="overlay" @click.self="emit('close')">
     <div class="dialog">
       <div class="dialog-header">
         <span>{{ t('ssh_dialog.title') }}</span>

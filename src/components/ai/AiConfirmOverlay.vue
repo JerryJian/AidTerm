@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -14,6 +14,10 @@ const emit = defineEmits<{
   cancel: []
   modify: [newCommand: string]
 }>()
+
+const escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('cancel') }
+onMounted(() => document.addEventListener('keydown', escHandler))
+onUnmounted(() => document.removeEventListener('keydown', escHandler))
 
 const editing = ref(false)
 const editedCommand = ref(props.command)
@@ -38,7 +42,7 @@ function submitEdit() {
 </script>
 
 <template>
-  <div class="confirm-overlay">
+  <div class="confirm-overlay" @click.self="doCancel">
     <div class="confirm-box" @click.stop>
       <div class="confirm-header">
         <span class="confirm-icon">🤖</span>

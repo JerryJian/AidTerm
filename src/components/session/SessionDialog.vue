@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionStore } from '../../stores/sessionStore'
 import type { SavedSession } from '../../types'
@@ -42,6 +42,9 @@ onMounted(() => {
       groupSelect.value = g.name
     }
   }
+  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
+  document.addEventListener('keydown', onKey)
+  onUnmounted(() => document.removeEventListener('keydown', onKey))
 })
 
 function onGroupChange() {
@@ -71,7 +74,7 @@ function onSubmit() {
 </script>
 
 <template>
-  <div class="overlay">
+  <div class="overlay" @click.self="emit('close')">
     <div class="dialog">
       <div class="dialog-header">
         <span>{{ isEditing ? t('session_dialog.title_edit') : t('session_dialog.title_new') }}</span>
