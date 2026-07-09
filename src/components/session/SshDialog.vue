@@ -68,7 +68,7 @@ function onSubmit() {
 </script>
 
 <template>
-  <div class="overlay" @click.self="emit('close')">
+  <div class="overlay">
     <div class="dialog">
       <div class="dialog-header">
         <span>{{ t('ssh_dialog.title') }}</span>

@@ -496,7 +496,7 @@ function fileIcon(entry: FileEntry): string {
 
       <!-- Delete confirm dialog -->
       <Teleport to="body">
-        <div v-if="deleteConfirm" class="confirm-overlay" @click="cancelConfirmDelete">
+        <div v-if="deleteConfirm" class="confirm-overlay">
           <div class="confirm-box" @click.stop>
             <div class="confirm-msg">
               <span class="confirm-icon" v-html="icons.delete" />
@@ -512,7 +512,7 @@ function fileIcon(entry: FileEntry): string {
 
       <!-- Create dialog -->
       <Teleport to="body">
-        <div v-if="showCreateDialog" class="confirm-overlay" @click="showCreateDialog = false">
+        <div v-if="showCreateDialog" class="confirm-overlay">
           <div class="confirm-box create-box" @click.stop>
             <div class="confirm-msg">{{ t('sftp.create_title', [createIsDir ? t('sftp.dir') : t('sftp.file')]) }}</div>
             <div class="create-name-row">

@@ -74,7 +74,7 @@ function onSubmit() {
 </script>
 
 <template>
-  <div class="overlay" @click.self="emit('close')">
+  <div class="overlay">
     <div class="dialog">
       <div class="dialog-header">
         <span>{{ isEditing ? t('session_dialog.title_edit') : t('session_dialog.title_new') }}</span>
