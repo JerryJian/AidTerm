@@ -58,9 +58,15 @@ impl LocalSession {
             }
         });
 
+        let mut cmd_builder = portable_pty::CommandBuilder::new(cmd);
+        cmd_builder.env("TERM", "xterm-256color");
+        // Ensure UTF-8 locale so shells handle multi-byte characters correctly
+        if std::env::var("LANG").is_err() && std::env::var("LC_ALL").is_err() {
+            cmd_builder.env("LANG", "en_US.UTF-8");
+        }
         let child = pair
             .slave
-            .spawn_command(portable_pty::CommandBuilder::new(cmd))
+            .spawn_command(cmd_builder)
             .map_err(|e| format!("Failed to spawn shell: {}", e))?;
 
         let mut reader = master
