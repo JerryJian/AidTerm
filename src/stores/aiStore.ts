@@ -10,6 +10,7 @@ export interface AiConfig {
   provider_id?: string
   mode?: string
   prefix?: string
+  auto_execute?: boolean
 }
 
 export interface ProviderOption {

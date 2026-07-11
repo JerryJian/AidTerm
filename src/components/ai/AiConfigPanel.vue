@@ -104,6 +104,23 @@ const showAiKey = ref(false)
       </div>
 
       <div class="section">
+        <h3>命令执行</h3>
+        <div class="field">
+          <label class="toggle-label">
+            <span>自动执行安全命令</span>
+            <input
+              type="checkbox"
+              :checked="ai.config.auto_execute || false"
+              @change="(e: any) => ai.updateConfig({ auto_execute: e.target.checked })"
+              class="toggle-input"
+            />
+            <span class="toggle-switch" />
+          </label>
+          <p class="field-desc">开启后，AI 判断为安全的查询命令将自动执行，危险命令仍需确认</p>
+        </div>
+      </div>
+
+      <div class="section">
         <h3>状态</h3>
         <p class="status" :class="{ ok: ai.enabled }">
           {{ ai.enabled ? '✅ 已配置' : '❌ 未配置 (请输入 API Key)' }}
@@ -331,5 +348,49 @@ const showAiKey = ref(false)
   font-size: 11px;
   color: var(--text-sub0);
   margin: 2px 0 0;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.toggle-input {
+  display: none;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--bg-surface1);
+  border-radius: 10px;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--text);
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.toggle-input:checked + .toggle-switch {
+  background: var(--accent);
+}
+
+.toggle-input:checked + .toggle-switch::after {
+  transform: translateX(16px);
+  background: var(--bg-base);
 }
 </style>

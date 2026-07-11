@@ -89,15 +89,22 @@ watch(conversationMessages, async () => {
 
         <div v-else-if="msg.role === 'command'" class="ai-msg ai-msg-command">
           <div class="ai-msg-label">{{ t('ai.title') }}</div>
-          <div class="command-block">
-            <div class="command-header">{{ t('ai.suggest_command') }}</div>
+          <div class="command-block" :class="{ 'command-danger': msg.dangerous }">
+            <div class="command-header">
+              <span v-if="msg.dangerous" class="danger-badge">⚠️ {{ t('ai.dangerous_command') }}</span>
+              <span v-else class="safe-badge">✅ {{ t('ai.safe_command') }}</span>
+            </div>
             <pre class="command-text">{{ msg.command }}</pre>
             <div v-if="aiConv.showConfirm.value && aiConv.pendingToolId.value === msg.toolCallId" class="command-actions">
               <button class="cmd-btn cmd-cancel" @click="doCancel">{{ t('ai.cancel') }}</button>
-              <button class="cmd-btn cmd-confirm" @click="doConfirm">{{ t('ai.execute') }}</button>
+              <button class="cmd-btn cmd-confirm" :class="{ 'cmd-confirm-danger': msg.dangerous }" @click="doConfirm">{{ t('ai.execute') }}</button>
             </div>
             <div v-else-if="aiConv.showConfirm.value && aiConv.pendingToolId.value !== msg.toolCallId" class="command-pending">
               {{ t('ai.thinking') }}
+            </div>
+            <div v-else-if="!msg.dangerous && aiConv.autoExecute" class="command-auto" :class="{ 'command-auto-done': msg.autoExecStatus === 'completed' }">
+              <span v-if="msg.autoExecStatus === 'completed'">✅ {{ t('ai.auto_execute_done') }}</span>
+              <span v-else>⏳ {{ t('ai.auto_executing') }}</span>
             </div>
           </div>
         </div>
@@ -310,6 +317,9 @@ watch(conversationMessages, async () => {
   overflow: hidden;
   width: 100%;
 }
+.command-block.command-danger {
+  border-color: var(--danger);
+}
 
 .command-header {
   padding: 6px 10px;
@@ -317,6 +327,16 @@ watch(conversationMessages, async () => {
   font-size: 11px;
   color: var(--success);
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.danger-badge {
+  color: var(--danger);
+}
+.safe-badge {
+  color: var(--success);
 }
 
 .command-text {
@@ -361,12 +381,32 @@ watch(conversationMessages, async () => {
 .cmd-confirm:hover {
   background: var(--teal);
 }
+.cmd-confirm-danger {
+  background: var(--danger);
+}
+.cmd-confirm-danger:hover {
+  background: var(--rosewater);
+}
 
 .command-pending {
   padding: 8px 10px;
   font-size: 11px;
   color: var(--text-overlay0);
   border-top: 1px solid var(--bg-surface0);
+}
+
+.command-auto {
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--accent);
+  border-top: 1px solid var(--bg-surface0);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.command-auto-done {
+  color: var(--success);
 }
 
 .result-block {

@@ -1,4 +1,4 @@
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useAiStore, type AiMessage } from '../stores/aiStore'
 import { useTerminalStore } from '../stores/terminal'
@@ -19,6 +19,8 @@ export interface ConversationMessage {
   content: string
   command?: string
   toolCallId?: string
+  dangerous?: boolean
+  autoExecStatus?: 'executing' | 'completed'
 }
 
 function buildSystemPrompt(systemInfo: SystemInfo, history: CommandRecord[]): string {
@@ -46,6 +48,34 @@ function buildSystemPrompt(systemInfo: SystemInfo, history: CommandRecord[]): st
   }
 
   lines.push(
+    '',
+    '=== 命令安全分类规则 ===',
+    '当你建议执行命令时，必须在回复文本的第一行以 [SAFE] 或 [DANGER] 开头标注命令的安全等级：',
+    '',
+    '[SAFE] — 安全命令（仅查询/读取，不会改变系统状态）：',
+    '  ls, cat, head, tail, wc, grep, find, echo, pwd, whoami, id, uname, date, uptime,',
+    '  df, du, free, ps, top, htop, env, which, type, file, stat, wc, diff,',
+    '  git status, git log, git diff, git show, git branch,',
+    '  ping, traceroute, nslookup, dig, curl (GET), wget (download),',
+    '  docker ps, docker images, docker logs, kubectl get, kubectl describe',
+    '',
+    '[DANGER] — 危险命令（会改变系统/文件：增、删、改）：',
+    '  rm, mv, cp, chmod, chown, chgrp, mkdir, rmdir, touch, ln,',
+    '  echo >, echo >>, tee, sed -i, awk (写入),',
+    '  apt, apt-get, yum, dnf, brew, pip install, npm install, cargo install,',
+    '  systemctl, service, kill, killall, pkill, reboot, shutdown,',
+    '  docker rm, docker rmi, docker run, docker exec, docker stop,',
+     '  kubectl delete, kubectl apply, kubectl exec,',
+    '  git commit, git push, git merge, git reset, git checkout, git stash,',
+    '  ssh (执行远程命令), scp, rsync, dd, mkfs, fdisk, mount,',
+    '  sudo (任何命令), su, passwd, useradd, userdel,',
+    '  export (永久修改环境变量), alias, crontab,',
+    '  curl -X POST/PUT/DELETE, wget --post,',
+    '  任何涉及文件内容修改、权限变更、服务管理、包安装/卸载的命令',
+    '',
+    '格式示例：',
+    '[SAFE] 我来查看当前目录的文件列表。',
+    '[DANGER] 我将删除 /tmp 下的临时文件，请确认。',
     '',
     '注意：',
     '- 使用工具时，系统会提示用户确认，用户确认后才会执行',
@@ -107,6 +137,39 @@ function cleanCommandOutput(output: string, cmd: string): string {
   return trimmed.join('\n').trim()
 }
 
+function parseDangerTag(text: string): boolean | null {
+  const match = text.match(/^\[SAFE\]|^\[DANGER\]/i)
+  if (!match) return null
+  return match[0].toUpperCase() === '[DANGER]'
+}
+
+function stripDangerTag(text: string): string {
+  return text.replace(/^\[(?:SAFE|DANGER)\]\s*/i, '')
+}
+
+const DANGEROUS_CMD_PATTERNS = [
+  /\brm\b/, /\bmv\b/, /\bchmod\b/, /\bchown\b/, /\bchgrp\b/,
+  /\bmkdir\b/, /\brmdir\b/, /\btouch\b/, /\bln\b/,
+  /\btee\b/, /\bsed\b.*-i/, /\bawk\b/,
+  /\bapt(-get)?\b/, /\byum\b/, /\bdnf\b/, /\bbrew\b/,
+  /\bpip3?\s+install\b/, /\bnpm\s+(i|install)\b/, /\bcargo\s+install\b/,
+  /\bsystemctl\b/, /\bservice\b/, /\bkill\b/, /\bkillall\b/, /\bpkill\b/,
+  /\breboot\b/, /\bshutdown\b/,
+  /\bdocker\s+(rm|rmi|run|exec|stop|kill|restart)\b/,
+  /\bkubectl\s+(delete|apply|exec|patch)\b/,
+  /\bgit\s+(commit|push|merge|reset|checkout|stash|rebase|branch\s+-[dD])\b/,
+  /\bscp\b/, /\brsync\b/, /\bdd\b/, /\bmkfs\b/, /\bfdisk\b/,
+  /\bsudo\b/, /\bsu\b/, /\bpasswd\b/, /\buseradd\b/, /\buserdel\b/,
+  /\bcurl\b.*-X\s*(POST|PUT|DELETE|PATCH)/i,
+  /\b>\s*\S/, /\b>>\s*\S/,
+  /\bmount\b/, /\bumount\b/,
+]
+
+function isDangerousByHeuristic(cmd: string): boolean {
+  const trimmed = cmd.trim()
+  return DANGEROUS_CMD_PATTERNS.some(p => p.test(trimmed))
+}
+
 export function useAiConversation(
   getTerminal: () => any | null,
   writeToBackend?: (data: string) => void,
@@ -119,6 +182,7 @@ export function useAiConversation(
   const pendingAiMsg = ref('')
   const busy = ref(false)
   const cancelled = ref(false)
+  const autoExecute = computed(() => ai.config.auto_execute ?? false)
   const messages = ref<AiMessage[]>([])
   const commandHistory = ref<CommandRecord[]>([])
   const savedPrompt = ref('$ ')
@@ -198,17 +262,19 @@ export function useAiConversation(
     conversationMessages.push(msg)
   }
 
-  function updateLastConversationMessage(updates: Partial<ConversationMessage>) {
-    if (conversationMessages.length > 0) {
-      const last = conversationMessages[conversationMessages.length - 1]
-      Object.assign(last, updates)
-    }
-  }
-
   function removeLastThinking() {
     for (let i = conversationMessages.length - 1; i >= 0; i--) {
       if (conversationMessages[i].role === 'thinking') {
         conversationMessages.splice(i, 1)
+        return
+      }
+    }
+  }
+
+  function updateLastCommandAutoExecStatus(toolId: string, status: 'executing' | 'completed') {
+    for (let i = conversationMessages.length - 1; i >= 0; i--) {
+      if (conversationMessages[i].role === 'command' && conversationMessages[i].toolCallId === toolId) {
+        conversationMessages[i].autoExecStatus = status
         return
       }
     }
@@ -237,6 +303,16 @@ export function useAiConversation(
     continueConversation()
   }
 
+  function determineDanger(aiText: string, cmd: string): boolean {
+    const aiTag = parseDangerTag(aiText)
+    if (aiTag !== null) return aiTag
+    return isDangerousByHeuristic(cmd)
+  }
+
+  function cleanAiText(text: string): string {
+    return stripDangerTag(text)
+  }
+
   async function continueConversation() {
     try {
       const response = await ai.chat([...messages.value])
@@ -246,30 +322,42 @@ export function useAiConversation(
       if (response.tool_calls && response.tool_calls.length > 0) {
         const tc = response.tool_calls[0]
         const args = JSON.parse(tc.function.arguments)
-        pendingCommand.value = args.command || ''
+        const cmd = args.command || ''
+        pendingCommand.value = cmd
         pendingToolId.value = tc.id
         pendingAiMsg.value = response.text || ''
 
+        const aiText = response.text || ''
+        const dangerous = determineDanger(aiText, cmd)
+        const cleanText = cleanAiText(aiText)
+
         messages.value.push({
           role: 'assistant',
-          content: response.text || '',
+          content: aiText,
         })
 
-        if (response.text) {
-          addConversationMessage({ role: 'assistant', content: response.text })
+        if (cleanText) {
+          addConversationMessage({ role: 'assistant', content: cleanText })
         }
 
         addConversationMessage({
           role: 'command',
-          content: args.command || '',
-          command: args.command || '',
+          content: cmd,
+          command: cmd,
           toolCallId: tc.id,
+          dangerous,
         })
 
-        showConfirm.value = true
-        updateLastConversationMessage({ role: 'command' })
+        if (!dangerous && ai.config.auto_execute) {
+          updateLastCommandAutoExecStatus(tc.id, 'executing')
+          await onConfirmCommand()
+          updateLastCommandAutoExecStatus(tc.id, 'completed')
+        } else {
+          showConfirm.value = true
+        }
       } else if (response.text) {
-        addConversationMessage({ role: 'assistant', content: response.text })
+        const cleanText = cleanAiText(response.text)
+        addConversationMessage({ role: 'assistant', content: cleanText || response.text })
         messages.value.push({ role: 'assistant', content: response.text })
         endConversation()
       } else {
@@ -334,22 +422,34 @@ export function useAiConversation(
       if (response.tool_calls && response.tool_calls.length > 0) {
         const tc = response.tool_calls[0]
         const args = JSON.parse(tc.function.arguments)
-        pendingCommand.value = args.command || ''
+        const nextCmd = args.command || ''
+        pendingCommand.value = nextCmd
         pendingToolId.value = tc.id
         pendingAiMsg.value = response.text || ''
 
-        if (response.text) {
-          addConversationMessage({ role: 'assistant', content: response.text })
+        const aiText = response.text || ''
+        const dangerous = determineDanger(aiText, nextCmd)
+        const cleanText = cleanAiText(aiText)
+
+        if (cleanText) {
+          addConversationMessage({ role: 'assistant', content: cleanText })
         }
 
         addConversationMessage({
           role: 'command',
-          content: args.command || '',
-          command: args.command || '',
+          content: nextCmd,
+          command: nextCmd,
           toolCallId: tc.id,
+          dangerous,
         })
 
-        showConfirm.value = true
+        if (!dangerous && ai.config.auto_execute) {
+          updateLastCommandAutoExecStatus(tc.id, 'executing')
+          await onConfirmCommand()
+          updateLastCommandAutoExecStatus(tc.id, 'completed')
+        } else {
+          showConfirm.value = true
+        }
       } else if (response.text) {
         addConversationMessage({ role: 'assistant', content: response.text })
         endConversation()
@@ -430,5 +530,6 @@ export function useAiConversation(
     commandHistory,
     submitInput,
     forceAIInput,
+    autoExecute,
   }
 }

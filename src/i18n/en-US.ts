@@ -416,6 +416,13 @@ export default {
     output_truncated: 'Output truncated for AI',
     no_config: 'Configure API Key in Settings → AI first',
     reset: 'Reset Chat',
+    dangerous_command: 'Dangerous',
+    safe_command: 'Safe',
+    auto_executing: 'Auto-executing...',
+    auto_execute_done: 'Done',
+    auto_execute_section: 'Command Execution',
+    auto_execute: 'Auto-execute safe commands',
+    auto_execute_desc: 'When enabled, AI-classified safe read-only commands execute automatically; dangerous commands always require confirmation',
   },
   common: {
     name: 'Name',

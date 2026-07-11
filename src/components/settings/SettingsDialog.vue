@@ -267,6 +267,22 @@ async function toggleFullscreen() {
           </div>
         </div>
         <div class="section">
+          <h3>⚙️ {{ t('ai.auto_execute_section') }}</h3>
+          <div class="setting-row">
+            <label class="toggle-label">
+              <span>{{ t('ai.auto_execute') }}</span>
+              <input
+                type="checkbox"
+                :checked="ai.config.auto_execute || false"
+                @change="(e: any) => ai.updateConfig({ auto_execute: e.target.checked })"
+                class="toggle-input"
+              />
+              <span class="toggle-switch" />
+            </label>
+          </div>
+          <span class="field-desc">{{ t('ai.auto_execute_desc') }}</span>
+        </div>
+        <div class="section">
           <h3>{{ t('ai.status') }}</h3>
           <div class="setting-row">
             <span :class="ai.enabled ? 'status-ok' : 'status-ko'">
@@ -657,5 +673,50 @@ async function toggleFullscreen() {
 .field-desc {
   font-size: 11px;
   color: var(--text-sub0);
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  width: 100%;
+}
+
+.toggle-input {
+  display: none;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--bg-surface1);
+  border-radius: 10px;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--text);
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.toggle-input:checked + .toggle-switch {
+  background: var(--accent);
+}
+
+.toggle-input:checked + .toggle-switch::after {
+  transform: translateX(16px);
+  background: var(--bg-base);
 }
 </style>

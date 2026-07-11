@@ -416,6 +416,13 @@ export default {
     output_truncated: '输出较长，已截断发送给 AI',
     no_config: '请在设置 → AI 中配置 API Key 后使用 AI 助手',
     reset: '重置对话',
+    dangerous_command: '危险命令',
+    safe_command: '安全命令',
+    auto_executing: '自动执行中...',
+    auto_execute_done: '执行完成',
+    auto_execute_section: '命令执行',
+    auto_execute: '自动执行安全命令',
+    auto_execute_desc: '开启后，AI 判断为安全的查询命令将自动执行，危险命令仍需确认',
   },
   common: {
     name: '名称',
