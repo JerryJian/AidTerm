@@ -78,32 +78,6 @@ const showAiKey = ref(false)
       </div>
 
       <div class="section">
-        <h3>自然语言识别</h3>
-        <div class="field">
-          <label>模式</label>
-          <select
-            :value="ai.config.mode || 'auto'"
-            @change="(e: any) => ai.updateConfig({ mode: e.target.value })"
-            class="input"
-          >
-            <option value="auto">自动识别</option>
-            <option value="prefix">前缀触发</option>
-            <option value="keybinding">按键发送 (Ctrl+Enter)</option>
-          </select>
-        </div>
-        <div class="field" v-if="ai.config.mode === 'prefix'">
-          <label>触发前缀</label>
-          <input
-            :value="ai.config.prefix || ':'"
-            @input="(e: any) => ai.updateConfig({ prefix: e.target.value })"
-            class="input"
-            placeholder=":"
-          />
-          <p class="field-desc">输入任一字符开头的文本触发 AI 应答，每个字符均为独立触发前缀</p>
-        </div>
-      </div>
-
-      <div class="section">
         <h3>命令执行</h3>
         <div class="field">
           <label class="toggle-label">

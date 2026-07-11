@@ -165,30 +165,6 @@ async function toggleFullscreen() {
 
       </div>
       <div class="section">
-        <h3>🌐 {{ t('ai.mode') }}</h3>
-        <div class="setting-row col">
-          <select
-            :value="ai.config.mode || 'auto'"
-            @change="(e: any) => ai.updateConfig({ mode: e.target.value })"
-            class="text-input"
-          >
-            <option value="auto">{{ t('ai.mode_auto') }}</option>
-            <option value="prefix">{{ t('ai.mode_prefix') }}</option>
-            <option value="keybinding">{{ t('ai.mode_keybinding') }}</option>
-          </select>
-        </div>
-        <div class="setting-row col" v-if="ai.config.mode === 'prefix'">
-          <label>{{ t('ai.prefix') }}</label>
-          <input
-            :value="ai.config.prefix || ':'"
-            @input="(e: any) => ai.updateConfig({ prefix: e.target.value })"
-            class="text-input"
-            placeholder=":"
-          />
-          <span class="field-desc">{{ t('ai.prefix_desc') }}</span>
-        </div>
-      </div>
-      <div class="section">
         <h3>⚙️ {{ t('ai.auto_execute_section') }}</h3>
         <div class="setting-row">
           <label class="toggle-label">
