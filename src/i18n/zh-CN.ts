@@ -13,6 +13,8 @@ export default {
     ssh: 'SSH',
     telnet: 'Telnet',
     serial: '串口',
+    toggle_sidebar: '切换侧栏',
+    tools: '工具',
   },
   titlebar: {
     minimize: '最小化',

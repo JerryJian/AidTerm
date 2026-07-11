@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { useI18n } from 'vue-i18n'
 import { useTerminalStore } from '../../stores/terminal'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useUiStore } from '../../stores/uiStore'
@@ -12,6 +13,7 @@ const store = useTerminalStore()
 const sessionStore = useSessionStore()
 const ui = useUiStore()
 const aiStore = useAiStore()
+const { t } = useI18n()
 
 const emit = defineEmits<{
   quickSsh: [host: string, port: number, username: string]
@@ -183,7 +185,7 @@ defineExpose({ onKeydown })
 <template>
   <div class="tab-bar" @keydown="onKeydown">
     <div class="tab-bar-left">
-      <button class="sidebar-toggle" :class="{ active: ui.leftSidebar }" @click="ui.leftSidebar = !ui.leftSidebar" title="Toggle Sidebar">{{ '\u2630' }}</button>
+      <button class="sidebar-toggle" :class="{ active: ui.leftSidebar }" @click="ui.leftSidebar = !ui.leftSidebar" :title="t('tab.toggle_sidebar')">{{ '\u2630' }}</button>
       <div
         v-for="tab in store.tabs"
         :key="tab.id"
@@ -242,7 +244,7 @@ defineExpose({ onKeydown })
         class="ai-toggle-btn"
         :class="{ active: store.activeTab?.aiSidebarOpen }"
         @click="toggleAiSidebar"
-        title="AI Assistant"
+        :title="t('ai.sidebar_title')"
       >
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
@@ -251,7 +253,7 @@ defineExpose({ onKeydown })
         </svg>
       </button>
       <div class="tools-wrapper">
-        <button class="tools-btn" :class="{ active: toolsMenuOpen }" @click="toggleToolsMenu" title="Tools">
+        <button class="tools-btn" :class="{ active: toolsMenuOpen }" @click="toggleToolsMenu" :title="t('tab.tools')">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
             <path d="M4 21C3.44772 21 3 20.5523 3 20V4C3 3.44772 3.44772 3 4 3H20C20.5523 3 21 3.44772 21 4V20C21 20.5523 20.5523 21 20 21H4ZM8 10H5V19H8V10ZM19 10H10V19H19V10ZM19 5H5V8H19V5Z"/>
           </svg>
