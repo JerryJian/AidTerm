@@ -322,7 +322,7 @@ watch(conversationMessages, async () => {
   border: 1px solid var(--bg-surface1);
   padding: 5px 8px;
   text-align: left;
-  white-space: nowrap;
+  white-space: normal;
 }
 .assistant-bubble :deep(th) {
   background: var(--bg-surface0);
