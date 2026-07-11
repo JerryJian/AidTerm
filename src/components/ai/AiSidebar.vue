@@ -153,8 +153,8 @@ watch(conversationMessages, async () => {
 
 <style scoped>
 .ai-sidebar {
-  width: 380px;
-  min-width: 300px;
+  width: 100%;
+  min-width: 0;
   background: var(--bg-base);
   border-left: 1px solid var(--bg-surface0);
   display: flex;
