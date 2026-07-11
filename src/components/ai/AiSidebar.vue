@@ -149,12 +149,12 @@ watch(conversationMessages, async () => {
 
       <template v-for="(msg, idx) in conversationMessages" :key="idx">
         <div v-if="msg.role === 'user'" class="ai-msg ai-msg-user">
-          <div class="ai-msg-header">
-            <span class="ai-msg-sender">{{ t('ai.me') }}</span>
-            <span class="ai-msg-time">{{ formatTime(msg.timestamp) }}</span>
+          <div class="ai-msg-header ai-msg-header-right">
             <button class="copy-btn copy-btn-sm" @click="copyMessage(msg)" :title="t('ai.copy')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             </button>
+            <span class="ai-msg-time">{{ formatTime(msg.timestamp) }}</span>
+            <span class="ai-msg-sender">{{ t('ai.me') }}</span>
           </div>
           <div class="ai-msg-bubble user-bubble">{{ msg.content }}</div>
         </div>
@@ -359,6 +359,11 @@ watch(conversationMessages, async () => {
   align-items: center;
   gap: 6px;
   padding-left: 4px;
+}
+.ai-msg-header-right {
+  justify-content: flex-end;
+  padding-left: 0;
+  padding-right: 4px;
 }
 
 .ai-msg-sender {
