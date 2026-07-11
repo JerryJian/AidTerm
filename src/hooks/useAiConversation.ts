@@ -88,7 +88,10 @@ function buildSystemPrompt(systemInfo: SystemInfo, history: CommandRecord[]): st
 }
 
 function stripAnsi(text: string): string {
-  return text.replace(/\x1b\[[\d;?]*[a-zA-Z]/g, '').replace(/\r/g, '')
+  return text
+    .replace(/\x1b\[[\d;?]*[a-zA-Z]/g, '')
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+    .replace(/\r/g, '')
 }
 
 function detectPromptInOutput(output: string, savedPrompt?: string): boolean {
