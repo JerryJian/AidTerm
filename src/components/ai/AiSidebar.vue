@@ -712,9 +712,6 @@ watch(conversationMessages, async () => {
   width: 11px;
   height: 11px;
 }
-.ai-msg-user .copy-btn {
-  opacity: 0.6;
-}
 .ai-msg:hover > .ai-msg-header .copy-btn,
 .ai-msg:hover > .ai-msg-header .ai-msg-time {
   opacity: 0.6;
