@@ -370,6 +370,8 @@ watch(conversationMessages, async () => {
 .ai-msg-time {
   font-size: 10px;
   color: var(--text-overlay0);
+  opacity: 0;
+  transition: opacity 0.15s;
 }
 
 .ai-msg-bubble {
@@ -709,7 +711,7 @@ watch(conversationMessages, async () => {
   opacity: 0.6;
 }
 .ai-msg:hover > .ai-msg-header .copy-btn,
-.ai-msg:hover > .copy-btn {
+.ai-msg:hover > .ai-msg-header .ai-msg-time {
   opacity: 0.6;
 }
 
