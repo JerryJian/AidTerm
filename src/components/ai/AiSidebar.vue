@@ -508,7 +508,7 @@ watch(conversationMessages, async () => {
 
 .ai-input {
   width: 100%;
-  padding: 8px 40px 8px 10px;
+  padding: 8px 44px 8px 10px;
   background: var(--bg-base);
   border: 1px solid var(--bg-surface1);
   border-radius: 6px;
@@ -529,10 +529,10 @@ watch(conversationMessages, async () => {
 
 .ai-send-btn {
   position: absolute;
-  right: 8px;
-  bottom: 8px;
-  width: 28px;
-  height: 28px;
+  right: 18px;
+  bottom: 18px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   background: var(--accent);
   color: var(--bg-base);
