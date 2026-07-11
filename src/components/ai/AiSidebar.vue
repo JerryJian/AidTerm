@@ -110,7 +110,7 @@ watch(conversationMessages, async () => {
         </div>
 
         <div v-else-if="msg.role === 'result'" class="ai-msg ai-msg-result">
-          <div class="result-label">{{ t('terminal.connecting').replace('...', '') }}Output</div>
+          <div class="result-label">{{ t('ai.command_output') }}</div>
           <pre class="result-block">{{ msg.content }}</pre>
         </div>
 

@@ -425,6 +425,7 @@ export default {
     auto_execute_section: '命令执行',
     auto_execute: '自动执行安全命令',
     auto_execute_desc: '开启后，AI 判断为安全的查询命令将自动执行，危险命令仍需确认',
+    command_output: '命令输出',
   },
   common: {
     name: '名称',
