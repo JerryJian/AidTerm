@@ -316,6 +316,14 @@ onMounted(async () => {
   document.addEventListener('keydown', f11Handler)
   unlisteners.push(() => document.removeEventListener('keydown', f11Handler))
 
+  const f5Handler = (e: KeyboardEvent) => {
+    if (e.key === 'F5') {
+      e.preventDefault()
+    }
+  }
+  document.addEventListener('keydown', f5Handler)
+  unlisteners.push(() => document.removeEventListener('keydown', f5Handler))
+
   const ctxHandler = (e: MouseEvent) => {
     const el = e.target as HTMLElement
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable) {
