@@ -62,6 +62,13 @@ function copyMessage(msg: { role: string; content: string; command?: string }) {
   navigator.clipboard.writeText(getCopyText(msg))
 }
 
+function formatTime(ts?: number): string {
+  if (!ts) return ''
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 function selectAllText() {
   const el = messagesContainer.value
   if (!el) return
@@ -142,26 +149,37 @@ watch(conversationMessages, async () => {
 
       <template v-for="(msg, idx) in conversationMessages" :key="idx">
         <div v-if="msg.role === 'user'" class="ai-msg ai-msg-user">
-          <div class="ai-msg-bubble user-bubble">
-            <span>{{ msg.content }}</span>
-            <button class="copy-btn" @click="copyMessage(msg)" :title="t('ai.copy')">
+          <div class="ai-msg-header">
+            <span class="ai-msg-sender">{{ t('ai.me') }}</span>
+            <span class="ai-msg-time">{{ formatTime(msg.timestamp) }}</span>
+            <button class="copy-btn copy-btn-sm" @click="copyMessage(msg)" :title="t('ai.copy')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             </button>
           </div>
+          <div class="ai-msg-bubble user-bubble">{{ msg.content }}</div>
         </div>
 
         <div v-else-if="msg.role === 'assistant'" class="ai-msg ai-msg-assistant">
-          <div class="ai-msg-label">{{ t('ai.title') }}</div>
-          <div class="ai-msg-bubble assistant-bubble">
-            <div v-html="renderMarkdown(msg.content)" />
-            <button class="copy-btn" @click="copyMessage(msg)" :title="t('ai.copy')">
+          <div class="ai-msg-header">
+            <span class="ai-msg-sender">{{ t('ai.aid') }}</span>
+            <span class="ai-msg-time">{{ formatTime(msg.timestamp) }}</span>
+            <button class="copy-btn copy-btn-sm" @click="copyMessage(msg)" :title="t('ai.copy')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             </button>
+          </div>
+          <div class="ai-msg-bubble assistant-bubble">
+            <div v-html="renderMarkdown(msg.content)" />
           </div>
         </div>
 
         <div v-else-if="msg.role === 'command'" class="ai-msg ai-msg-command">
-          <div class="ai-msg-label">{{ t('ai.title') }}</div>
+          <div class="ai-msg-header">
+            <span class="ai-msg-sender">{{ t('ai.aid') }}</span>
+            <span class="ai-msg-time">{{ formatTime(msg.timestamp) }}</span>
+            <button class="copy-btn copy-btn-sm" @click="copyMessage(msg)" :title="t('ai.copy')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+          </div>
           <div class="command-block" :class="{ 'command-danger': msg.dangerous }">
             <div class="command-header">
               <span v-if="msg.dangerous" class="danger-badge">⚠️ {{ t('ai.dangerous_command') }}</span>
@@ -186,8 +204,9 @@ watch(conversationMessages, async () => {
         </div>
 
         <div v-else-if="msg.role === 'result'" class="ai-msg ai-msg-result">
-          <div class="result-label">
-            {{ t('ai.command_output') }}
+          <div class="ai-msg-header">
+            <span class="ai-msg-sender">{{ t('ai.command_output') }}</span>
+            <span class="ai-msg-time">{{ formatTime(msg.timestamp) }}</span>
             <button class="copy-btn copy-btn-sm" @click="copyMessage(msg)" :title="t('ai.copy')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             </button>
@@ -335,13 +354,22 @@ watch(conversationMessages, async () => {
   align-items: flex-start;
 }
 
-.ai-msg-label {
+.ai-msg-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 4px;
+}
+
+.ai-msg-sender {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-sub0);
+}
+
+.ai-msg-time {
   font-size: 10px;
   color: var(--text-overlay0);
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  padding-left: 4px;
 }
 
 .ai-msg-bubble {
@@ -358,6 +386,7 @@ watch(conversationMessages, async () => {
   color: var(--bg-base);
   border-bottom-right-radius: 2px;
   max-width: 85%;
+  align-self: flex-end;
 }
 
 .assistant-bubble {
@@ -544,14 +573,6 @@ watch(conversationMessages, async () => {
   width: 100%;
 }
 
-.result-label {
-  font-size: 10px;
-  color: var(--text-overlay0);
-  text-transform: uppercase;
-  font-weight: 600;
-  padding-left: 4px;
-}
-
 .error-text {
   font-size: 12px;
   color: var(--danger);
@@ -683,17 +704,6 @@ watch(conversationMessages, async () => {
 .copy-btn-sm svg {
   width: 11px;
   height: 11px;
-}
-.user-bubble,
-.assistant-bubble,
-.command-header,
-.result-label,
-.error-text {
-  display: flex;
-  align-items: flex-start;
-}
-.user-bubble {
-  justify-content: space-between;
 }
 .ai-msg-user .copy-btn {
   opacity: 0.6;

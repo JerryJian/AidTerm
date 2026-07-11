@@ -21,6 +21,7 @@ export interface ConversationMessage {
   toolCallId?: string
   dangerous?: boolean
   autoExecStatus?: 'executing' | 'completed'
+  timestamp?: number
 }
 
 function buildSystemPrompt(systemInfo: SystemInfo, history: CommandRecord[]): string {
@@ -272,7 +273,7 @@ export function useAiConversation(
   }
 
   function addConversationMessage(msg: ConversationMessage) {
-    conversationMessages.push(msg)
+    conversationMessages.push({ ...msg, timestamp: Date.now() })
   }
 
   function removeLastThinking() {

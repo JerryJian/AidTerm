@@ -428,6 +428,8 @@ export default {
     command_output: 'Output',
     copy: 'Copy',
     select_all: 'Select All',
+    me: 'Me',
+    aid: 'Aid',
   },
   common: {
     name: 'Name',

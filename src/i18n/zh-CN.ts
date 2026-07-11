@@ -428,6 +428,8 @@ export default {
     command_output: '命令输出',
     copy: '复制',
     select_all: '全选',
+    me: '我',
+    aid: 'Aid',
   },
   common: {
     name: '名称',
