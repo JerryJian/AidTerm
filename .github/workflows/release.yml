@@ -76,7 +76,8 @@ jobs:
             libssl-dev \
             librsvg2-dev \
             patchelf \
-            libayatana-appindicator3-dev
+            libayatana-appindicator3-dev \
+            xdg-utils
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v1
