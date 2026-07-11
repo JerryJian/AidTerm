@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, watch, computed } from 'vue'
+import { ref, nextTick, watch, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAiConversation } from '../../hooks/useAiConversation'
 import { marked } from 'marked'
@@ -53,6 +53,69 @@ function doReset() {
   props.aiConv.resetConversation()
 }
 
+function getCopyText(msg: { role: string; content: string; command?: string }): string {
+  if (msg.role === 'command') return msg.command || ''
+  return msg.content
+}
+
+function copyMessage(msg: { role: string; content: string; command?: string }) {
+  navigator.clipboard.writeText(getCopyText(msg))
+}
+
+function selectAllText() {
+  const el = messagesContainer.value
+  if (!el) return
+  const range = document.createRange()
+  range.selectNodeContents(el)
+  const sel = window.getSelection()
+  sel?.removeAllRanges()
+  sel?.addRange(range)
+}
+
+function copySelection() {
+  const sel = window.getSelection()
+  if (sel && sel.toString()) {
+    navigator.clipboard.writeText(sel.toString())
+  }
+}
+
+const ctx = reactive({ show: false, x: 0, y: 0 })
+
+function onContextMenu(e: MouseEvent) {
+  e.preventDefault()
+  e.stopPropagation()
+  ctx.x = e.clientX
+  ctx.y = e.clientY
+  ctx.show = true
+}
+
+function hideCtx() {
+  ctx.show = false
+}
+
+function ctxAction(action: 'copy' | 'selectAll') {
+  hideCtx()
+  if (action === 'copy') copySelection()
+  else if (action === 'selectAll') selectAllText()
+}
+
+function onCtxDocClick() {
+  if (ctx.show) hideCtx()
+}
+
+function onCtxKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && ctx.show) hideCtx()
+}
+
+onMounted(() => {
+  document.addEventListener('click', onCtxDocClick, true)
+  document.addEventListener('keydown', onCtxKeydown)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', onCtxDocClick, true)
+  document.removeEventListener('keydown', onCtxKeydown)
+})
+
 watch(conversationMessages, async () => {
   await nextTick()
   if (messagesContainer.value) {
@@ -71,7 +134,7 @@ watch(conversationMessages, async () => {
       </div>
     </div>
 
-    <div class="ai-messages" ref="messagesContainer">
+    <div class="ai-messages" ref="messagesContainer" @contextmenu="onContextMenu">
       <div v-if="conversationMessages.length === 0" class="ai-empty">
         <div class="ai-empty-icon">&#x1F916;</div>
         <div class="ai-empty-text">{{ t('ai.input_placeholder') }}</div>
@@ -79,12 +142,22 @@ watch(conversationMessages, async () => {
 
       <template v-for="(msg, idx) in conversationMessages" :key="idx">
         <div v-if="msg.role === 'user'" class="ai-msg ai-msg-user">
-          <div class="ai-msg-bubble user-bubble">{{ msg.content }}</div>
+          <div class="ai-msg-bubble user-bubble">
+            <span>{{ msg.content }}</span>
+            <button class="copy-btn" @click="copyMessage(msg)" :title="t('ai.copy')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+          </div>
         </div>
 
         <div v-else-if="msg.role === 'assistant'" class="ai-msg ai-msg-assistant">
           <div class="ai-msg-label">{{ t('ai.title') }}</div>
-          <div class="ai-msg-bubble assistant-bubble" v-html="renderMarkdown(msg.content)" />
+          <div class="ai-msg-bubble assistant-bubble">
+            <div v-html="renderMarkdown(msg.content)" />
+            <button class="copy-btn" @click="copyMessage(msg)" :title="t('ai.copy')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+          </div>
         </div>
 
         <div v-else-if="msg.role === 'command'" class="ai-msg ai-msg-command">
@@ -93,6 +166,9 @@ watch(conversationMessages, async () => {
             <div class="command-header">
               <span v-if="msg.dangerous" class="danger-badge">⚠️ {{ t('ai.dangerous_command') }}</span>
               <span v-else class="safe-badge">✅ {{ t('ai.safe_command') }}</span>
+              <button class="copy-btn copy-btn-sm" @click="copyMessage(msg)" :title="t('ai.copy')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
             </div>
             <pre class="command-text">{{ msg.command }}</pre>
             <div v-if="aiConv.showConfirm.value && aiConv.pendingToolId.value === msg.toolCallId" class="command-actions">
@@ -110,12 +186,22 @@ watch(conversationMessages, async () => {
         </div>
 
         <div v-else-if="msg.role === 'result'" class="ai-msg ai-msg-result">
-          <div class="result-label">{{ t('ai.command_output') }}</div>
+          <div class="result-label">
+            {{ t('ai.command_output') }}
+            <button class="copy-btn copy-btn-sm" @click="copyMessage(msg)" :title="t('ai.copy')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+          </div>
           <pre class="result-block">{{ msg.content }}</pre>
         </div>
 
         <div v-else-if="msg.role === 'error'" class="ai-msg ai-msg-error">
-          <div class="error-text">{{ msg.content }}</div>
+          <div class="error-text">
+            {{ msg.content }}
+            <button class="copy-btn copy-btn-sm" @click="copyMessage(msg)" :title="t('ai.copy')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+          </div>
         </div>
 
         <div v-else-if="msg.role === 'thinking'" class="ai-msg ai-msg-thinking">
@@ -147,6 +233,12 @@ watch(conversationMessages, async () => {
           <path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4Z" />
         </svg>
       </button>
+    </div>
+
+    <div v-if="ctx.show" class="ai-ctx-overlay" @click="hideCtx" @contextmenu.prevent="hideCtx" />
+    <div v-if="ctx.show" class="ai-ctx-menu" :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }">
+      <button class="ai-ctx-item" @click="ctxAction('copy')">{{ t('ai.copy') }}</button>
+      <button class="ai-ctx-item" @click="ctxAction('selectAll')">{{ t('ai.select_all') }}</button>
     </div>
   </div>
 </template>
@@ -560,5 +652,82 @@ watch(conversationMessages, async () => {
   opacity: 0.3;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-overlay0);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+.copy-btn svg {
+  width: 12px;
+  height: 12px;
+}
+.copy-btn:hover {
+  background: var(--bg-surface1);
+  color: var(--text);
+}
+.copy-btn-sm {
+  padding: 1px;
+}
+.copy-btn-sm svg {
+  width: 11px;
+  height: 11px;
+}
+.user-bubble,
+.assistant-bubble,
+.command-header,
+.result-label,
+.error-text {
+  display: flex;
+  align-items: flex-start;
+}
+.user-bubble {
+  justify-content: space-between;
+}
+.ai-msg-user .copy-btn {
+  opacity: 0.6;
+}
+
+.ai-ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+}
+.ai-ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-mantle);
+  border: 1px solid var(--bg-surface1);
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  min-width: 120px;
+}
+.ai-ctx-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.ai-ctx-item:hover {
+  background: var(--accent);
+  color: var(--bg-base);
 }
 </style>

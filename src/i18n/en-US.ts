@@ -426,6 +426,8 @@ export default {
     auto_execute: 'Auto-execute safe commands',
     auto_execute_desc: 'When enabled, AI-classified safe read-only commands execute automatically; dangerous commands always require confirmation',
     command_output: 'Output',
+    copy: 'Copy',
+    select_all: 'Select All',
   },
   common: {
     name: 'Name',
