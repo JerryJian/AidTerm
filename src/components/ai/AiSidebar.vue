@@ -708,6 +708,10 @@ watch(conversationMessages, async () => {
 .ai-msg-user .copy-btn {
   opacity: 0.6;
 }
+.ai-msg:hover > .ai-msg-header .copy-btn,
+.ai-msg:hover > .copy-btn {
+  opacity: 0.6;
+}
 
 .ai-ctx-overlay {
   position: fixed;
