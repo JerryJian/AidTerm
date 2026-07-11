@@ -1,24 +1,24 @@
-import { ref } from 'vue'
-import type { Terminal } from '@xterm/xterm'
+import { ref, reactive } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useAiStore, type AiMessage } from '../stores/aiStore'
 import { useTerminalStore } from '../stores/terminal'
 import type { SystemInfo } from '../types'
-import { marked } from 'marked'
-import { AnsiRenderer } from './ansiRenderer'
-
-const renderer = new AnsiRenderer()
 
 const MAX_HISTORY = 10
+const LONG_OUTPUT_THRESHOLD = 5000
+const LONG_OUTPUT_TRUNCATE = 8000
+const PROMPT_TIMEOUT = 30000
 
 interface CommandRecord {
   command: string
   result: string
 }
 
-/** Strip control chars that would garble terminal display */
-function sanitizeForTerminal(text: string): string {
-  return text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
+export interface ConversationMessage {
+  role: 'user' | 'assistant' | 'command' | 'result' | 'error' | 'thinking'
+  content: string
+  command?: string
+  toolCallId?: string
 }
 
 function buildSystemPrompt(systemInfo: SystemInfo, history: CommandRecord[]): string {
@@ -57,11 +57,60 @@ function buildSystemPrompt(systemInfo: SystemInfo, history: CommandRecord[]): st
   return lines.join('\n')
 }
 
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[[\d;]*[a-zA-Z]/g, '').replace(/\r/g, '')
+}
+
+function detectPromptInOutput(output: string, savedPrompt?: string): boolean {
+  const plain = stripAnsi(output)
+  const lines = plain.split('\n')
+  const lastLine = (lines[lines.length - 1] || lines[lines.length - 2] || '').trimEnd()
+
+  if (!lastLine) return false
+
+  if (savedPrompt && savedPrompt.trim() !== '$ ' && lastLine.includes(savedPrompt.trimEnd())) {
+    return true
+  }
+
+  const promptPatterns = [
+    /[$#>]\s*$/,
+    /[%→]\s*$/,
+  ]
+
+  return promptPatterns.some(p => p.test(lastLine))
+}
+
+function cleanCommandOutput(output: string, cmd: string): string {
+  const plain = stripAnsi(output)
+  const lines = plain.split('\n')
+
+  let startIdx = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(cmd)) {
+      startIdx = i
+      break
+    }
+  }
+
+  const resultLines = startIdx >= 0 ? lines.slice(startIdx + 1) : lines
+
+  const trimmed = resultLines.filter(l => l.trim().length > 0)
+
+  if (trimmed.length > 0) {
+    const lastIdx = trimmed.length - 1
+    const last = trimmed[lastIdx]
+    if (/[$#>]\s*$/.test(last) || /[%→]\s*$/.test(last)) {
+      trimmed.pop()
+    }
+  }
+
+  return trimmed.join('\n').trim()
+}
+
 export function useAiConversation(
-  getTerminal: () => Terminal | null,
+  getTerminal: () => any | null,
   writeToBackend?: (data: string) => void,
-  executeInTerminal?: (cmd: string, prompt?: string, silent?: boolean) => Promise<string>,
-  setOutputSuppression?: (suppress: boolean) => void,
+  rawOnOutput?: (cb: (data: string) => void) => Promise<(() => void) | null | undefined>,
 ) {
   const ai = useAiStore()
   const showConfirm = ref(false)
@@ -69,47 +118,109 @@ export function useAiConversation(
   const pendingToolId = ref('')
   const pendingAiMsg = ref('')
   const busy = ref(false)
-  const inputBuffer = ref('')
-  const messages = ref<AiMessage[]>([])
   const cancelled = ref(false)
-  const pendingConfirm = ref<((value: boolean) => void) | null>(null)
+  const messages = ref<AiMessage[]>([])
   const commandHistory = ref<CommandRecord[]>([])
   const savedPrompt = ref('$ ')
 
-  let passthrough = false
+  const conversationMessages = reactive<ConversationMessage[]>([])
 
-  function writeAI(text: string, prefix = '[AI] ') {
-    const formatted = marked.parse(sanitizeForTerminal(text), { renderer, async: false }) as string
-    getTerminal()?.write(`\r\n\x1b[36m${prefix}\x1b[0m${formatted.replace(/\n/g, '\r\n')}`)
+  function detectSavedPrompt() {
+    const t = getTerminal()
+    if (!t) return
+    try {
+      const buf = t.buffer.active
+      const ln = buf.getLine(buf.baseY + buf.cursorY)
+      if (ln) {
+        const text = ln.translateToString()
+        const match = text.match(/^.*?([^\s].*?)$/)
+        if (match) {
+          savedPrompt.value = match[1]
+        }
+      }
+    } catch {}
   }
 
-  function writeAITitle(text: string) {
-    getTerminal()?.write(`\r\n\x1b[35m━━━ ${text} ━━━\x1b[0m`)
+  async function waitForPrompt(cmd: string): Promise<string> {
+    if (!rawOnOutput || !writeToBackend) {
+      return ai.executeCommand(cmd)
+    }
+
+    return new Promise<string>(resolve => {
+      let output = ''
+      let unsub: (() => void) | null = null
+      let resolved = false
+
+      const cleanup = () => {
+        if (unsub) {
+          unsub()
+          unsub = null
+        }
+      }
+
+      rawOnOutput!((data: string) => {
+        output += data
+      }).then((un: (() => void) | null | undefined) => {
+        if (un) unsub = un
+      })
+
+      writeToBackend!(cmd + '\r')
+
+      const t0 = Date.now()
+
+      const check = () => {
+        if (resolved) return
+
+        if (detectPromptInOutput(output, savedPrompt.value)) {
+          resolved = true
+          cleanup()
+          const result = cleanCommandOutput(output, cmd)
+          resolve(result)
+          return
+        }
+
+        if (Date.now() - t0 > PROMPT_TIMEOUT) {
+          resolved = true
+          cleanup()
+          const result = cleanCommandOutput(output, cmd)
+          resolve(result || output)
+          return
+        }
+
+        setTimeout(check, 100)
+      }
+
+      setTimeout(check, 300)
+    })
   }
 
-  function writeCommand(cmd: string) {
-    getTerminal()?.write(`\x1b[33m${sanitizeForTerminal(cmd)}\x1b[0m\r\n`)
+  function addConversationMessage(msg: ConversationMessage) {
+    conversationMessages.push(msg)
   }
 
-  function writeOutput(out: string) {
-    for (const line of out.split('\n')) {
-      getTerminal()?.write(`\r\n\x1b[90m${sanitizeForTerminal(line)}\x1b[0m`)
+  function updateLastConversationMessage(updates: Partial<ConversationMessage>) {
+    if (conversationMessages.length > 0) {
+      const last = conversationMessages[conversationMessages.length - 1]
+      Object.assign(last, updates)
     }
   }
 
-  const LONG_OUTPUT_THRESHOLD = 5000
-  const LONG_OUTPUT_TRUNCATE = 8000
-
-  function waitForUserConfirm(message: string): Promise<boolean> {
-    return new Promise(resolve => {
-      pendingConfirm.value = resolve
-      getTerminal()?.write(`\r\n\x1b[33m${message}\x1b[0m`)
-    })
+  function removeLastThinking() {
+    for (let i = conversationMessages.length - 1; i >= 0; i--) {
+      if (conversationMessages[i].role === 'thinking') {
+        conversationMessages.splice(i, 1)
+        return
+      }
+    }
   }
 
   async function startConversation(userInput: string) {
     cancelled.value = false
     busy.value = true
+
+    detectSavedPrompt()
+
+    addConversationMessage({ role: 'user', content: userInput })
 
     const termStore = useTerminalStore()
     const tab = termStore.activeTab
@@ -121,15 +232,16 @@ export function useAiConversation(
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userInput },
     ]
+
+    addConversationMessage({ role: 'thinking', content: '' })
     continueConversation()
   }
 
   async function continueConversation() {
-    writeAITitle('AI 思考中...')
-
     try {
       const response = await ai.chat([...messages.value])
       if (cancelled.value) return
+      removeLastThinking()
 
       if (response.tool_calls && response.tool_calls.length > 0) {
         const tc = response.tool_calls[0]
@@ -143,16 +255,29 @@ export function useAiConversation(
           content: response.text || '',
         })
 
+        if (response.text) {
+          addConversationMessage({ role: 'assistant', content: response.text })
+        }
+
+        addConversationMessage({
+          role: 'command',
+          content: args.command || '',
+          command: args.command || '',
+          toolCallId: tc.id,
+        })
+
         showConfirm.value = true
+        updateLastConversationMessage({ role: 'command' })
       } else if (response.text) {
-        writeAI(response.text)
+        addConversationMessage({ role: 'assistant', content: response.text })
         messages.value.push({ role: 'assistant', content: response.text })
         endConversation()
       } else {
         endConversation()
       }
     } catch (e: any) {
-      writeAI(`错误: ${e}`)
+      removeLastThinking()
+      addConversationMessage({ role: 'error', content: `错误: ${e}` })
       endConversation()
     }
   }
@@ -165,54 +290,44 @@ export function useAiConversation(
     pendingToolId.value = ''
 
     try {
-      let result: string
+      addConversationMessage({ role: 'thinking', content: '执行中...' })
 
-      if (executeInTerminal) {
-        setOutputSuppression?.(false)
-        writeToBackend?.('\r')
-        await new Promise(r => setTimeout(r, 200))
-        result = await executeInTerminal(cmd, savedPrompt.value)
-        if (cancelled.value) return
-        setOutputSuppression?.(true)
-        await new Promise(r => setTimeout(r, 200))
+      const result = await waitForPrompt(cmd)
+      if (cancelled.value) return
+      removeLastThinking()
 
-        // Long output: ask user before sending to AI
-        if (result.length > LONG_OUTPUT_THRESHOLD) {
-          const shouldContinue = await waitForUserConfirm(
-            `[输出较长 (${result.length} 字符)，按 Enter 发送给 AI 分析，按 Ctrl+C 取消]`
-          )
-          if (!shouldContinue || cancelled.value) {
-            if (!cancelled.value) writeAI('已取消分析')
-            endConversation()
-            return
-          }
-          result = result.slice(0, LONG_OUTPUT_TRUNCATE) +
-            `\n\n...(输出过长，仅显示前 ${LONG_OUTPUT_TRUNCATE} 字符，共 ${result.length} 字符)`
-        }
-      } else {
-        writeAITitle('执行命令')
-        writeCommand(cmd)
-        result = await ai.executeCommand(cmd)
-        writeOutput(result || '(无输出)')
+      const displayResult = result || '(无输出)'
+
+      addConversationMessage({ role: 'result', content: displayResult })
+
+      let resultForAI = displayResult
+      if (displayResult.length > LONG_OUTPUT_THRESHOLD) {
+        resultForAI = displayResult.slice(0, LONG_OUTPUT_TRUNCATE) +
+          `\n\n...(输出过长，仅显示前 ${LONG_OUTPUT_TRUNCATE} 字符，共 ${displayResult.length} 字符)`
+        addConversationMessage({
+          role: 'error',
+          content: `输出较长 (${displayResult.length} 字符)，已截断发送给 AI`,
+        })
       }
 
-      commandHistory.value.unshift({ command: cmd, result: result || '(无输出)' })
+      commandHistory.value.unshift({ command: cmd, result: displayResult })
       if (commandHistory.value.length > MAX_HISTORY) {
         commandHistory.value = commandHistory.value.slice(0, MAX_HISTORY)
       }
 
-      writeAITitle('AI 继续分析')
+      addConversationMessage({ role: 'thinking', content: 'AI 分析中...' })
+
       messages.value.push({
         role: 'tool',
-        content: result || '(无输出)',
+        content: resultForAI,
         tool_call_id: toolId,
       })
 
-      const response = await ai.continueWithResult(toolId, result || '(无输出)')
+      const response = await ai.continueWithResult(toolId, resultForAI)
       if (cancelled.value) return
+      removeLastThinking()
 
       if (response.text) {
-        writeAI(response.text)
         messages.value.push({ role: 'assistant', content: response.text })
       }
 
@@ -222,12 +337,28 @@ export function useAiConversation(
         pendingCommand.value = args.command || ''
         pendingToolId.value = tc.id
         pendingAiMsg.value = response.text || ''
+
+        if (response.text) {
+          addConversationMessage({ role: 'assistant', content: response.text })
+        }
+
+        addConversationMessage({
+          role: 'command',
+          content: args.command || '',
+          command: args.command || '',
+          toolCallId: tc.id,
+        })
+
         showConfirm.value = true
+      } else if (response.text) {
+        addConversationMessage({ role: 'assistant', content: response.text })
+        endConversation()
       } else {
         endConversation()
       }
     } catch (e: any) {
-      writeAI(`执行错误: ${e}`)
+      removeLastThinking()
+      addConversationMessage({ role: 'error', content: `执行错误: ${e}` })
       endConversation()
     }
   }
@@ -238,7 +369,7 @@ export function useAiConversation(
     pendingCommand.value = ''
     pendingToolId.value = ''
 
-    writeAI('已取消命令执行')
+    addConversationMessage({ role: 'error', content: '已取消命令执行' })
     writeToBackend?.('\x03')
     endConversation()
   }
@@ -251,206 +382,53 @@ export function useAiConversation(
 
   function endConversation() {
     busy.value = false
-    inputBuffer.value = ''
     ai.pendingToolCall = null
-    if (pendingConfirm.value) {
-      pendingConfirm.value = null
-    }
-    getTerminal()?.write('\x1b[?25h\x1b[?12h')
-    setOutputSuppression?.(false)
-    writeToBackend?.('\r')
   }
 
-  /** Submit a complete line from the input bar (deprecated, kept for compat) */
-  function submitLine(line: string): void {
-    const trimmed = line.trim()
+  function submitInput(text: string) {
+    const trimmed = text.trim()
     if (!trimmed) return
 
-    if (!busy.value && ai.isNaturalLanguage(trimmed)) {
-      if (!ai.enabled) {
-        getTerminal()?.write(`\r\n\x1b[33m⚠ 请在设置 → AI 中配置 API Key 后使用 AI 助手\x1b[0m\r\n`)
-        return
-      }
-      startConversation(trimmed)
-      return
-    }
-
-    writeToBackend?.(trimmed + '\r\n')
-  }
-
-  function interceptInput(data: string): boolean {
-    if (passthrough) {
-      if (data === '\r' || data === '\n') {
-        passthrough = false
-      }
-      return false
-    }
-
-    const t = getTerminal()
-    if (!t) return false
-
-    // === Waiting for user confirmation (long output) ===
-    if (pendingConfirm.value) {
-      if (data === '\r' || data === '\n') {
-        const resolve = pendingConfirm.value
-        pendingConfirm.value = null
-        resolve(true)
-        return true
-      }
-      if (data === '\x03') {
-        const resolve = pendingConfirm.value
-        pendingConfirm.value = null
-        writeToBackend?.('\x03')
-        resolve(false)
-        return true
-      }
-      return true
-    }
-
-    // === AI conversation in progress - intercept all input ===
-    if (busy.value) {
-      if (data === '\x03') {
-        cancelled.value = true
-        writeToBackend?.('\x03')
-        endConversation()
-        return true
-      }
-      return true
-    }
-
-    // === Normal mode ===
-    if (data === '\r' || data === '\n') {
-      const line = inputBuffer.value
-      inputBuffer.value = ''
-
-      if (!line.trim()) {
-        return false
-      }
-
-      if (ai.isNaturalLanguage(line)) {
-        if (!ai.enabled) {
-          t.write(`\r\n\x1b[33m⚠ 请在设置 → AI 中配置 API Key 后使用 AI 助手\x1b[0m\r\n`)
-          writeToBackend?.('\r')
-          return true
-        }
-        try {
-          const buf = t.buffer.active
-          const ln = buf.getLine(buf.baseY + buf.cursorY)
-          if (ln) {
-            const text = ln.translateToString()
-            if (text.endsWith(line)) {
-              savedPrompt.value = text.slice(0, -line.length)
-            }
-          }
-        } catch {}
-        // Strip prefix in prefix mode
-        let aiLine = line
-        if (ai.config.mode === 'prefix') {
-          const prefixes = (ai.config.prefix || ':').split('')
-          const trimmed = aiLine.trim()
-          const matched = prefixes.find(p => trimmed.startsWith(p))
-          if (matched) {
-            aiLine = trimmed.slice(matched.length).trimStart()
-          }
-        }
-        // Cancel buffered text in shell while suppressing the "^C" + new prompt output
-        setOutputSuppression?.(true)
-        writeToBackend?.('\x03')
-    startConversation(line.trim())
-        setTimeout(() => setOutputSuppression?.(false), 200)
-        return true
-      }
-
-      // Normal command: send Enter to backend (characters already sent individually)
-      writeToBackend?.('\r')
-      return true
-    }
-
-    if (data === '\x7f') {
-      if (inputBuffer.value.length > 0) {
-        inputBuffer.value = inputBuffer.value.slice(0, -1)
-      }
-      return false
-    }
-
-    if (data === '\t') {
-      inputBuffer.value = ''
-      passthrough = true
-      writeToBackend?.('\t')
-      return true
-    }
-
-    // Forward printable text to backend AND buffer for AI detection
-    if (/^[\x20-\x7e\u00a0-\uffff]+$/.test(data)) {
-      inputBuffer.value += data
-      writeToBackend?.(data)
-      return true
-    }
-
-    // Single control char → clear buffer and pass through
-    if (data.length === 1 && data.charCodeAt(0) < 32) {
-      inputBuffer.value = ''
-      return false
-    }
-
-    // Escape sequences (arrow keys etc.) and other data → pass through, keep buffer
-    return false
-  }
-
-  function forceAIInput(): void {
-    const t = getTerminal()
-    if (!t || busy.value) return
     if (!ai.enabled) {
-      t.write(`\r\n\x1b[33m⚠ 请在设置 → AI 中配置 API Key 后使用 AI 助手\x1b[0m\r\n`)
-      writeToBackend?.('\r')
+      addConversationMessage({ role: 'error', content: '请在设置 → AI 中配置 API Key 后使用 AI 助手' })
       return
     }
-    const line = inputBuffer.value
-    inputBuffer.value = ''
-    if (!line.trim()) return
-    try {
-      const buf = t.buffer.active
-      const ln = buf.getLine(buf.baseY + buf.cursorY)
-      if (ln) {
-        const text = ln.translateToString()
-        if (text.endsWith(line)) {
-          savedPrompt.value = text.slice(0, -line.length)
-        }
-      }
-    } catch {}
-    setOutputSuppression?.(true)
-    writeToBackend?.('\x03')
-    startConversation(line.trim())
-    setTimeout(() => setOutputSuppression?.(false), 200)
-  }
 
-  function clearInputBuffer() {
-    inputBuffer.value = ''
+    startConversation(trimmed)
   }
 
   function resetConversation() {
     ai.clearHistory()
     endConversation()
     messages.value = []
-    writeAI('对话已重置')
+    conversationMessages.length = 0
+    addConversationMessage({ role: 'assistant', content: '对话已重置' })
+  }
+
+  function forceAIInput() {
+    const t = getTerminal()
+    if (!t || busy.value) return
+    if (!ai.enabled) {
+      addConversationMessage({ role: 'error', content: '请在设置 → AI 中配置 API Key 后使用 AI 助手' })
+      return
+    }
   }
 
   return {
     showConfirm,
     pendingCommand,
+    pendingToolId,
     pendingAiMsg,
     busy,
     cancelled,
-    interceptInput,
+    conversationMessages,
     onConfirmCommand,
     onCancelCommand,
     onModifyCommand,
     resetConversation,
-    writeAI,
     startConversation,
     commandHistory,
-    clearInputBuffer,
-    submitLine,
+    submitInput,
     forceAIInput,
   }
 }

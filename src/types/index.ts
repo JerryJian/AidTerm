@@ -68,6 +68,7 @@ export interface TerminalTab {
   toolSidebarOpen?: boolean
   openToolTabs?: ToolTab[]
   activeToolTab?: ToolTab
+  aiSidebarOpen?: boolean
 }
 
 export interface TerminalOutputPayload {

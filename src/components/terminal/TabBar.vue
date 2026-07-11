@@ -4,12 +4,14 @@ import { invoke } from '@tauri-apps/api/core'
 import { useTerminalStore } from '../../stores/terminal'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useUiStore } from '../../stores/uiStore'
+import { useAiStore } from '../../stores/aiStore'
 import type { SavedSession, ToolTab } from '../../types'
 import QuickConnectBar from '../session/QuickConnectBar.vue'
 
 const store = useTerminalStore()
 const sessionStore = useSessionStore()
 const ui = useUiStore()
+const aiStore = useAiStore()
 
 const emit = defineEmits<{
   quickSsh: [host: string, port: number, username: string]
@@ -49,6 +51,12 @@ function openToolTab(tab: ToolTab) {
     store.addToolTab(store.activeTabId, tab)
   }
   toolsMenuOpen.value = false
+}
+
+function toggleAiSidebar() {
+  if (store.activeTabId) {
+    store.toggleAiSidebar(store.activeTabId)
+  }
 }
 
 function isToolOpen(tab: ToolTab): boolean {
@@ -229,6 +237,17 @@ defineExpose({ onKeydown })
       </div>
     </div>
     <div class="tab-bar-right">
+      <button
+        v-if="aiStore.enabled"
+        class="ai-toggle-btn"
+        :class="{ active: store.activeTab?.aiSidebarOpen }"
+        @click="toggleAiSidebar"
+        title="AI Assistant"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v2h-2zm0 4h2v6h-2z"/>
+        </svg>
+      </button>
       <div class="tools-wrapper">
         <button class="tools-btn" :class="{ active: toolsMenuOpen }" @click="toggleToolsMenu" title="Tools">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
@@ -452,6 +471,29 @@ defineExpose({ onKeydown })
   color: var(--text);
 }
 .tools-btn.active {
+  background: var(--accent-glass);
+  color: var(--accent);
+}
+
+.ai-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--text-sub0);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-right: 4px;
+}
+.ai-toggle-btn:hover {
+  background: var(--bg-surface0);
+  color: var(--text);
+}
+.ai-toggle-btn.active {
   background: var(--accent-glass);
   color: var(--accent);
 }

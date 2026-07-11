@@ -387,6 +387,7 @@ export default {
   },
   ai: {
     title: 'AI',
+    sidebar_title: 'AI Assistant',
     suggest_command: 'AI suggests command:',
     execute: 'Execute',
     modify: 'Modify',
@@ -408,6 +409,13 @@ export default {
     mode_keybinding: 'Keybinding (Ctrl+Enter)',
     prefix: 'Trigger Prefix',
     prefix_desc: 'Lines starting with any of these characters trigger AI response; each character is a separate trigger prefix',
+    input_placeholder: 'Ask AI... (Enter to send)',
+    thinking: 'Thinking...',
+    executing: 'Executing...',
+    analyzing: 'AI analyzing...',
+    output_truncated: 'Output truncated for AI',
+    no_config: 'Configure API Key in Settings → AI first',
+    reset: 'Reset Chat',
   },
   common: {
     name: 'Name',

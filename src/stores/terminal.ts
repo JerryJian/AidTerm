@@ -96,6 +96,13 @@ export const useTerminalStore = defineStore('terminal', () => {
     return !!tab?.openToolTabs?.includes(tool)
   }
 
+  function toggleAiSidebar(tabId: string) {
+    const tab = tabs.value.find(t => t.id === tabId)
+    if (tab) {
+      tab.aiSidebarOpen = !tab.aiSidebarOpen
+    }
+  }
+
   function closeTab(id: string) {
     const idx = tabs.value.findIndex(t => t.id === id)
     if (idx === -1) return
@@ -187,5 +194,6 @@ export const useTerminalStore = defineStore('terminal', () => {
     setActiveToolTab,
     toggleToolSidebar,
     isToolOpen,
+    toggleAiSidebar,
   }
 })

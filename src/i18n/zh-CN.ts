@@ -387,6 +387,7 @@ export default {
   },
   ai: {
     title: 'AI',
+    sidebar_title: 'AI 助手',
     suggest_command: 'AI 建议执行命令',
     execute: '执行',
     modify: '修改',
@@ -408,6 +409,13 @@ export default {
     mode_keybinding: '按键发送 (Ctrl+Enter)',
     prefix: '触发前缀',
     prefix_desc: '输入此字符开头的文本将触发 AI 应答，每字符均为独立触发前缀',
+    input_placeholder: '输入问题... (Enter 发送)',
+    thinking: '思考中...',
+    executing: '执行中...',
+    analyzing: 'AI 分析中...',
+    output_truncated: '输出较长，已截断发送给 AI',
+    no_config: '请在设置 → AI 中配置 API Key 后使用 AI 助手',
+    reset: '重置对话',
   },
   common: {
     name: '名称',

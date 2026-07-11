@@ -11,7 +11,6 @@ import { useTerminalStore } from '../../stores/terminal'
 import { useThemeStore } from '../../stores/themeStore'
 import { useAiConversation } from '../../hooks/useAiConversation'
 import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SystemInfo } from '../../types'
-import AiConfirmOverlay from '../ai/AiConfirmOverlay.vue'
 import { useAiStore } from '../../stores/aiStore'
 import { useI18n } from 'vue-i18n'
 
@@ -45,9 +44,10 @@ const unlisteners: (() => void)[] = []
 let resizeObserver: ResizeObserver | null = null
 let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 let lastSize = { w: 0, h: 0 }
-const suppressOutput = ref(false)
 
 const { createSession, sshConnect, telnetConnect, serialConnect, writeInput, resize, onOutput, killSession } = useTerminal()
+
+const aiConv = useAiConversation(() => terminal, writeInput, onOutput)
 
 function getXtermTheme() {
   const s = getComputedStyle(document.documentElement)
@@ -75,110 +75,7 @@ function getXtermTheme() {
   }
 }
 
-function stripAnsi(text: string): string {
-  return text.replace(/\x1b\[[\d;]*[a-zA-Z]/g, '').replace(/\r/g, '')
-}
-
-function stripLeadingEcho(output: string, cmd: string): string {
-  const idx = output.indexOf(cmd)
-  if (idx === 0) {
-    let rest = output.slice(cmd.length)
-    if (rest.startsWith('\r\n')) rest = rest.slice(2)
-    else if (rest.startsWith('\n')) rest = rest.slice(1)
-    else if (rest.startsWith('\r')) rest = rest.slice(1)
-    return rest
-  }
-  return output
-}
-
-function stripTrailingPrompt(output: string, prompt: string): string {
-  if (!prompt || prompt === '$ ' || !output) return output
-  const plain = output.replace(/\x1b\[[\d;]*[a-zA-Z]/g, '')
-  if (plain.endsWith(prompt.trimEnd())) {
-    return output.slice(0, -prompt.trimEnd().length)
-  }
-  return output
-}
-
-function stripMarkerFromOutput(text: string, marker: string): string {
-  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  // Consume the trailing \r?\n so the line removal doesn't orphan a blank line
-  const re = new RegExp(`^.*?echo\\s+${escaped}.*\\r?\\n`, 'gm')
-  return text.replace(re, '').replace(new RegExp(escaped, 'g'), '')
-}
-
-async function executeInTerminal(cmd: string, prompt?: string, silent?: boolean): Promise<string> {
-  const p = prompt || '$ '
-  return new Promise(async (resolve) => {
-    suppressOutput.value = true
-
-    let output = ''
-    const unsub = (await onOutput((data: string) => {
-      output += data
-    })) ?? (() => {})
-
-    if (!silent) terminal?.write(`${cmd}\r\n`)
-
-    const marker = `__CMD_DONE_${Date.now()}__`
-    writeInput(`${cmd}\recho ${marker}\r`)
-
-    const t0 = Date.now()
-    const MAX_WAIT = 30000
-
-    const poll = () => {
-      const idx = output.lastIndexOf(marker)
-      if (idx >= 0) {
-        unsub()
-        output = output.slice(0, idx)
-        finish()
-        return
-      }
-
-      if (Date.now() - t0 > MAX_WAIT) {
-        unsub()
-        writeInput('\x03')
-        finish()
-        return
-      }
-
-      setTimeout(poll, 50)
-    }
-    setTimeout(poll, 50)
-
-    function finish() {
-      const clean = stripMarkerFromOutput(output, marker)
-
-      if (silent) {
-        suppressOutput.value = false
-        const raw = stripAnsi(clean)
-        const lines = raw.split(/\r?\n/)
-        let startIdx = -1
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].trim() === cmd) { startIdx = i; break }
-        }
-        const result = startIdx >= 0
-          ? lines.slice(startIdx + 1).filter(l => l.trim()).slice(0, -1).join('\n')
-          : lines.filter(l => l.trim()).slice(0, -1).join('\n')
-        const last = raw.split(/\r?\n/).filter(l => l.trim()).pop()
-        if (last && /[$#>]/.test(last)) terminal?.write(`\r\n${last}`)
-        resolve(result.trim())
-        return
-      }
-
-      let display = stripLeadingEcho(clean, cmd)
-      display = stripTrailingPrompt(display, p)
-      terminal?.write(display)
-
-      suppressOutput.value = false
-      resolve(stripAnsi(clean))
-    }
-  })
-}
-
-const aiConv = useAiConversation(() => terminal, writeInput, executeInTerminal, (v) => suppressOutput.value = v)
-
 function handleTerminalData(data: string) {
-  if (aiConv.interceptInput(data)) return
   writeInput(data)
 }
 
@@ -230,14 +127,6 @@ async function initTerminal() {
   terminal.loadAddon(fitAddon)
   terminal.loadAddon(searchAddon.value)
   terminal.loadAddon(new WebLinksAddon())
-
-  terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      aiConv.forceAIInput()
-      return false
-    }
-    return true
-  })
 
   terminal.onData((data: string) => {
     handleTerminalData(data)
@@ -303,13 +192,11 @@ async function initTerminal() {
 
     sessionId = id
     store.updateSessionId(store.activeTabId ?? '', id)
-    // Local and telnet sessions connect synchronously; the event emitted during
-    // creation arrives before sessionId is set, so set connected status directly.
     if (!props.sshInfo) {
       store.updateSessionStatus(store.activeTabId ?? '', 'connected')
     }
     const unsub = await onOutput((data: string) => {
-      if (!suppressOutput.value) terminal?.write(data)
+      terminal?.write(data)
     })
     if (unsub) unlisten = unsub
 
@@ -436,7 +323,6 @@ async function readClipboard(): Promise<string> {
 async function pasteOrSend() {
   const text = await readClipboard()
   if (text) {
-    aiConv.clearInputBuffer()
     writeInput(text)
   } else {
     writeInput('\x16')
@@ -510,7 +396,7 @@ onUnmounted(() => {
   document.removeEventListener('keydown', onKeydown)
 })
 
-defineExpose({ focusSearch, doFit })
+defineExpose({ focusSearch, doFit, aiConv })
 </script>
 
 <template>
@@ -524,24 +410,15 @@ defineExpose({ focusSearch, doFit })
         @keydown.shift.enter="findPrevious"
         @keydown.escape="closeSearch"
       />
-      <button class="search-btn" @click="findNext">↓</button>
-      <button class="search-btn" @click="findPrevious">↑</button>
-      <button class="search-btn" @click="closeSearch">✕</button>
+      <button class="search-btn" @click="findNext">&#x2193;</button>
+      <button class="search-btn" @click="findPrevious">&#x2191;</button>
+      <button class="search-btn" @click="closeSearch">&#x2715;</button>
     </div>
     <div ref="terminalRef" class="terminal-xterm" />
     <div v-if="store.activeTab?.session?.status === 'connecting'" class="connecting-overlay">
       <div class="spinner" />
       <span>{{ t('terminal.connecting') }}</span>
     </div>
-
-    <AiConfirmOverlay
-      v-if="aiConv.showConfirm.value"
-      :command="aiConv.pendingCommand.value"
-      :ai-message="aiConv.pendingAiMsg.value"
-      @confirm="aiConv.onConfirmCommand()"
-      @cancel="aiConv.onCancelCommand()"
-      @modify="(cmd: string) => aiConv.onModifyCommand(cmd)"
-    />
 
     <!-- Context menu -->
     <teleport to="body">
