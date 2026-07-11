@@ -362,10 +362,13 @@ function doToggleSearch() {
 }
 
 function doAskAi() {
-  closeContextMenu()
   const sel = terminal?.getSelection()
+  closeContextMenu()
   if (!sel) return
-  aiConv.startConversation(`${t('context_menu.ask_ai')}\n${sel}`)
+  if (store.activeTabId && !store.activeTab?.aiSidebarOpen) {
+    store.toggleAiSidebar(store.activeTabId)
+  }
+  nextTick(() => aiConv.startConversation(sel))
 }
 
 function doNewTab() {
