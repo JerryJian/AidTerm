@@ -131,8 +131,8 @@ function cleanCommandOutput(output: string, cmd: string): string {
 
   if (trimmed.length > 0) {
     const lastIdx = trimmed.length - 1
-    const last = trimmed[lastIdx]
-    if (/[$#>]\s*$/.test(last) || /[%→]\s*$/.test(last)) {
+    const last = trimmed[lastIdx].trimEnd()
+    if (/^[$#>%]$/.test(last)) {
       trimmed.pop()
     }
   }
