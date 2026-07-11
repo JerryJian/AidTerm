@@ -472,8 +472,7 @@ watch(conversationMessages, async () => {
 }
 
 .ai-input-area {
-  display: flex;
-  gap: 6px;
+  position: relative;
   padding: 8px 12px;
   border-top: 1px solid var(--bg-surface0);
   background: var(--bg-mantle);
@@ -481,8 +480,8 @@ watch(conversationMessages, async () => {
 }
 
 .ai-input {
-  flex: 1;
-  padding: 8px 10px;
+  width: 100%;
+  padding: 8px 32px 8px 10px;
   background: var(--bg-base);
   border: 1px solid var(--bg-surface1);
   border-radius: 6px;
@@ -502,16 +501,21 @@ watch(conversationMessages, async () => {
 }
 
 .ai-send-btn {
-  padding: 0 12px;
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   background: var(--accent);
   color: var(--bg-base);
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 16px;
-  align-self: flex-end;
-  height: 36px;
-  flex-shrink: 0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .ai-send-btn:hover:not(:disabled) {
   background: var(--accent-hover);
