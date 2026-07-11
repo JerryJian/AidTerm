@@ -412,7 +412,6 @@ export function useAiConversation(
         if (!dangerous && ai.config.auto_execute) {
           updateLastCommandAutoExecStatus(tc.id, 'executing')
           await onConfirmCommand()
-          updateLastCommandAutoExecStatus(tc.id, 'completed')
         } else {
           showConfirm.value = true
         }
@@ -444,6 +443,7 @@ export function useAiConversation(
       const result = await waitForPrompt(cmd)
       if (cancelled.value) return
       removeLastThinking()
+      updateLastCommandAutoExecStatus(toolId, 'completed')
 
       const displayResult = result || '(无输出)'
 
@@ -507,7 +507,6 @@ export function useAiConversation(
         if (!dangerous && ai.config.auto_execute) {
           updateLastCommandAutoExecStatus(tc.id, 'executing')
           await onConfirmCommand()
-          updateLastCommandAutoExecStatus(tc.id, 'completed')
         } else {
           showConfirm.value = true
         }
@@ -518,6 +517,7 @@ export function useAiConversation(
         endConversation()
       }
     } catch (e: any) {
+      updateLastCommandAutoExecStatus(toolId, 'completed')
       removeLastThinking()
       addConversationMessage({ role: 'error', content: `执行错误: ${e}` })
       endConversation()
