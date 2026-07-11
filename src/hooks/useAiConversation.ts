@@ -113,7 +113,7 @@ function detectPromptInOutput(output: string, savedPrompt?: string): boolean {
   return promptPatterns.some(p => p.test(lastLine))
 }
 
-function cleanCommandOutput(output: string, cmd: string): string {
+function cleanCommandOutput(output: string, cmd: string, prompt?: string): string {
   const plain = stripAnsi(output)
   const lines = plain.split('\n')
 
@@ -131,9 +131,18 @@ function cleanCommandOutput(output: string, cmd: string): string {
 
   if (trimmed.length > 0) {
     const lastIdx = trimmed.length - 1
-    const last = trimmed[lastIdx].trimEnd()
-    if (/^[$#>%]$/.test(last)) {
+    let last = trimmed[lastIdx].trimEnd()
+
+    if (prompt && prompt.trimEnd() && last.endsWith(prompt.trimEnd())) {
+      last = last.slice(0, -prompt.trimEnd().length)
+    } else if (/^[$#>%]$/.test(last)) {
+      last = ''
+    }
+
+    if (last.trim().length === 0) {
       trimmed.pop()
+    } else {
+      trimmed[lastIdx] = last
     }
   }
 
@@ -241,7 +250,7 @@ export function useAiConversation(
         if (detectPromptInOutput(output, savedPrompt.value)) {
           resolved = true
           cleanup()
-          const result = cleanCommandOutput(output, cmd)
+          const result = cleanCommandOutput(output, cmd, savedPrompt.value)
           resolve(result)
           return
         }
@@ -249,7 +258,7 @@ export function useAiConversation(
         if (Date.now() - t0 > PROMPT_TIMEOUT) {
           resolved = true
           cleanup()
-          const result = cleanCommandOutput(output, cmd)
+          const result = cleanCommandOutput(output, cmd, savedPrompt.value)
           resolve(result || output)
           return
         }
