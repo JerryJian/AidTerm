@@ -294,8 +294,10 @@ export function useAiConversation(
     const systemInfo = tab?.systemInfo ?? await invoke<SystemInfo>('get_system_info')
 
     const systemPrompt = buildSystemPrompt(systemInfo, commandHistory.value)
+    const historyMsgs = buildHistoryMessages(3)
     messages.value = [
       { role: 'system', content: systemPrompt },
+      ...historyMsgs,
       { role: 'user', content: userInput },
     ]
 
@@ -311,6 +313,65 @@ export function useAiConversation(
 
   function cleanAiText(text: string): string {
     return stripDangerTag(text)
+  }
+
+  function buildHistoryMessages(maxTurns: number = 3): AiMessage[] {
+    const userIndices: number[] = []
+    for (let i = 0; i < conversationMessages.length; i++) {
+      if (conversationMessages[i].role === 'user') userIndices.push(i)
+    }
+
+    const startIdx = userIndices.length > maxTurns
+      ? userIndices[userIndices.length - maxTurns]
+      : userIndices.length > 0 ? userIndices[0] : conversationMessages.length
+
+    const slice = conversationMessages.slice(startIdx)
+    const result: AiMessage[] = []
+
+    let pendingAssistant: AiMessage | null = null
+
+    for (const msg of slice) {
+      if (msg.role === 'user') {
+        result.push({ role: 'user', content: msg.content })
+        pendingAssistant = null
+      } else if (msg.role === 'assistant') {
+        if (!pendingAssistant) {
+          pendingAssistant = { role: 'assistant', content: msg.content }
+          result.push(pendingAssistant)
+        } else {
+          pendingAssistant.content = msg.content
+        }
+      } else if (msg.role === 'command' && msg.toolCallId) {
+        if (!pendingAssistant) {
+          pendingAssistant = { role: 'assistant', content: '' }
+          result.push(pendingAssistant)
+        }
+        if (!pendingAssistant.tool_calls) pendingAssistant.tool_calls = []
+        pendingAssistant.tool_calls.push({
+          id: msg.toolCallId,
+          function: {
+            name: 'execute_command',
+            arguments: JSON.stringify({ command: msg.command || '' }),
+          },
+        })
+      } else if (msg.role === 'result' && msg.toolCallId) {
+        result.push({
+          role: 'tool',
+          content: msg.content,
+          tool_call_id: msg.toolCallId,
+        })
+        pendingAssistant = null
+      } else if (msg.role === 'error' && msg.toolCallId) {
+        result.push({
+          role: 'tool',
+          content: msg.content,
+          tool_call_id: msg.toolCallId,
+        })
+        pendingAssistant = null
+      }
+    }
+
+    return result
   }
 
   async function continueConversation() {
