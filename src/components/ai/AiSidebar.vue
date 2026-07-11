@@ -143,7 +143,9 @@ watch(conversationMessages, async () => {
         @click="doSend"
         :disabled="!inputText.trim() || aiConv.busy.value"
       >
-        &#x27A4;
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4Z" />
+        </svg>
       </button>
     </div>
   </div>
@@ -308,6 +310,31 @@ watch(conversationMessages, async () => {
 .assistant-bubble :deep(a) {
   color: var(--accent);
   text-decoration: underline;
+}
+.assistant-bubble :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 12px;
+}
+.assistant-bubble :deep(th),
+.assistant-bubble :deep(td) {
+  border: 1px solid var(--bg-surface1);
+  padding: 5px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+.assistant-bubble :deep(th) {
+  background: var(--bg-surface0);
+  font-weight: 600;
+  color: var(--text);
+}
+.assistant-bubble :deep(td) {
+  background: var(--bg-crust);
+  color: var(--text);
+}
+.assistant-bubble :deep(tr:hover td) {
+  background: var(--bg-surface0);
 }
 
 .command-block {
@@ -481,7 +508,7 @@ watch(conversationMessages, async () => {
 
 .ai-input {
   width: 100%;
-  padding: 8px 32px 8px 10px;
+  padding: 8px 40px 8px 10px;
   background: var(--bg-base);
   border: 1px solid var(--bg-surface1);
   border-radius: 6px;
@@ -502,26 +529,36 @@ watch(conversationMessages, async () => {
 
 .ai-send-btn {
   position: absolute;
-  right: 16px;
-  bottom: 12px;
-  width: 24px;
-  height: 24px;
+  right: 8px;
+  bottom: 8px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   background: var(--accent);
   color: var(--bg-base);
   border: none;
-  border-radius: 4px;
+  border-radius: 50%;
   cursor: pointer;
-  font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background 0.15s, transform 0.1s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.ai-send-btn svg {
+  width: 14px;
+  height: 14px;
 }
 .ai-send-btn:hover:not(:disabled) {
   background: var(--accent-hover);
+  transform: scale(1.05);
+}
+.ai-send-btn:active:not(:disabled) {
+  transform: scale(0.95);
 }
 .ai-send-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.3;
   cursor: not-allowed;
+  box-shadow: none;
 }
 </style>
