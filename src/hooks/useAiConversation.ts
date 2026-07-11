@@ -186,6 +186,7 @@ export function useAiConversation(
   getTerminal: () => any | null,
   writeToBackend?: (data: string) => void,
   rawOnOutput?: (cb: (data: string) => void) => Promise<(() => void) | null | undefined>,
+  aiSessionId?: string,
 ) {
   const ai = useAiStore()
   const showConfirm = ref(false)
@@ -388,7 +389,7 @@ export function useAiConversation(
 
   async function continueConversation() {
     try {
-      const response = await ai.chat([...messages.value])
+      const response = await ai.chat([...messages.value], aiSessionId)
       if (cancelled.value) return
       removeLastThinking()
 
@@ -484,7 +485,7 @@ export function useAiConversation(
         tool_call_id: toolId,
       })
 
-      const response = await ai.continueWithResult(toolId, resultForAI)
+      const response = await ai.continueWithResult(toolId, resultForAI, aiSessionId)
       if (cancelled.value) return
       removeLastThinking()
 

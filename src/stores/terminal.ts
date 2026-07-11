@@ -34,6 +34,7 @@ export const useTerminalStore = defineStore('terminal', () => {
       sshInfo,
       telnetInfo,
       serialInfo,
+      aiSessionId: `ai-${id}`,
     }
     tabs.value.push(tab)
     activeTabId.value = id

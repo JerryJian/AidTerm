@@ -67,6 +67,7 @@ function onAiDividerDown(e: MouseEvent) {
         :ssh-info="tab.sshInfo"
         :telnet-info="tab.telnetInfo"
         :serial-info="tab.serialInfo"
+        :ai-session-id="tab.aiSessionId"
         @newSsh="$emit('newSsh')"
       />
     </div>

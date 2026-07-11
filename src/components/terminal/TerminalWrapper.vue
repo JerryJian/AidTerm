@@ -18,6 +18,7 @@ const props = defineProps<{
   sshInfo?: SshConnectionInfo
   telnetInfo?: TelnetConnectionInfo
   serialInfo?: SerialConnectionInfo
+  aiSessionId?: string
 }>()
 
 const emit = defineEmits<{
@@ -47,7 +48,7 @@ let lastSize = { w: 0, h: 0 }
 
 const { createSession, sshConnect, telnetConnect, serialConnect, writeInput, resize, onOutput, killSession } = useTerminal()
 
-const aiConv = useAiConversation(() => terminal, writeInput, onOutput)
+const aiConv = useAiConversation(() => terminal, writeInput, onOutput, props.aiSessionId)
 
 function getXtermTheme() {
   const s = getComputedStyle(document.documentElement)

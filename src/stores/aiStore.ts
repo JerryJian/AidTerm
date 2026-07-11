@@ -210,11 +210,11 @@ export const useAiStore = defineStore('ai', () => {
     return false
   }
 
-  async function chat(messages: AiMessage[]): Promise<AiResponse> {
+  async function chat(messages: AiMessage[], sessionId?: string): Promise<AiResponse> {
     thinking.value = true
     try {
       const response = await invoke<AiResponse>('ai_chat', {
-        sessionId: activeSessionId.value || 'default',
+        sessionId: sessionId || activeSessionId.value || 'default',
         messages,
         config: config.value,
       })
@@ -231,12 +231,12 @@ export const useAiStore = defineStore('ai', () => {
     return await invoke<string>('ai_execute', { command })
   }
 
-  async function continueWithResult(toolCallId: string, result: string): Promise<AiResponse> {
+  async function continueWithResult(toolCallId: string, result: string, sessionId?: string): Promise<AiResponse> {
     thinking.value = true
     pendingToolCall.value = null
     try {
       const response = await invoke<AiResponse>('ai_continue', {
-        sessionId: activeSessionId.value || 'default',
+        sessionId: sessionId || activeSessionId.value || 'default',
         toolCallId,
         toolResult: result,
         config: config.value,
@@ -250,8 +250,8 @@ export const useAiStore = defineStore('ai', () => {
     }
   }
 
-  function clearHistory() {
-    invoke('ai_clear_history', { sessionId: activeSessionId.value || 'default' })
+  function clearHistory(sessionId?: string) {
+    invoke('ai_clear_history', { sessionId: sessionId || activeSessionId.value || 'default' })
     pendingToolCall.value = null
   }
 
