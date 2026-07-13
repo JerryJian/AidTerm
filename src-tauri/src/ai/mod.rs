@@ -222,33 +222,79 @@ async fn fetch_openai_models(base_url: &str, api_key: &str) -> Result<Vec<String
 
 async fn chat_ollama(messages: Vec<ChatMessage>, config: &AiConfig) -> Result<AiResponse, String> {
     use ollama_rs::Ollama;
-    use ollama_rs::generation::chat::{ChatMessage as OllamaChatMessage, MessageRole};
-    use ollama_rs::generation::chat::request::ChatMessageRequest;
+    use ollama_rs::generation::chat::{ChatMessage as OllamaChatMessage, MessageRole, request::ChatMessageRequest};
+    use ollama_rs::generation::tools::ToolInfo;
 
-    let ollama = Ollama::builder()
-        .url(config.base_url.trim_end_matches('/'))
-        .build();
+    let url = config.base_url.trim_end_matches('/');
+    let ollama = Ollama::try_new(url)
+        .map_err(|e| format!("Failed to create Ollama client: {}", e))?;
 
-    let history: Vec<OllamaChatMessage> = messages.iter().map(|m| {
+    let ollama_messages: Vec<OllamaChatMessage> = messages.iter().map(|m| {
         let role = match m.role.as_str() {
+            "system" => MessageRole::System,
             "user" => MessageRole::User,
             "assistant" => MessageRole::Assistant,
-            "system" => MessageRole::System,
             "tool" => MessageRole::Tool,
             _ => MessageRole::User,
         };
-        OllamaChatMessage::new(role, m.content.clone())
+        let mut msg = OllamaChatMessage::new(role, m.content.clone());
+        if let Some(ref tool_calls) = m.tool_calls {
+            msg.tool_calls = tool_calls.iter().map(|tc| {
+                ollama_rs::generation::tools::ToolCall {
+                    function: ollama_rs::generation::tools::ToolCallFunction {
+                        name: tc.function.name.clone(),
+                        arguments: serde_json::from_str::<serde_json::Value>(&tc.function.arguments)
+                            .unwrap_or(serde_json::json!({})),
+                    },
+                }
+            }).collect();
+        }
+        msg
     }).collect();
 
-    let request = ChatMessageRequest::new(config.model.clone(), history);
+    let tool_info: ToolInfo = serde_json::from_value(serde_json::json!({
+        "type": "Function",
+        "function": {
+            "name": "execute_command",
+            "description": "在服务器上执行一条 shell 命令，返回命令的输出结果。执行命令后，系统会将输出结果返回给你，请根据结果继续推理。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "要执行的 shell 命令"
+                    }
+                },
+                "required": ["command"]
+            }
+        }
+    })).map_err(|e| format!("Failed to build tool info: {}", e))?;
+
+    let request = ChatMessageRequest::new(config.model.clone(), ollama_messages)
+        .tools(vec![tool_info]);
 
     let response = ollama.send_chat_messages(request)
         .await
         .map_err(|e| format!("Ollama API error: {}", e))?;
 
-    let text = response.message.content;
+    let text = if response.message.content.is_empty() {
+        None
+    } else {
+        Some(response.message.content)
+    };
 
-    Ok(AiResponse { text: Some(text), tool_calls: vec![] })
+    let tool_calls = response.message.tool_calls
+        .into_iter()
+        .map(|tc| ToolCall {
+            id: format!("call_{}", uuid::Uuid::new_v4()),
+            function: ToolCallFunction {
+                name: tc.function.name,
+                arguments: tc.function.arguments.to_string(),
+            },
+        })
+        .collect();
+
+    Ok(AiResponse { text, tool_calls })
 }
 
 async fn fetch_ollama_models(base_url: &str) -> Result<Vec<String>, String> {
@@ -265,88 +311,6 @@ async fn fetch_ollama_models(base_url: &str) -> Result<Vec<String>, String> {
     Ok(models.into_iter().map(|m| m.name).collect())
 }
 
-// --- Anthropic (anthropic-ai-sdk) ---
-
-async fn chat_anthropic(messages: Vec<ChatMessage>, config: &AiConfig) -> Result<AiResponse, String> {
-    use anthropic_ai_sdk::client::AnthropicClient;
-    use anthropic_ai_sdk::types::message::{
-        CreateMessageParams, Message as AnthropicMessage, RequiredMessageParams,
-        Role, ContentBlock, MessageClient,
-    };
-
-    let client = AnthropicClient::new::<anthropic_ai_sdk::types::model::ModelError>(
-        &config.api_key, "2023-06-01",
-    )
-    .map_err(|e| format!("Failed to create Anthropic client: {}", e))?;
-
-    let mut anthropic_messages: Vec<AnthropicMessage> = Vec::new();
-    for m in &messages {
-        let role = match m.role.as_str() {
-            "user" => Role::User,
-            "assistant" => Role::Assistant,
-            _ => continue,
-        };
-        anthropic_messages.push(AnthropicMessage::new_text(role, m.content.clone()));
-    }
-
-    let params = CreateMessageParams::new(RequiredMessageParams {
-        model: config.model.clone(),
-        messages: anthropic_messages,
-        max_tokens: 4096,
-    });
-
-    let response = client.create_message(Some(&params))
-        .await
-        .map_err(|e| format!("Anthropic API error: {}", e))?;
-
-    let mut text = String::new();
-    for block in response.content {
-        if let ContentBlock::Text { text: t } = block {
-            text.push_str(&t);
-        }
-    }
-
-    Ok(AiResponse { text: Some(text), tool_calls: vec![] })
-}
-
-async fn fetch_anthropic_models(base_url: &str, api_key: &str) -> Result<Vec<String>, String> {
-    let url = format!("{}/v1/models", base_url.trim_end_matches('/'));
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-
-    let response = client
-        .get(&url)
-        .header("x-api-key", api_key)
-        .header("anthropic-version", "2023-06-01")
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch Anthropic models: {}", e))?;
-
-    let status = response.status();
-    let text = response.text().await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
-
-    if !status.is_success() {
-        return Err(format!("Anthropic API error ({}): {}", status, text));
-    }
-
-    let v: serde_json::Value = serde_json::from_str(&text)
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
-
-    let models = v["data"]
-        .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|m| m["id"].as_str().map(|s| s.to_string()))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    Ok(models)
-}
-
 // --- Public API ---
 
 pub async fn fetch_models(
@@ -356,7 +320,6 @@ pub async fn fetch_models(
 ) -> Result<Vec<String>, String> {
     match provider {
         "ollama" => fetch_ollama_models(base_url).await,
-        "anthropic" => fetch_anthropic_models(base_url, api_key).await,
         _ => fetch_openai_models(base_url, api_key).await,
     }
 }
@@ -367,7 +330,6 @@ pub async fn chat_completion(
 ) -> Result<AiResponse, String> {
     match config.provider.as_str() {
         "ollama" => chat_ollama(messages, config).await,
-        "anthropic" => chat_anthropic(messages, config).await,
         _ => chat_openai(messages, config).await,
     }
 }

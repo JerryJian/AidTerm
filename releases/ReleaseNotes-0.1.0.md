@@ -56,7 +56,7 @@
 - 消息气泡复制按钮（hover 显示）、右键菜单、时间戳
 - 发送按钮内嵌输入框右下角、圆形图标
 - 最近 3 轮对话上下文带入新查询
-- AI SDK 库替换手写 HTTP 请求、Provider 预设（OpenAI / DeepSeek / DashScope / Ollama / Anthropic）
+- AI SDK 库替换手写 HTTP 请求、Provider 预设（OpenAI / DeepSeek / DashScope / Ollama）
 - AI 设置面板：分步表单 + 模型列表从 API 拉取
 
 ### 会话管理

@@ -60,7 +60,7 @@ export const useAiStore = defineStore('ai', () => {
         delete raw.api_type
         return raw
       }
-      const providerNameMap: Record<string, string> = { openai: 'openai-compatible', deepseek: 'openai-compatible', dashscope: 'openai-compatible', ollama: 'ollama', anthropic: 'anthropic' }
+      const providerNameMap: Record<string, string> = { openai: 'openai-compatible', deepseek: 'openai-compatible', dashscope: 'openai-compatible', ollama: 'ollama' }
       if (raw.provider && providerNameMap[raw.provider]) {
         raw.provider = providerNameMap[raw.provider]
         return raw
@@ -97,7 +97,6 @@ export const useAiStore = defineStore('ai', () => {
     { id: 'dashscope', label: 'DashScope', provider: 'openai-compatible', model: 'qwen-plus', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
     { id: 'openai-compatible', label: 'OpenAI Compatible', provider: 'openai-compatible', model: 'gpt-4o', baseUrl: 'https://api.openai.com/v1' },
     { id: 'ollama', label: 'Ollama', provider: 'ollama', model: 'llama3', baseUrl: 'http://localhost:11434' },
-    { id: 'anthropic', label: 'Anthropic', provider: 'anthropic', model: 'claude-sonnet-4-20250514', baseUrl: 'https://api.anthropic.com' },
   ])
 
   const currentProviderId = computed(() => {
