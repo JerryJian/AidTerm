@@ -1132,10 +1132,12 @@ async function callAiChat(messages: AiMessage[], config: AiConfig): Promise<AiRe
   const choice = response.choices?.[0]
   if (!choice) throw new Error('No choices in AI response')
 
-  const toolCalls: AiToolCall[] = (choice.message?.tool_calls || []).map((tc) => ({
-    id: tc.id,
-    function: { name: tc.function.name, arguments: tc.function.arguments },
-  }))
+  const toolCalls: AiToolCall[] = (choice.message?.tool_calls || [])
+    .filter((tc): tc is typeof tc & { function: { name: string; arguments: string } } => 'function' in tc)
+    .map((tc) => ({
+      id: tc.id,
+      function: { name: tc.function.name, arguments: tc.function.arguments },
+    }))
 
   return { text: choice.message?.content || null, tool_calls: toolCalls }
 }
