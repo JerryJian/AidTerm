@@ -1,5 +1,5 @@
 import { ref, reactive, computed } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/api'
 import { useAiStore, type AiMessage } from '../stores/aiStore'
 import { useTerminalStore } from '../stores/terminal'
 import type { SystemInfo } from '../types'

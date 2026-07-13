@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { open } from '@tauri-apps/plugin-dialog'
+import { openDialog as open } from '@/api'
 import { useI18n } from 'vue-i18n'
 import { useProxyStore } from '../../stores/proxyStore'
 import type { SshConnectionInfo } from '../../types'

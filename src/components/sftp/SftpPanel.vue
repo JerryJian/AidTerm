@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, reactive, onMounted, onUnmounted } from 'vue'
 import { useSftpStore } from '../../stores/sftpStore'
-import { open, save } from '@tauri-apps/plugin-dialog'
-import { listen } from '@tauri-apps/api/event'
+import { openDialog as open, saveDialog as save, listen } from '@/api'
 import { useI18n } from 'vue-i18n'
 import type { FileEntry, TerminalTab, UploadTask, SftpProgress } from '../../types'
 

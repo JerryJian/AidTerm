@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke, getCurrentWindow } from '@/api'
 import { useI18n } from 'vue-i18n'
-import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useUiStore } from '../../stores/uiStore'
 
 const { t } = useI18n()
@@ -147,6 +146,7 @@ async function onInspect() {
   border-bottom: 1px solid var(--bg-surface0);
   user-select: none;
   flex-shrink: 0;
+  -webkit-app-region: drag;
 }
 
 .titlebar-left {
@@ -177,6 +177,7 @@ async function onInspect() {
 .titlebar-actions {
   display: flex;
   height: 100%;
+  -webkit-app-region: no-drag;
 }
 
 .tb-btn {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/api'
 import { useI18n } from 'vue-i18n'
 
 interface KnownHostEntry {

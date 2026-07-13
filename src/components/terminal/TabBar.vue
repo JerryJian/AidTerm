@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/api'
 import { useI18n } from 'vue-i18n'
 import { useTerminalStore } from '../../stores/terminal'
 import { useSessionStore } from '../../stores/sessionStore'
@@ -16,6 +16,7 @@ const aiStore = useAiStore()
 const { t } = useI18n()
 
 const emit = defineEmits<{
+  lockClick: []
   quickSsh: [host: string, port: number, username: string]
   quickTelnet: [host: string, port: number]
   quickSerial: []

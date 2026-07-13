@@ -4,8 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { setLanguage } from '../../i18n'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useAiStore } from '../../stores/aiStore'
-import { getCurrentWindow } from '@tauri-apps/api/window'
-import { open } from '@tauri-apps/plugin-dialog'
+import { getCurrentWindow, openDialog as open } from '@/api'
 
 const { t, locale } = useI18n()
 const settings = useSettingsStore()

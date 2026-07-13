@@ -6,8 +6,7 @@ import { useSettingsStore } from '../../stores/settingsStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { useAiStore } from '../../stores/aiStore'
 import { useProxyStore } from '../../stores/proxyStore'
-import { getCurrentWindow } from '@tauri-apps/api/window'
-import { open } from '@tauri-apps/plugin-dialog'
+import { getCurrentWindow, openDialog as open } from '@/api'
 import type { ProxyConfig, ProxyType } from '../../types'
 
 const { t, locale } = useI18n()

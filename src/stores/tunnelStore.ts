@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/api'
 import type { TunnelCreateRequest, TunnelInfo } from '../types'
 
 const tunnels = ref<TunnelInfo[]>([])

@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/api'
 import type { ProxyConfig } from '../types'
 
 const STORAGE_KEY = 'aidterm_proxies'

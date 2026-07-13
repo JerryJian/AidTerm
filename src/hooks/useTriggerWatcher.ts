@@ -1,6 +1,5 @@
 import { onMounted, onUnmounted } from 'vue'
-import { listen } from '@tauri-apps/api/event'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke, listen } from '@/api'
 import { useTriggerStore } from '../stores/triggerStore'
 import { useTerminalStore } from '../stores/terminal'
 import type { TerminalOutputPayload } from '../types'

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { ref, toRaw } from 'vue'
+import { invoke } from '@/api'
 import type { SavedSession, SavedSessionGroup, SessionStoreData } from '../types'
 
 function genId(): string {
@@ -26,7 +26,7 @@ export const useSessionStore = defineStore('sessions', () => {
   async function save() {
     try {
       await invoke('save_session_store', {
-        data: { groups: groups.value, sessions: sessions.value },
+        data: { groups: toRaw(groups.value), sessions: toRaw(sessions.value) },
       })
     } catch (e) {
       console.error('Failed to save sessions:', e)

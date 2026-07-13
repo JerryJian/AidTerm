@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { ref, computed, toRaw } from 'vue'
+import { invoke } from '@/api'
 
 export interface AiConfig {
   provider: string
@@ -215,8 +215,8 @@ export const useAiStore = defineStore('ai', () => {
     try {
       const response = await invoke<AiResponse>('ai_chat', {
         sessionId: sessionId || activeSessionId.value || 'default',
-        messages,
-        config: config.value,
+        messages: messages.map(m => toRaw(m)),
+        config: toRaw(config.value),
       })
       if (response.tool_calls && response.tool_calls.length > 0) {
         pendingToolCall.value = response.tool_calls[0]
@@ -239,7 +239,7 @@ export const useAiStore = defineStore('ai', () => {
         sessionId: sessionId || activeSessionId.value || 'default',
         toolCallId,
         toolResult: result,
-        config: config.value,
+        config: toRaw(config.value),
       })
       if (response.tool_calls && response.tool_calls.length > 0) {
         pendingToolCall.value = response.tool_calls[0]

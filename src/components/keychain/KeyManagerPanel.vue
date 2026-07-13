@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
-import { open } from '@tauri-apps/plugin-dialog'
+import { invoke, openDialog as open } from '@/api'
 import { useI18n } from 'vue-i18n'
 import type { KeyInfo } from '../../types'
 

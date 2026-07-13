@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { open } from '@tauri-apps/plugin-dialog'
+import { openDialog as open } from '@/api'
 import { useI18n } from 'vue-i18n'
 import { useTunnelStore } from '../../stores/tunnelStore'
 import type { TunnelCreateRequest, TerminalTab } from '../../types'
