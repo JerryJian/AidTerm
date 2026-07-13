@@ -92,22 +92,6 @@ async function toggleFullscreen() {
       </div>
 
       <div class="section">
-        <h3>{{ t('settings.tray') }}</h3>
-        <div class="setting-row">
-          <label>
-            <input type="checkbox" v-model="settings.minimizeToTray" />
-            {{ t('settings.minimize_to_tray') }}
-          </label>
-        </div>
-        <div class="setting-row">
-          <label>
-            <input type="checkbox" v-model="settings.closeToTray" />
-            {{ t('settings.close_to_tray') }}
-          </label>
-        </div>
-      </div>
-
-      <div class="section">
         <h3>🤖 {{ t('ai.title') }}</h3>
 
         <div class="setting-row col">
