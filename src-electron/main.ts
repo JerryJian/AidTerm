@@ -89,7 +89,7 @@ function createWindow(): void {
   if (isDev) {
     mainWindow.loadURL('http://localhost:1420')
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+    mainWindow.loadFile(path.join(process.resourcesPath, 'dist', 'index.html'))
   }
 
   mainWindow.once('ready-to-show', () => { mainWindow?.show() })
