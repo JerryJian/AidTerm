@@ -1,14 +1,20 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useTerminalStore } from '../../stores/terminal'
 import { useI18n } from 'vue-i18n'
-import { getVersion } from '@tauri-apps/api/app'
 
 const store = useTerminalStore()
 const { t } = useI18n()
 const version = ref('')
 
-getVersion().then(v => version.value = v).catch(() => {})
+onMounted(async () => {
+  try {
+    const { getVersion } = await import('@tauri-apps/api/app')
+    version.value = await getVersion()
+  } catch {
+    version.value = '0.2.0'
+  }
+})
 
 const statusText = computed(() => {
   const tab = store.activeTab
