@@ -2,8 +2,7 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       target:
@@ -23,8 +22,8 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: ${{ matrix.target }}
+  build-tauri:
+    name: Build Tauri ${{ matrix.target }}
     strategy:
       fail-fast: false
       matrix:
@@ -81,14 +80,188 @@ jobs:
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "AidTerm ${{ github.ref_name }}"
-          releaseBody: |
-            See [CHANGELOG](https://github.com/${{ github.repository }}/releases) for details.
-          releaseDraft: true
-          uploadUpdaterJson: false
-          uploadWorkflowArtifacts: true
           args: --target ${{ matrix.target }}
+
+      - name: Upload artifacts (Unix)
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.app.tar.gz
+          if-no-files-found: error
+
+      - name: Upload artifacts (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.msi
+          if-no-files-found: error
+
+  build-electron:
+    name: Build Electron ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: linux-x64
+          - runner: ubuntu-22.04-arm
+            target: linux-arm64
+          - runner: macos-13
+            target: macos-x64
+          - runner: macos-15
+            target: macos-arm64
+          - runner: windows-2022
+            target: windows-x64
+
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Install Electron dependencies
+        working-directory: src-electron
+        run: npm ci
+
+      - name: Build Electron TypeScript
+        working-directory: src-electron
+        run: npm run build
+
+      - name: Install native modules (Linux)
+        if: runner.os == 'Linux'
+        working-directory: src-electron
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            libx11-dev \
+            libxtst-dev \
+            libpng-dev \
+            libffi-dev
+
+      - name: Build Electron app (Linux)
+        if: runner.os == 'Linux'
+        working-directory: src-electron
+        run: npx electron-builder --linux --${{ matrix.target == 'linux-arm64' && 'arm64' || 'x64' }}
+
+      - name: Build Electron app (macOS)
+        if: runner.os == 'macOS'
+        working-directory: src-electron
+        run: npx electron-builder --mac --${{ matrix.target == 'macos-arm64' && 'arm64' || 'x64' }}
+
+      - name: Build Electron app (Windows)
+        if: runner.os == 'Windows'
+        working-directory: src-electron
+        run: npx electron-builder --win --x64
+
+      - name: Upload artifacts (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-${{ matrix.target }}
+          path: |
+            src-electron/release/*.AppImage
+            src-electron/release/*.deb
+          if-no-files-found: error
+
+      - name: Upload artifacts (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-${{ matrix.target }}
+          path: |
+            src-electron/release/*.dmg
+          if-no-files-found: error
+
+      - name: Upload artifacts (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-${{ matrix.target }}
+          path: |
+            src-electron/release/*.exe
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: [build-tauri, build-electron]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download Tauri artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tauri-*
+          merge-multiple: true
+          path: artifacts/tauri
+
+      - name: Download Electron artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: electron-*
+          merge-multiple: true
+          path: artifacts/electron
+
+      - name: List release assets
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: "AidTerm ${{ github.ref_name }}"
+          body: |
+            See [CHANGELOG](https://github.com/${{ github.repository }}/releases) for details.
+
+            ## Downloads
+
+            ### Tauri (Recommended)
+
+            | Platform | File |
+            |----------|------|
+            | Windows (x64) | `AidTerm_*_x64-setup.exe` |
+            | Linux (x64) | `AidTerm_*_amd64.deb` |
+            | Linux (ARM64) | `AidTerm_*_arm64.deb` |
+            | macOS (Intel) | `AidTerm_*_x64.dmg` |
+            | macOS (Apple Silicon) | `AidTerm_*_aarch64.dmg` |
+
+            ### Electron
+
+            | Platform | File |
+            |----------|------|
+            | Windows (x64) | `AidTerm_*_electron_x64.exe` |
+            | Linux (x64) | `AidTerm_*_electron_amd64.deb` |
+            | Linux (ARM64) | `AidTerm_*_electron_arm64.deb` |
+            | macOS (Intel) | `AidTerm_*_electron_x64.dmg` |
+            | macOS (Apple Silicon) | `AidTerm_*_electron_aarch64.dmg` |
+          files: |
+            artifacts/tauri/**/*.exe
+            artifacts/tauri/**/*.deb
+            artifacts/tauri/**/*.dmg
+            artifacts/tauri/**/*.AppImage
+            artifacts/tauri/**/*.app.tar.gz
+            artifacts/electron/**/*.exe
+            artifacts/electron/**/*.deb
+            artifacts/electron/**/*.dmg
+            artifacts/electron/**/*.AppImage

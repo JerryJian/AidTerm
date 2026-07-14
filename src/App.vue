@@ -17,6 +17,7 @@ import SshDialog from './components/session/SshDialog.vue'
 import SerialDialog from './components/session/SerialDialog.vue'
 import SessionDialog from './components/session/SessionDialog.vue'
 import SettingsDialog from './components/settings/SettingsDialog.vue'
+import AboutDialog from './components/about/AboutDialog.vue'
 import FileEditor from './components/editor/FileEditor.vue'
 import LockScreen from './components/lock/LockScreen.vue'
 import { useTriggerWatcher } from './hooks/useTriggerWatcher'
@@ -427,6 +428,10 @@ onUnmounted(() => {
   <SettingsDialog
     v-if="ui.settingsDialog"
     @close="ui.settingsDialog = false"
+  />
+  <AboutDialog
+    v-if="ui.aboutDialog"
+    @close="ui.aboutDialog = false"
   />
   <SessionDialog
     v-if="showSessionDialog"

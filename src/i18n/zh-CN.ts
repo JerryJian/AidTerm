@@ -445,4 +445,9 @@ export default {
   terminal: {
     connecting: '连接中...',
   },
+  about: {
+    title: '关于',
+    description: '基于 Tauri 和 Vue 构建的跨平台终端模拟器，支持 SSH、Telnet、串口、SFTP 及 AI 智能助手。',
+    github: 'GitHub',
+  },
 }

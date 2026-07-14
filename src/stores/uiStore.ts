@@ -7,6 +7,7 @@ export const useUiStore = defineStore('ui', () => {
   const sshDialog = ref(false)
   const serialDialog = ref(false)
   const settingsDialog = ref(false)
+  const aboutDialog = ref(false)
   const leftSidebarWidth = ref(280)
 
   return {
@@ -15,6 +16,7 @@ export const useUiStore = defineStore('ui', () => {
     sshDialog,
     serialDialog,
     settingsDialog,
+    aboutDialog,
     leftSidebarWidth,
   }
 })

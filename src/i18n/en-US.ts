@@ -445,4 +445,9 @@ export default {
   terminal: {
     connecting: 'Connecting...',
   },
+  about: {
+    title: 'About',
+    description: 'A cross-platform terminal emulator built with Tauri and Vue, supporting SSH, Telnet, Serial, SFTP and AI assistant.',
+    github: 'GitHub',
+  },
 }

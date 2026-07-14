@@ -26,11 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
-            // macOS/Linux: use native window decorations (decorations:false only on Windows)
-            #[cfg(not(target_os = "windows"))]
-            if let Some(window) = app.get_webview_window("main") {
-                window.set_decorations(true).map_err(|e| e.to_string())?;
-            }
+            // All platforms: use custom Vue titlebar (decorations:false in tauri.conf.json)
 
             // Keychain manager with app data dir
             let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
