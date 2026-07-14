@@ -175,7 +175,7 @@ jobs:
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $installPath = & $vswhere -latest -property installationPath
           $setupExe = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
-          & $setupExe modify --installPath $installPath --add Microsoft.VisualStudio.Component.VC.Runtimes.x64.Spectre --quiet --norestart --nocache --wait
+          Start-Process -FilePath $setupExe -ArgumentList "modify --installPath `"$installPath`" --add Microsoft.VisualStudio.Component.VC.Runtimes.x64.Spectre --quiet --norestart --nocache" -Wait -NoNewWindow
 
       - name: Build Electron app (Windows)
         if: runner.os == 'Windows'
