@@ -158,6 +158,11 @@ jobs:
             libpng-dev \
             libffi-dev
 
+      - name: Skip incompatible native modules
+        if: runner.os == 'Linux'
+        working-directory: src-electron
+        run: rm -rf node_modules/cpu-features
+
       - name: Build Electron app (Linux)
         if: runner.os == 'Linux'
         working-directory: src-electron
