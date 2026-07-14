@@ -2,6 +2,11 @@
   "name": "aidterm-electron",
   "version": "0.1.0",
   "private": true,
+  "author": {
+    "name": "AidTerm",
+    "email": "aidterm@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/AidTerm/AidTerm",
   "main": "dist/main.js",
   "scripts": {
     "dev": "tsc && electron dist/main.js",
@@ -42,7 +47,8 @@
         "AppImage",
         "deb"
       ],
-      "category": "TerminalEmulator"
+      "category": "TerminalEmulator",
+      "maintainer": "AidTerm <aidterm@users.noreply.github.com>"
     },
     "mac": {
       "target": [
