@@ -170,9 +170,12 @@ jobs:
 
       - name: Install Spectre-mitigated libs (Windows)
         if: runner.os == 'Windows'
-        shell: cmd
+        shell: pwsh
         run: |
-          "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" modify --installPath "C:\Program Files\Microsoft Visual Studio\2022\Enterprise" --add Microsoft.VisualStudio.Component.VC.Runtimes.x64.Spectre --quiet --norestart --nocache --wait
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installPath = & $vswhere -latest -property installationPath
+          $setupExe = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+          & $setupExe modify --installPath $installPath --add Microsoft.VisualStudio.Component.VC.Runtimes.x64.Spectre --quiet --norestart --nocache --wait
 
       - name: Build Electron app (Windows)
         if: runner.os == 'Windows'
