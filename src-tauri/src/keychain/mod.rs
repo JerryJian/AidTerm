@@ -3,6 +3,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::process::Command;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 pub struct KeychainManager {
     keys_dir: PathBuf,
@@ -48,8 +50,13 @@ impl KeychainManager {
     }
 
     fn run_ssh_keygen(args: &[&str]) -> Result<String, String> {
-        let output = Command::new("ssh-keygen")
-            .args(args)
+        let mut cmd = Command::new("ssh-keygen");
+        cmd.args(args);
+        #[cfg(target_os = "windows")]
+        {
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        let output = cmd
             .output()
             .map_err(|e| format!("ssh-keygen not found: {}. Install OpenSSH client.", e))?;
 

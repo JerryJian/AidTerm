@@ -1,4 +1,6 @@
 use std::sync::mpsc::Sender;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use tauri::{Manager, State};
 use crate::ai;
 use crate::keychain;
@@ -361,13 +363,21 @@ pub async fn get_system_info() -> SystemInfo {
         .unwrap_or_else(|_| "unknown".to_string());
 
     let kernel = if cfg!(target_os = "windows") {
-        std::process::Command::new("cmd")
-            .args(["/C", "ver"])
-            .output()
-            .ok()
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| "unknown".to_string())
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("cmd")
+                .args(["/C", "ver"])
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .output()
+                .ok()
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|| "unknown".to_string())
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            unreachable!()
+        }
     } else {
         std::process::Command::new("uname")
             .arg("-a")

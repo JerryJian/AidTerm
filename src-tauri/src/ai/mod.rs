@@ -1,4 +1,6 @@
 use std::sync::Mutex;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 pub struct AiState {
     pub active_chats: Mutex<std::collections::HashMap<String, Vec<ChatMessage>>>,
@@ -337,10 +339,18 @@ pub async fn chat_completion(
 /// Execute a shell command and return its output
 pub async fn execute_command(command: &str) -> Result<String, String> {
     let output = if cfg!(target_os = "windows") {
-        std::process::Command::new("cmd")
-            .args(["/C", command])
-            .output()
-            .map_err(|e| format!("Failed to execute command: {}", e))?
+        #[cfg(target_os = "windows")]
+        {
+            std::process::Command::new("cmd")
+                .args(["/C", command])
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .output()
+                .map_err(|e| format!("Failed to execute command: {}", e))?
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            unreachable!()
+        }
     } else {
         std::process::Command::new("sh")
             .args(["-c", command])
