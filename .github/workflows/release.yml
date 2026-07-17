@@ -184,8 +184,8 @@ jobs:
         with:
           name: electron-${{ matrix.target }}
           path: |
-            dist/electron/*.AppImage
-            dist/electron/*.deb
+            src-electron/out/*.AppImage
+            src-electron/out/*.deb
           if-no-files-found: error
 
       - name: Upload artifacts (macOS)
@@ -194,7 +194,7 @@ jobs:
         with:
           name: electron-${{ matrix.target }}
           path: |
-            dist/electron/*.dmg
+            src-electron/out/*.dmg
           if-no-files-found: error
 
       - name: Upload artifacts (Windows)
@@ -203,7 +203,7 @@ jobs:
         with:
           name: electron-${{ matrix.target }}
           path: |
-            dist/electron/*.exe
+            src-electron/out/*.exe
           if-no-files-found: error
 
   release:
