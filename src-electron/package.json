@@ -1,6 +1,6 @@
 {
   "name": "aidterm-electron",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "author": {
     "name": "AidTerm",
@@ -38,7 +38,7 @@
     "appId": "com.aidterm.app",
     "productName": "AidTerm",
     "directories": {
-      "output": "../dist/electron"
+      "output": "./out"
     },
     "files": [
       "dist/**/*"
