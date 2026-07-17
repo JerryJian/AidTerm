@@ -35,38 +35,6 @@
     "typescript": "~5.8.3"
   },
   "build": {
-    "appId": "com.aidterm.app",
-    "productName": "AidTerm",
-    "directories": {
-      "output": "./out"
-    },
-    "files": [
-      "dist/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "../dist",
-        "to": "dist"
-      }
-    ],
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "category": "TerminalEmulator",
-      "maintainer": "AidTerm <aidterm@users.noreply.github.com>"
-    },
-    "mac": {
-      "target": [
-        "dmg"
-      ]
-    },
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "icons/icon.ico"
-    }
+    "extends": "./electron-builder.config.js"
   }
 }
