@@ -87,7 +87,7 @@ function createWindow(): void {
   })
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:1420')
+    mainWindow.loadURL('http://localhost:3000')
   } else {
     mainWindow.loadFile(path.join(process.resourcesPath, 'dist', 'index.html'))
   }
@@ -297,7 +297,13 @@ function registerIpcHandlers(): void {
   ipcMain.handle('window:openDevtools', () => mainWindow?.webContents.openDevTools())
 
   // ═══ Platform ═══
-  ipcMain.handle('get_platform', () => process.platform)
+  ipcMain.handle('get_platform', () => {
+    switch (process.platform) {
+      case 'win32': return 'windows'
+      case 'darwin': return 'macos'
+      default: return 'linux'
+    }
+  })
 
   // ═══ Dialog ═══
   ipcMain.handle('dialog:open', async (_, opts: OpenDialogOpts | undefined) => {

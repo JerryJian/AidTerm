@@ -24,7 +24,7 @@ onMounted(async () => {
     isMaximized.value = await win.isMaximized()
     const platform = await invoke<string>('get_platform')
     isWindows.value = platform === 'windows'
-    isMacOS.value = platform === 'darwin'
+    isMacOS.value = platform === 'macos'
   } catch { /* ignore */ }
 })
 
@@ -120,7 +120,7 @@ async function onInspect() {
           <line x1="12" y1="19" x2="20" y2="19" />
         </svg>
       </template>
-      <span class="titlebar-title">AidTerm</span>
+      <span class="titlebar-title">AidTerm <span class="titlebar-version">v0.2.0</span></span>
     </div>
     <div class="titlebar-center" />
 
@@ -273,6 +273,13 @@ async function onInspect() {
   font-weight: 600;
   color: var(--text-sub0);
   letter-spacing: 0.3px;
+}
+
+.titlebar-version {
+  font-weight: 400;
+  opacity: 0.5;
+  margin-left: 4px;
+  font-size: 11px;
 }
 
 .titlebar-center {

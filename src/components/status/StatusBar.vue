@@ -1,20 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useTerminalStore } from '../../stores/terminal'
 import { useI18n } from 'vue-i18n'
 
 const store = useTerminalStore()
 const { t } = useI18n()
-const version = ref('')
-
-onMounted(async () => {
-  try {
-    const { getVersion } = await import('@tauri-apps/api/app')
-    version.value = await getVersion()
-  } catch {
-    version.value = '0.2.0'
-  }
-})
 
 const statusText = computed(() => {
   const tab = store.activeTab
@@ -124,7 +114,6 @@ const statusTooltip = computed(() => {
     </span>
     <span v-else class="status-left" />
     <span class="status-right">
-      <span v-if="version" class="status-version">v{{ version }}</span>
       {{ $t('status.tabs_count', { count: store.tabs.length }) }}
     </span>
   </div>
@@ -160,14 +149,6 @@ const statusTooltip = computed(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.status-version {
-  color: var(--text-sub0);
-  background: var(--bg-surface0);
-  padding: 0 6px;
-  border-radius: 4px;
-  font-size: 10px;
 }
 
 .status-dot {
