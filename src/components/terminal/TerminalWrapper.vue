@@ -51,27 +51,28 @@ const aiConv = useAiConversation(() => terminal, writeInput, onOutput, props.aiS
 
 function getXtermTheme() {
   const s = getComputedStyle(document.documentElement)
+  const v = (name: string, fallback: string) => s.getPropertyValue(name).trim() || fallback
   return {
-    background: s.getPropertyValue('--bg-base').trim() || '#1e1e2e',
-    foreground: s.getPropertyValue('--text').trim() || '#cdd6f4',
-    cursor: s.getPropertyValue('--rosewater').trim() || '#f5e0dc',
-    selectionBackground: s.getPropertyValue('--text-overlay0').trim() || '#585b70',
-    black: s.getPropertyValue('--bg-surface1').trim() || '#45475a',
-    red: s.getPropertyValue('--danger').trim() || '#f38ba8',
-    green: s.getPropertyValue('--success').trim() || '#a6e3a1',
-    yellow: s.getPropertyValue('--warning').trim() || '#f9e2af',
-    blue: s.getPropertyValue('--accent').trim() || '#89b4fa',
-    magenta: s.getPropertyValue('--pink').trim() || '#f5c2e7',
-    cyan: s.getPropertyValue('--teal').trim() || '#94e2d5',
-    white: s.getPropertyValue('--text-sub1').trim() || '#bac2de',
-    brightBlack: s.getPropertyValue('--text-overlay0').trim() || '#585b70',
-    brightRed: s.getPropertyValue('--danger').trim() || '#f38ba8',
-    brightGreen: s.getPropertyValue('--success').trim() || '#a6e3a1',
-    brightYellow: s.getPropertyValue('--warning').trim() || '#f9e2af',
-    brightBlue: s.getPropertyValue('--accent').trim() || '#89b4fa',
-    brightMagenta: s.getPropertyValue('--pink').trim() || '#f5c2e7',
-    brightCyan: s.getPropertyValue('--teal').trim() || '#94e2d5',
-    brightWhite: s.getPropertyValue('--text-sub0').trim() || '#a6adc8',
+    background: v('--bg-base', '#1e1e1e'),
+    foreground: v('--text-sub1', '#cccccc'),
+    cursor: v('--text', '#d4d4d4'),
+    selectionBackground: v('--term-selection', '#264f78'),
+    black: v('--term-black', '#000000'),
+    red: v('--term-red', '#cd3131'),
+    green: v('--term-green', '#00bc00'),
+    yellow: v('--term-yellow', '#949800'),
+    blue: v('--term-blue', '#0451a5'),
+    magenta: v('--term-magenta', '#bc05bc'),
+    cyan: v('--term-cyan', '#0598bc'),
+    white: v('--term-white', '#555555'),
+    brightBlack: v('--term-bright-black', '#666666'),
+    brightRed: v('--term-bright-red', '#cd3131'),
+    brightGreen: v('--term-bright-green', '#14ce14'),
+    brightYellow: v('--term-bright-yellow', '#b5ba00'),
+    brightBlue: v('--term-bright-blue', '#0451a5'),
+    brightMagenta: v('--term-bright-magenta', '#bc05bc'),
+    brightCyan: v('--term-bright-cyan', '#0598bc'),
+    brightWhite: v('--term-bright-white', '#a5a5a5'),
   }
 }
 
