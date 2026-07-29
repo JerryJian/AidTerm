@@ -20,9 +20,10 @@ pub async fn spawn_terminal(
     rows: u16,
     cols: u16,
     shell: Option<String>,
+    working_dir: Option<String>,
 ) -> Result<String, String> {
     let id = uuid::Uuid::new_v4().to_string();
-    manager.spawn_local(id.clone(), rows, cols, app, shell)?;
+    manager.spawn_local(id.clone(), rows, cols, app, shell, working_dir)?;
     Ok(id)
 }
 
@@ -625,35 +626,41 @@ fn exe_in_path(name: &str) -> bool {
         .unwrap_or(false)
 }
 
+#[derive(serde::Serialize)]
+pub struct ShellProfile {
+    pub name: String,
+    pub command: String,
+    pub icon: String,
+}
+
 #[tauri::command]
-pub fn detect_shells() -> Vec<String> {
+pub fn detect_shells() -> Vec<ShellProfile> {
     let mut shells = Vec::new();
 
     if cfg!(target_os = "windows") {
-        shells.push("cmd.exe".into());
+        shells.push(ShellProfile { name: "\u{547D}\u{4EE4}\u{63D0}\u{793A}\u{7B26}" .into(), command: "cmd.exe".into(), icon: "\u{1F4DF}".into() });
         if std::path::Path::new(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe").exists() {
-            shells.push("powershell.exe".into());
+            shells.push(ShellProfile { name: "Windows PowerShell".into(), command: "powershell.exe".into(), icon: "\u{1F4DF}".into() });
         }
         if exe_in_path("pwsh.exe") {
-            shells.push("pwsh.exe".into());
+            shells.push(ShellProfile { name: "PowerShell".into(), command: "pwsh.exe".into(), icon: "\u{1F4DF}".into() });
         }
         if exe_in_path("wsl.exe") {
-            shells.push("wsl.exe".into());
+            shells.push(ShellProfile { name: "WSL".into(), command: "wsl.exe".into(), icon: "\u{1F427}".into() });
         }
         if exe_in_path("bash.exe") {
-            shells.push("bash.exe".into());
+            shells.push(ShellProfile { name: "Bash".into(), command: "bash.exe".into(), icon: "\u{1F40D}".into() });
         }
     } else {
-        // macOS default is zsh since Catalina 2019
         if cfg!(target_os = "macos") {
-            shells.push("zsh".into());
+            shells.push(ShellProfile { name: "Zsh".into(), command: "zsh".into(), icon: "\u{1F334}".into() });
         }
-        shells.push("bash".into());
-        shells.push("sh".into());
+        shells.push(ShellProfile { name: "Bash".into(), command: "bash".into(), icon: "\u{1F40D}".into() });
+        shells.push(ShellProfile { name: "Sh".into(), command: "sh".into(), icon: "\u{1F40D}".into() });
         if cfg!(not(target_os = "macos")) {
-            if exe_in_path("zsh") { shells.push("zsh".into()); }
+            if exe_in_path("zsh") { shells.push(ShellProfile { name: "Zsh".into(), command: "zsh".into(), icon: "\u{1F334}".into() }); }
         }
-        if exe_in_path("fish") { shells.push("fish".into()); }
+        if exe_in_path("fish") { shells.push(ShellProfile { name: "Fish".into(), command: "fish".into(), icon: "\u{1F41F}".into() }); }
     }
 
     shells

@@ -178,6 +178,9 @@ function onConnectSession(session: SavedSession) {
     }
     store.addTab('serial', undefined, undefined, undefined, info)
     sessionStore.updateLastConnected(session.id)
+  } else if (session.session_type === 'local') {
+    store.addTab('local', undefined, undefined, session.command ?? undefined, undefined, session.working_dir ?? undefined, session.name)
+    sessionStore.updateLastConnected(session.id)
   }
 }
 
@@ -211,7 +214,7 @@ function onLeftDividerDown(e: MouseEvent) {
   document.addEventListener('mouseup', onUp)
 }
 
-function onSaveSession(data: { name: string; type: 'ssh' | 'telnet' | 'serial'; host: string; port: number; username: string; password: string; savePassword: boolean; groupName: string; dataBits?: number; stopBits?: number; parity?: string; flowControl?: string }) {
+function onSaveSession(data: { name: string; type: 'ssh' | 'telnet' | 'serial' | 'local'; host: string; port: number; username: string; password: string; savePassword: boolean; groupName: string; dataBits?: number; stopBits?: number; parity?: string; flowControl?: string; command?: string; working_dir?: string; icon?: string }) {
   const existing = editingSession.value
   const groupId = sessionStore.ensureGroup(data.groupName)
   const extra: Record<string, any> = {}
@@ -220,6 +223,11 @@ function onSaveSession(data: { name: string; type: 'ssh' | 'telnet' | 'serial'; 
     extra.stop_bits = data.stopBits
     extra.parity = data.parity
     extra.flow_control = data.flowControl
+  }
+  if (data.type === 'local') {
+    extra.command = data.command || null
+    extra.working_dir = data.working_dir || null
+    extra.icon = data.icon || null
   }
   if (existing) {
     sessionStore.updateSession(existing.id, {
@@ -298,6 +306,17 @@ async function handleCliArgs() {
   }
 }
 
+async function initBuiltInLocalProfiles() {
+  if (!sessionStore.loaded) await sessionStore.load()
+  if (sessionStore.hasBuiltInLocalProfiles()) return
+  try {
+    const shells = await invoke<Array<{ name: string; command: string; icon: string }>>('detect_shells')
+    sessionStore.initBuiltInProfiles(shells)
+  } catch {
+    // ignore
+  }
+}
+
 const unlisteners: Array<() => void> = []
 
 onMounted(async () => {
@@ -359,6 +378,7 @@ onMounted(async () => {
   })
   unlisteners.push(un3)
 
+  await initBuiltInLocalProfiles()
   await handleCliArgs()
 })
 
@@ -479,9 +499,9 @@ body,
   --text-sub1: #cccccc;
   --text-overlay0: #5a5a5a;
   --text-overlay1: #7a7a7a;
-  --accent: #007acc;
-  --accent-hover: #1c8cd9;
-  --accent-glass: rgba(0, 122, 204, 0.15);
+  --accent: #89b4fa;
+  --accent-hover: #74c7ec;
+  --accent-glass: rgba(137, 180, 250, 0.15);
   --danger: #f44747;
   --success: #6a9955;
   --warning: #cca700;
@@ -520,9 +540,9 @@ body,
   --text-sub1: #444444;
   --text-overlay0: #bbbbbb;
   --text-overlay1: #888888;
-  --accent: #0066b8;
-  --accent-hover: #005a9e;
-  --accent-glass: rgba(0, 102, 184, 0.12);
+  --accent: #1e66f5;
+  --accent-hover: #2a7cf6;
+  --accent-glass: rgba(30, 102, 245, 0.12);
   --danger: #a1260d;
   --success: #388a34;
   --warning: #bf8803;

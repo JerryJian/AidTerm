@@ -28,7 +28,6 @@ const newTabMenuOpen = ref(false)
 const batchInput = ref('')
 const batchFocused = ref(false)
 
-const availableShells = ref<string[]>([])
 const toolsMenuOpen = ref(false)
 
 const activeTabSessionType = computed(() => store.activeTab?.session?.type)
@@ -67,8 +66,6 @@ function isToolOpen(tab: ToolTab): boolean {
   return store.isToolOpen(store.activeTabId, tab)
 }
 
-const savedSessions = computed(() => sessionStore.sessions)
-
 function onSavedSessionClick(session: SavedSession) {
   newTabMenuOpen.value = false
   emit('connectSession', session)
@@ -76,27 +73,16 @@ function onSavedSessionClick(session: SavedSession) {
 
 onMounted(async () => {
   if (!sessionStore.loaded) await sessionStore.load()
-  try {
-    const shells = await invoke<string[]>('detect_shells')
-    availableShells.value = shells
-  } catch { /* ignore */ }
 })
 
-const shellKeyMap: Record<string, string> = {
-  'cmd.exe': 'cmd',
-  'powershell.exe': 'powershell',
-  'pwsh.exe': 'pwsh',
-  'wsl.exe': 'wsl',
-  'bash.exe': 'bash',
-  'bash': 'bash',
-  'zsh': 'zsh',
-  'sh': 'sh',
-  'fish': 'fish',
-}
+const localProfiles = computed(() => sessionStore.sessions.filter(s => s.session_type === 'local' && !s.hidden))
+const groupedSavedSessions = computed(() => sessionStore.groups.map(g => ({ group: g, sessions: sessionStore.getSessionsByGroup(g.id).filter(s => !(s.session_type === 'local' && s.built_in)) })))
+const ungroupedSavedSessions = computed(() => sessionStore.getUngroupedSessions().filter(s => !(s.session_type === 'local' && s.built_in)))
+const hasSavedSessions = computed(() => groupedSavedSessions.value.some(g => g.sessions.length > 0) || ungroupedSavedSessions.value.length > 0)
 
-function openLocalShell(shell: string) {
+function openLocalProfile(session: SavedSession) {
   newTabMenuOpen.value = false
-  store.addTab('local', undefined, undefined, shell)
+  emit('connectSession', session)
 }
 
 function openSsh() {
@@ -211,25 +197,25 @@ defineExpose({ onKeydown })
         <button class="tab-add" @click="onNewTabClick">+</button>
         <div v-if="newTabMenuOpen" class="new-tab-menu" @mousedown.prevent>
           <div class="new-tab-section-title">{{ $t('menu.local_shell') }}</div>
-          <button v-for="s in availableShells" :key="s" class="menu-item" @click="openLocalShell(s)">{{ $t('shell.' + (shellKeyMap[s] || s)) || s }}</button>
+          <button v-for="s in localProfiles" :key="s.id" class="menu-item" @click="openLocalProfile(s)"><span class="mi-icon">{{ s.icon || '💻' }}</span><span>{{ s.name }}</span></button>
           <div class="menu-divider" />
           <div class="new-tab-section-title">{{ $t('menu.remote_connection') }}</div>
           <button class="menu-item" @click="openSsh()"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>{{ $t('menu.ssh') }}</span></button>
           <button class="menu-item" @click="openTelnet()"><span class="mi-icon">{{ '\uD83D\uDD0C' }}</span><span>{{ $t('menu.telnet') }}</span></button>
           <button class="menu-item" @click="openSerial()"><span class="mi-icon">{{ '\uD83D\uDD04' }}</span><span>{{ $t('menu.serial') }}</span></button>
-          <div v-if="savedSessions.length > 0" class="menu-divider" />
-          <div v-if="savedSessions.length > 0" class="saved-sessions-list">
-            <template v-for="group in sessionStore.groups" :key="group.id">
-              <div class="saved-group-label">{{ group.name }}</div>
-              <button v-for="s in sessionStore.getSessionsByGroup(group.id)" :key="s.id" class="menu-item" @click="onSavedSessionClick(s)">
+          <div v-if="hasSavedSessions" class="menu-divider" />
+          <div v-if="hasSavedSessions" class="saved-sessions-list">
+            <template v-for="gs in groupedSavedSessions" :key="gs.group.id">
+              <div v-if="gs.sessions.length > 0" class="saved-group-label">{{ gs.group.name }}</div>
+              <button v-for="s in gs.sessions" :key="s.id" class="menu-item" @click="onSavedSessionClick(s)">
                 <span class="mi-icon">{{ s.session_type === 'ssh' ? '\uD83D\uDD12' : s.session_type === 'serial' ? '\uD83D\uDD04' : '\uD83D\uDD0C' }}</span>
                 <span class="saved-session-name">{{ s.name }}</span>
                 <span class="saved-session-meta">{{ s.session_type === 'serial' ? s.host : (s.username ? s.username + '@' : '') + (s.host ?? '') }}</span>
               </button>
             </template>
-            <template v-if="sessionStore.getUngroupedSessions().length > 0">
+            <template v-if="ungroupedSavedSessions.length > 0">
               <div class="saved-group-label">{{ $t('session_panel.ungrouped') }}</div>
-              <button v-for="s in sessionStore.getUngroupedSessions()" :key="s.id" class="menu-item" @click="onSavedSessionClick(s)">
+              <button v-for="s in ungroupedSavedSessions" :key="s.id" class="menu-item" @click="onSavedSessionClick(s)">
                 <span class="mi-icon">{{ s.session_type === 'ssh' ? '\uD83D\uDD12' : s.session_type === 'serial' ? '\uD83D\uDD04' : '\uD83D\uDD0C' }}</span>
                 <span class="saved-session-name">{{ s.name }}</span>
                 <span class="saved-session-meta">{{ s.session_type === 'serial' ? s.host : (s.username ? s.username + '@' : '') + (s.host ?? '') }}</span>

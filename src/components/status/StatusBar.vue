@@ -14,8 +14,8 @@ const statusText = computed(() => {
 
   const parts: string[] = [s.type.toUpperCase()]
 
-  if (s.type === 'local' && s.subshell) {
-    parts.push(s.subshell)
+  if (s.type === 'local' && s.command) {
+    parts.push(s.command)
   }
 
   if (s.status === 'connected' || s.status === 'connecting') {
@@ -59,8 +59,8 @@ const statusTooltip = computed(() => {
     `${t('status.status')}: ${t('status.' + s.status)}`,
   ]
 
-  if (s.type === 'local' && s.subshell) {
-    lines.push(`${t('status.shell')}: ${s.subshell}`)
+  if (s.type === 'local' && s.command) {
+    lines.push(`${t('status.shell')}: ${s.command}`)
   }
 
   const ssh = tab.sshInfo

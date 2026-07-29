@@ -189,7 +189,7 @@ async function initTerminal() {
         ? await telnetConnect(props.telnetInfo.host, props.telnetInfo.port)
         : props.serialInfo
           ? await serialConnect(props.serialInfo)
-          : await createSession(rows, cols, store.activeTab?.session?.subshell)
+          : await createSession(rows, cols, store.activeTab?.session?.command, store.activeTab?.session?.workingDir)
 
     sessionId = id
     store.updateSessionId(store.activeTabId ?? '', id)

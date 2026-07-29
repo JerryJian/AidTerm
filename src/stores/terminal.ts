@@ -1,10 +1,23 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { TerminalTab, TerminalSession, SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SystemInfo, ToolTab } from '../types'
 
 let nextId = 1
 function generateId(): string {
   return `tab-${nextId++}`
+}
+
+const shellKeyMap: Record<string, string> = {
+  'cmd.exe': 'cmd',
+  'powershell.exe': 'powershell',
+  'pwsh.exe': 'pwsh',
+  'wsl.exe': 'wsl',
+  'bash.exe': 'bash',
+  'bash': 'bash',
+  'zsh': 'zsh',
+  'sh': 'sh',
+  'fish': 'fish',
 }
 
 export const useTerminalStore = defineStore('terminal', () => {
@@ -18,9 +31,25 @@ export const useTerminalStore = defineStore('terminal', () => {
     return tabs.value.find(t => t.id === activeTabId.value) ?? null
   })
 
-  function addTab(type: TerminalSession['type'] = 'local', sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo, subshell?: string, serialInfo?: SerialConnectionInfo) {
+  function addTab(type: TerminalSession['type'] = 'local', sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo, localCommand?: string, serialInfo?: SerialConnectionInfo, workingDir?: string, titleOverride?: string) {
     const id = generateId()
-    const title = subshell ? subshell.replace(/\.exe$/, '') : (type === 'local' ? 'Local' : type.toUpperCase())
+    let title: string
+    if (titleOverride) {
+      title = titleOverride
+    } else if (type === 'ssh') {
+      title = sshInfo ? `${sshInfo.username || 'ssh'}@${sshInfo.host}` : 'SSH'
+    } else if (type === 'telnet') {
+      title = telnetInfo ? `Telnet ${telnetInfo.host}` : 'Telnet'
+    } else if (type === 'serial') {
+      title = serialInfo ? `Serial ${serialInfo.portName}` : 'Serial'
+    } else if (localCommand) {
+      const { t } = useI18n()
+      const key = shellKeyMap[localCommand] || localCommand.replace(/\.exe$/, '')
+      title = t(`shell.${key}`)
+    } else {
+      const { t } = useI18n()
+      title = t('shell.cmd')
+    }
     const tab: TerminalTab = {
       id,
       title,
@@ -29,7 +58,8 @@ export const useTerminalStore = defineStore('terminal', () => {
         title,
         type,
         status: 'connecting',
-        subshell,
+        command: localCommand,
+        workingDir,
       },
       sshInfo,
       telnetInfo,

@@ -11,14 +11,14 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  save: [data: { name: string; type: 'ssh' | 'telnet' | 'serial'; host: string; port: number; username: string; password: string; savePassword: boolean; groupName: string; dataBits?: number; stopBits?: number; parity?: string; flowControl?: string }]
+  save: [data: { name: string; type: 'ssh' | 'telnet' | 'serial' | 'local'; host: string; port: number; username: string; password: string; savePassword: boolean; groupName: string; dataBits?: number; stopBits?: number; parity?: string; flowControl?: string; command?: string; working_dir?: string; icon?: string }]
   close: []
 }>()
 
 const store = useSessionStore()
 
 const name = ref(props.session?.name || '')
-const sessionType = ref<'ssh' | 'telnet' | 'serial'>(props.session?.session_type === 'telnet' ? 'telnet' : props.session?.session_type === 'serial' ? 'serial' : 'ssh')
+const sessionType = ref<'ssh' | 'telnet' | 'serial' | 'local'>(props.session?.session_type === 'telnet' ? 'telnet' : props.session?.session_type === 'serial' ? 'serial' : props.session?.session_type === 'local' ? 'local' : 'ssh')
 const host = ref(props.session?.host || '')
 const port = ref(props.session?.port || (props.session?.session_type === 'serial' ? 115200 : 22))
 const username = ref(props.session?.username || '')
@@ -31,6 +31,9 @@ const serialDataBits = ref(props.session?.data_bits ?? 8)
 const serialStopBits = ref(props.session?.stop_bits ?? 1)
 const serialParity = ref(props.session?.parity ?? 'None')
 const serialFlowControl = ref(props.session?.flow_control ?? 'None')
+const localCommand = ref(props.session?.command || '')
+const localWorkingDir = ref(props.session?.working_dir || '')
+const localIcon = ref(props.session?.icon || '')
 
 const existingGroupNames = computed(() => store.groups.map(g => g.name))
 const isEditing = computed(() => !!props.session)
@@ -62,7 +65,8 @@ function onGroupChange() {
 }
 
 function onSubmit() {
-  if (!name.value.trim() || !host.value.trim()) return
+  if (!name.value.trim()) return
+  if (sessionType.value !== 'local' && !host.value.trim()) return
   const payload: any = {
     name: name.value.trim(),
     type: sessionType.value,
@@ -78,6 +82,11 @@ function onSubmit() {
     payload.stopBits = serialStopBits.value
     payload.parity = serialParity.value
     payload.flowControl = serialFlowControl.value
+  }
+  if (sessionType.value === 'local') {
+    payload.command = localCommand.value.trim() || undefined
+    payload.working_dir = localWorkingDir.value.trim() || undefined
+    payload.icon = localIcon.value.trim() || undefined
   }
   emit('save', payload)
 }
@@ -102,20 +111,23 @@ function onSubmit() {
             <option value="ssh">SSH</option>
             <option value="telnet">Telnet</option>
             <option value="serial">Serial</option>
+            <option value="local">{{ t('session_dialog.local_terminal') }}</option>
           </select>
         </label>
-        <label class="field">
-          <span class="field-label">{{ t('session_dialog.host') }}</span>
-          <input v-model="host" type="text" class="input" placeholder="192.168.1.1" required />
-        </label>
-        <label class="field">
-          <span class="field-label">{{ t('session_dialog.port') }}</span>
-          <input v-model.number="port" type="number" class="input" min="1" max="65535" />
-        </label>
-        <label class="field">
-          <span class="field-label">{{ t('session_dialog.username') }}</span>
-          <input v-model="username" type="text" class="input" placeholder="root" />
-        </label>
+        <template v-if="sessionType !== 'local'">
+          <label class="field">
+            <span class="field-label">{{ t('session_dialog.host') }}</span>
+            <input v-model="host" type="text" class="input" placeholder="192.168.1.1" required />
+          </label>
+          <label class="field">
+            <span class="field-label">{{ t('session_dialog.port') }}</span>
+            <input v-model.number="port" type="number" class="input" min="1" max="65535" />
+          </label>
+          <label class="field">
+            <span class="field-label">{{ t('session_dialog.username') }}</span>
+            <input v-model="username" type="text" class="input" placeholder="root" />
+          </label>
+        </template>
         <template v-if="sessionType === 'ssh'">
           <label class="field">
             <span class="field-label">{{ t('session_dialog.password') }}</span>
@@ -160,6 +172,20 @@ function onSubmit() {
               </select>
             </label>
           </div>
+        </template>
+        <template v-if="sessionType === 'local'">
+          <label class="field">
+            <span class="field-label">{{ t('session_dialog.command') }}</span>
+            <input v-model="localCommand" type="text" class="input" :placeholder="t('session_dialog.command_placeholder')" />
+          </label>
+          <label class="field">
+            <span class="field-label">{{ t('session_dialog.working_dir') }}</span>
+            <input v-model="localWorkingDir" type="text" class="input" :placeholder="t('session_dialog.working_dir_placeholder')" />
+          </label>
+          <label class="field">
+            <span class="field-label">{{ t('session_dialog.icon') }}</span>
+            <input v-model="localIcon" type="text" class="input" placeholder="💻" />
+          </label>
         </template>
         <label class="field">
           <span class="field-label">{{ t('session_dialog.group') }}</span>

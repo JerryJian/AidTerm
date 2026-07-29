@@ -32,8 +32,9 @@ impl SessionManager {
         cols: u16,
         app_handle: AppHandle,
         shell: Option<String>,
+        working_dir: Option<String>,
     ) -> Result<(), String> {
-        let session = local::LocalSession::spawn(id.clone(), rows, cols, app_handle, shell)?;
+        let session = local::LocalSession::spawn(id.clone(), rows, cols, app_handle, shell, working_dir)?;
         let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
         sessions.insert(id, Session::Local(session));
         Ok(())

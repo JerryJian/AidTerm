@@ -18,8 +18,9 @@ onMounted(() => {
   if (!store.loaded) store.load()
 })
 
-const sessionTypeIcon = computed(() => (type: string) => {
-  switch (type) {
+const sessionTypeIcon = computed(() => (session: SavedSession) => {
+  if (session.session_type === 'local' && session.icon) return session.icon
+  switch (session.session_type) {
     case 'ssh': return '🔒'
     case 'telnet': return '🔗'
     case 'serial': return '🔌'
@@ -34,6 +35,16 @@ function onSessionClick(session: SavedSession) {
 function onSessionEdit(e: MouseEvent, session: SavedSession) {
   e.stopPropagation()
   emit('editSession', session)
+}
+
+function onToggleHidden(e: MouseEvent, session: SavedSession) {
+  e.stopPropagation()
+  store.toggleSessionHidden(session.id)
+}
+
+function onDeleteSession(e: MouseEvent, session: SavedSession) {
+  e.stopPropagation()
+  store.removeSession(session.id)
 }
 </script>
 
@@ -58,9 +69,11 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
             class="session-item"
             @click="onSessionClick(s)"
           >
-            <span class="sess-icon">{{ sessionTypeIcon(s.session_type) }}</span>
+            <span class="sess-icon">{{ sessionTypeIcon(s) }}</span>
             <span class="sess-name">{{ s.name }}</span>
-            <span class="sess-host">{{ s.host }}</span>
+            <span class="sess-host">{{ s.session_type === 'local' ? (s.command || '') : s.host }}</span>
+            <button v-if="s.built_in" class="sess-toggle" :class="{ hidden: s.hidden }" @click="(e) => onToggleHidden(e, s)" :title="s.hidden ? t('session_panel.show') : t('session_panel.hide')">{{ s.hidden ? '👁‍🗨' : '👁' }}</button>
+            <button v-else class="sess-del" @click="(e) => onDeleteSession(e, s)" :title="t('common.delete')">✕</button>
             <button class="sess-edit" @click="(e) => onSessionEdit(e, s)" :title="t('common.edit')">✎</button>
           </div>
           <div v-if="store.getSessionsByGroup(group.id).length === 0" class="empty-hint">{{ t('session_panel.empty_group') }}</div>
@@ -79,9 +92,11 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
             class="session-item"
             @click="onSessionClick(s)"
           >
-            <span class="sess-icon">{{ sessionTypeIcon(s.session_type) }}</span>
+            <span class="sess-icon">{{ sessionTypeIcon(s) }}</span>
             <span class="sess-name">{{ s.name }}</span>
-            <span class="sess-host">{{ s.host }}</span>
+            <span class="sess-host">{{ s.session_type === 'local' ? (s.command || '') : s.host }}</span>
+            <button v-if="s.built_in" class="sess-toggle" :class="{ hidden: s.hidden }" @click="(e) => onToggleHidden(e, s)" :title="s.hidden ? t('session_panel.show') : t('session_panel.hide')">{{ s.hidden ? '👁‍🗨' : '👁' }}</button>
+            <button v-else class="sess-del" @click="(e) => onDeleteSession(e, s)" :title="t('common.delete')">✕</button>
             <button class="sess-edit" @click="(e) => onSessionEdit(e, s)" :title="t('common.edit')">✎</button>
           </div>
         </div>
@@ -232,6 +247,24 @@ function onSessionEdit(e: MouseEvent, session: SavedSession) {
   background: var(--bg-surface0);
   color: var(--accent);
 }
+
+.sess-toggle, .sess-del {
+  background: none;
+  border: none;
+  color: var(--text-overlay0);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  visibility: hidden;
+}
+.session-item:hover .sess-toggle,
+.session-item:hover .sess-del {
+  visibility: visible;
+}
+.sess-toggle:hover { color: var(--accent); }
+.sess-toggle.hidden { color: var(--text-overlay0); opacity: 0.5; }
+.sess-del:hover { color: var(--danger); }
 
 .empty-hint {
   padding: 2px 12px 2px 30px;

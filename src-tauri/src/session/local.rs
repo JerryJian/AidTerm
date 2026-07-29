@@ -41,6 +41,7 @@ impl LocalSession {
         cols: u16,
         app_handle: AppHandle,
         shell: Option<String>,
+        working_dir: Option<String>,
     ) -> Result<Self, String> {
         let native_pty = portable_pty::NativePtySystem::default();
         let pair: PtyPair = native_pty
@@ -59,6 +60,9 @@ impl LocalSession {
         });
 
         let mut cmd_builder = portable_pty::CommandBuilder::new(cmd);
+        if let Some(ref wd) = working_dir {
+            cmd_builder.cwd(wd);
+        }
         cmd_builder.env("TERM", "xterm-256color");
         // Ensure UTF-8 locale so shells handle multi-byte characters correctly
         if std::env::var("LANG").is_err() && std::env::var("LC_ALL").is_err() {
