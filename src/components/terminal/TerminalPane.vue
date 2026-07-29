@@ -24,10 +24,8 @@ const aiWidth = ref(380)
 const draggingTool = ref(false)
 const draggingAi = ref(false)
 
-const activeSplitChildId = ref<string | null>(null)
-
-function setActiveSplitChild(id: string) {
-  activeSplitChildId.value = id
+function isPaneSelected(tabId: string): boolean {
+  return terminalStore.selectedPaneId === tabId
 }
 
 function onToolDividerDown(e: MouseEvent) {
@@ -88,25 +86,27 @@ watch(() => terminalStore.exportRequest, (req) => {
 
 <template>
   <div class="terminal-pane-root" :class="{ dragging: draggingTool || draggingAi }">
-    <div class="split-container" :class="tab.splitDirection === 'horizontal' ? 'split-row' : 'split-col'">
-      <div
-        class="split-child"
-        :class="{ 'active-split': activeSplitChildId === tab.id }"
-        @mousedown="setActiveSplitChild(tab.id)"
-      >
-        <TerminalWrapper
-          ref="termRef"
-          :tab="tab"
-          @newSsh="$emit('newSsh')"
-          @split-tab="(id, dir) => $emit('splitTab', id, dir)"
-        />
-      </div>
+    <div class="split-container" :class="{ 'split-row': tab.splitDirection === 'horizontal', 'split-col': tab.splitDirection === 'vertical' }">
+      <template v-if="tab.session">
+        <div
+          class="split-child"
+          :class="{ 'active-split': isPaneSelected(tab.id) }"
+          @mousedown.stop="terminalStore.setSelectedPane(tab.id)"
+        >
+          <TerminalWrapper
+            ref="termRef"
+            :tab="tab"
+            @newSsh="$emit('newSsh')"
+            @split-tab="(id, dir) => $emit('splitTab', id, dir)"
+          />
+        </div>
+      </template>
       <div
         v-for="child in tab.children"
         :key="child.id"
         class="split-child"
-        :class="{ 'active-split': activeSplitChildId === child.id }"
-        @mousedown="setActiveSplitChild(child.id)"
+        :class="{ 'active-split': isPaneSelected(child.id) }"
+        @mousedown.stop="terminalStore.setSelectedPane(child.id)"
       >
         <TerminalPane
           :tab="child"
@@ -157,7 +157,6 @@ watch(() => terminalStore.exportRequest, (req) => {
   display: flex;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
 }
 
 .split-container.split-row {
@@ -173,14 +172,16 @@ watch(() => terminalStore.exportRequest, (req) => {
   display: flex;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
   position: relative;
 }
 
-.split-child.active-split {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  z-index: 1;
+.split-child.active-split::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--accent);
+  pointer-events: none;
+  z-index: 10;
 }
 
 .split-container.split-row > .split-child + .split-child {

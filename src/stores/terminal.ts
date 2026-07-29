@@ -23,6 +23,7 @@ const shellKeyMap: Record<string, string> = {
 export const useTerminalStore = defineStore('terminal', () => {
   const tabs = ref<TerminalTab[]>([])
   const activeTabId = ref<string | null>(null)
+  const selectedPaneId = ref<string | null>(null)
   const batchMode = ref(false)
   const batchTabIds = ref<Set<string>>(new Set())
   const { t } = useI18n()
@@ -162,6 +163,17 @@ export const useTerminalStore = defineStore('terminal', () => {
     return null
   }
 
+  function findParent(id: string, list: TerminalTab[] = tabs.value): { parent: TerminalTab[]; index: number } | null {
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].id === id) return { parent: list, index: i }
+      if (list[i].children?.length) {
+        const found = findParent(id, list[i].children)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
   function removeChildFromParent(id: string, list: TerminalTab[]): boolean {
     const idx = list.findIndex(t => t.id === id)
     if (idx !== -1) {
@@ -213,6 +225,10 @@ export const useTerminalStore = defineStore('terminal', () => {
 
   function setActiveTab(id: string) {
     activeTabId.value = id
+  }
+
+  function setSelectedPane(id: string | null) {
+    selectedPaneId.value = id
   }
 
   function updateTabTitle(id: string, title: string) {
@@ -278,6 +294,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     closeOtherTabs,
     closeTabsToRight,
     findTab,
+    findParent,
     setActiveTab,
     updateTabTitle,
     updateSessionStatus,
@@ -295,5 +312,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     toggleAiSidebar,
     requestExport,
     clearExportRequest,
+    selectedPaneId,
+    setSelectedPane,
   }
 })

@@ -87,7 +87,8 @@ function ctxExport() {
 }
 
 function ctxSplit(dir: 'horizontal' | 'vertical') {
-  if (ctxTabId.value) emit('splitTab', ctxTabId.value, dir)
+  const targetId = store.selectedPaneId ?? ctxTabId.value
+  if (targetId) emit('splitTab', targetId, dir)
   closeTabCtx()
 }
 

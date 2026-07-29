@@ -198,11 +198,6 @@ function onSplitTab(tabId: string, direction: 'horizontal' | 'vertical') {
   const tab = store.findTab(tabId)
   if (!tab) return
 
-  if (!tab.children) {
-    tab.splitDirection = direction
-    tab.children = []
-  }
-
   const id = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
   const child: TerminalTab = {
     id,
@@ -221,8 +216,23 @@ function onSplitTab(tabId: string, direction: 'horizontal' | 'vertical') {
     aiSessionId: `ai-${id}`,
   }
 
-  tab.children.push(child)
-  store.activeTabId = tab.id
+  const container: TerminalTab = {
+    id: `split-${id}`,
+    title: tab.title,
+    session: null,
+    splitDirection: direction,
+    children: [tab, child],
+    aiSessionId: `ai-split-${id}`,
+  }
+
+  const result = store.findParent(tabId)
+  if (result) {
+    if (store.activeTabId === tab.id) {
+      store.activeTabId = container.id
+    }
+    result.parent.splice(result.index, 1, container)
+  }
+  store.setSelectedPane(child.id)
 }
 
 const leftDragging = ref(false)
