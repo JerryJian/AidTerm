@@ -194,6 +194,17 @@ function onEditSession(session: SavedSession) {
   showSessionDialog.value = true
 }
 
+function onSplitTab(tabId: string, direction: 'horizontal' | 'vertical') {
+  const tab = store.tabs.find(t => t.id === tabId)
+  if (!tab) return
+  tab.splitDirection = direction
+  store.addTab('local')
+  const childTab = store.tabs[store.tabs.length - 1]
+  childTab.splitDirection = undefined
+  if (!tab.children) tab.children = []
+  tab.children.push(childTab)
+}
+
 const leftDragging = ref(false)
 
 function onLeftDividerDown(e: MouseEvent) {
@@ -404,7 +415,8 @@ onUnmounted(() => {
         <div v-if="ui.leftSidebar" class="left-sidebar" :style="{ width: ui.leftSidebarWidth + 'px' }">
           <div class="left-sidebar-divider" @mousedown="onLeftDividerDown" />
           <LeftSidebar
-            @connect-session="onConnectSession"
+      @connect-session="onConnectSession"
+      @split-tab="onSplitTab"
             @new-session="onNewSession"
             @edit-session="onEditSession"
             @close="ui.leftSidebar = false"

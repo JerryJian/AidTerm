@@ -400,7 +400,19 @@ onUnmounted(() => {
   document.removeEventListener('keydown', onKeydown)
 })
 
-defineExpose({ focusSearch, doFit, aiConv })
+function getTerminalContent(): string {
+  if (!terminal) return ''
+  const lines: string[] = []
+  for (let i = 0; i < terminal.buffer.active.length; i++) {
+    const line = terminal.buffer.active.getLine(i)
+    if (line) {
+      lines.push(line.translateToString().replace(/\s+$/, ''))
+    }
+  }
+  return lines.join('\n')
+}
+
+defineExpose({ focusSearch, doFit, aiConv, getTerminalContent })
 </script>
 
 <template>

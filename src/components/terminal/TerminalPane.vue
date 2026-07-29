@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import TerminalWrapper from './TerminalWrapper.vue'
+import TerminalPaneChild from './TerminalPane.vue'
 import ToolPanel from '../tools/ToolPanel.vue'
 import AiSidebar from '../ai/AiSidebar.vue'
 import { useTerminalStore } from '../../stores/terminal'
+import { saveDialog, invoke } from '@/api'
 import type { TerminalTab } from '../../types'
 
-defineProps<{
+const props = defineProps<{
   tab: TerminalTab
 }>()
 
@@ -57,11 +59,32 @@ function onAiDividerDown(e: MouseEvent) {
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
 }
+
+async function doExport() {
+  if (!termRef.value) return
+  const content = termRef.value.getTerminalContent()
+  if (!content) return
+  try {
+    const path = await saveDialog({ title: 'Export Text', filters: [{ name: 'Text Files', extensions: ['txt', 'log'] }] })
+    if (path) {
+      await invoke('write_text_file', { path, content })
+    }
+  } catch {
+    // ignore
+  }
+}
+
+watch(() => terminalStore.exportRequest, (req) => {
+  if (req && req.tabId === props.tab.id) {
+    doExport()
+    terminalStore.clearExportRequest()
+  }
+})
 </script>
 
 <template>
-  <div class="terminal-pane-root" :class="{ dragging: dragging || draggingAi }">
-    <div class="terminal-pane">
+  <div class="terminal-pane-root" :class="{ dragging: dragging || draggingAi }" :style="{ flexDirection: tab.splitDirection === 'horizontal' ? 'row' : 'column' }">
+    <div class="terminal-pane" :style="{ flex: tab.children?.length ? '1 1 0' : '1' }">
       <TerminalWrapper
         ref="termRef"
         :ssh-info="tab.sshInfo"
@@ -71,6 +94,11 @@ function onAiDividerDown(e: MouseEvent) {
         @newSsh="$emit('newSsh')"
       />
     </div>
+    <template v-if="tab.children?.length">
+      <div v-for="child in tab.children" :key="child.id" class="terminal-pane" style="flex: 1 1 0">
+        <TerminalPaneChild :tab="child" @newSsh="$emit('newSsh')" @edit-file="(p, c) => $emit('editFile', p, c)" />
+      </div>
+    </template>
     <div v-if="tab.aiSidebarOpen && termRef?.aiConv" class="ai-pane" :style="{ width: aiWidth + 'px' }">
       <div class="ai-divider" @mousedown="onAiDividerDown" />
       <div class="ai-pane-body">

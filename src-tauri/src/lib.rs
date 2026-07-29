@@ -91,6 +91,7 @@ pub fn run() {
             commands::fetch_ai_models,
             commands::get_platform,
             commands::detect_shells,
+            commands::write_text_file,
             commands::open_devtools,
         ])
         .run(tauri::generate_context!())

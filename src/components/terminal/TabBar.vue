@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { invoke } from '@/api'
 import { useI18n } from 'vue-i18n'
 import { useTerminalStore } from '../../stores/terminal'
@@ -21,6 +21,7 @@ const emit = defineEmits<{
   quickTelnet: [host: string, port: number]
   quickSerial: []
   connectSession: [session: SavedSession]
+  splitTab: [tabId: string, direction: 'horizontal' | 'vertical']
 }>()
 
 const quickConnectVisible = ref(false)
@@ -33,9 +34,17 @@ const toolsMenuOpen = ref(false)
 const ctxTabId = ref<string | null>(null)
 const ctxPos = ref({ x: 0, y: 0 })
 const ctxVisible = ref(false)
+const renamingTabId = ref<string | null>(null)
+const renameInput = ref('')
+const renameInputRef = ref<HTMLInputElement>()
+
+watch(renamingTabId, (val) => {
+  if (val) nextTick(() => renameInputRef.value?.focus())
+})
 
 function showTabCtx(e: MouseEvent, tabId: string) {
   e.preventDefault()
+  renameCancel()
   ctxTabId.value = tabId
   ctxPos.value = { x: e.clientX, y: e.clientY }
   ctxVisible.value = true
@@ -59,6 +68,44 @@ function ctxCloseOthers() {
 function ctxCloseRight() {
   if (ctxTabId.value) store.closeTabsToRight(ctxTabId.value)
   closeTabCtx()
+}
+
+function ctxRename() {
+  if (ctxTabId.value) {
+    const tab = store.tabs.find(t => t.id === ctxTabId.value)
+    if (tab) {
+      renamingTabId.value = ctxTabId.value
+      renameInput.value = tab.title
+    }
+  }
+  closeTabCtx()
+}
+
+function ctxExport() {
+  if (ctxTabId.value) store.requestExport(ctxTabId.value)
+  closeTabCtx()
+}
+
+function ctxSplit(dir: 'horizontal' | 'vertical') {
+  if (ctxTabId.value) emit('splitTab', ctxTabId.value, dir)
+  closeTabCtx()
+}
+
+function onRenameSubmit() {
+  if (renamingTabId.value && renameInput.value.trim()) {
+    store.updateTabTitle(renamingTabId.value, renameInput.value.trim())
+  }
+  renameCancel()
+}
+
+function renameCancel() {
+  renamingTabId.value = null
+  renameInput.value = ''
+}
+
+function onRenameKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter') onRenameSubmit()
+  if (e.key === 'Escape') renameCancel()
 }
 
 function onDocClick(e: MouseEvent) {
@@ -223,7 +270,17 @@ defineExpose({ onKeydown })
           @change="(e: Event) => store.setBatchTabId(tab.id, (e.target as HTMLInputElement).checked)"
         />
         <span class="tab-status" :class="tab.session?.status" />
-        <span class="tab-title">{{ tab.title }}</span>
+        <span v-if="renamingTabId === tab.id" class="tab-title">
+          <input
+            ref="renameInputRef"
+            v-model="renameInput"
+            class="rename-input"
+            @keydown="onRenameKeydown"
+            @blur="onRenameSubmit"
+            @click.stop
+          />
+        </span>
+        <span v-else class="tab-title">{{ tab.title }}</span>
         <button class="tab-close" @click.stop="store.closeTab(tab.id)">{{ '\u2715' }}</button>
       </div>
       <div class="new-tab-wrapper">
@@ -263,6 +320,13 @@ defineExpose({ onKeydown })
         :style="{ left: ctxPos.x + 'px', top: ctxPos.y + 'px' }"
         @mousedown.prevent
       >
+        <button class="ctx-item" @click="ctxRename">{{ $t('tab.rename') }}</button>
+        <div class="ctx-divider" />
+        <button class="ctx-item" @click="ctxExport">{{ $t('tab.export_text') }}</button>
+        <div class="ctx-divider" />
+        <button class="ctx-item" @click="ctxSplit('horizontal')">{{ $t('tab.split_horizontal') }}</button>
+        <button class="ctx-item" @click="ctxSplit('vertical')">{{ $t('tab.split_vertical') }}</button>
+        <div class="ctx-divider" />
         <button class="ctx-item" @click="ctxClose">{{ $t('tab.close_tab') }}</button>
         <button class="ctx-item" @click="ctxCloseOthers">{{ $t('tab.close_others') }}</button>
         <button class="ctx-item" @click="ctxCloseRight">{{ $t('tab.close_right') }}</button>
@@ -751,5 +815,23 @@ defineExpose({ onKeydown })
 .tab-ctx-menu .ctx-item:hover {
   background: var(--accent-glass);
   color: var(--accent);
+}
+
+.ctx-divider {
+  height: 1px;
+  background: var(--bg-surface1);
+  margin: 2px 4px;
+}
+
+.rename-input {
+  background: var(--bg-surface0);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 12px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  outline: none;
+  width: 100%;
+  min-width: 60px;
 }
 </style>

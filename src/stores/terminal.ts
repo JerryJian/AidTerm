@@ -134,6 +134,24 @@ export const useTerminalStore = defineStore('terminal', () => {
     }
   }
 
+  function removeToolTab(tabId: string, tool: ToolTab) {
+    const tab = tabs.value.find(t => t.id === tabId)
+    if (!tab?.openToolTabs) return
+    tab.openToolTabs = tab.openToolTabs.filter(t => t !== tool)
+    if (tab.activeToolTab === tool) {
+      tab.activeToolTab = tab.openToolTabs[0] || undefined
+      if (!tab.activeToolTab) tab.toolSidebarOpen = false
+    }
+  }
+
+  const exportRequest = ref<{ tabId: string } | null>(null)
+  function requestExport(tabId: string) {
+    exportRequest.value = { tabId }
+  }
+  function clearExportRequest() {
+    exportRequest.value = null
+  }
+
   function closeTab(id: string) {
     const idx = tabs.value.findIndex(t => t.id === id)
     if (idx === -1) return
@@ -222,6 +240,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     activeTab,
     batchMode,
     batchTabIds,
+    exportRequest,
     addTab,
     closeTab,
     closeOtherTabs,
@@ -236,9 +255,12 @@ export const useTerminalStore = defineStore('terminal', () => {
     getBatchSessionIds,
     addToolTab,
     closeToolTab,
+    removeToolTab,
     setActiveToolTab,
     toggleToolSidebar,
     isToolOpen,
     toggleAiSidebar,
+    requestExport,
+    clearExportRequest,
   }
 })
