@@ -5,7 +5,7 @@ import { useSessionStore } from './stores/sessionStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useUiStore } from './stores/uiStore'
 import { useThemeStore } from './stores/themeStore'
-import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SavedSession } from './types'
+import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SavedSession, TerminalTab } from './types'
 import { invoke, listen, getCurrentWindow, saveDialog as save } from '@/api'
 import TabBar from './components/terminal/TabBar.vue'
 import TitleBar from './components/titlebar/TitleBar.vue'
@@ -195,14 +195,34 @@ function onEditSession(session: SavedSession) {
 }
 
 function onSplitTab(tabId: string, direction: 'horizontal' | 'vertical') {
-  const tab = store.tabs.find(t => t.id === tabId)
+  const tab = store.findTab(tabId)
   if (!tab) return
-  tab.splitDirection = direction
-  store.addTab('local')
-  const childTab = store.tabs[store.tabs.length - 1]
-  childTab.splitDirection = undefined
-  if (!tab.children) tab.children = []
-  tab.children.push(childTab)
+
+  if (!tab.children) {
+    tab.splitDirection = direction
+    tab.children = []
+  }
+
+  const id = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+  const child: TerminalTab = {
+    id,
+    title: tab.title,
+    session: {
+      id: `session-${id}`,
+      title: tab.title,
+      type: tab.session?.type || 'local',
+      status: 'disconnected',
+      command: tab.session?.command,
+      workingDir: tab.session?.workingDir,
+    },
+    sshInfo: tab.sshInfo,
+    telnetInfo: tab.telnetInfo,
+    serialInfo: tab.serialInfo,
+    aiSessionId: `ai-${id}`,
+  }
+
+  tab.children.push(child)
+  store.activeTabId = tab.id
 }
 
 const leftDragging = ref(false)
@@ -409,14 +429,14 @@ onUnmounted(() => {
       @quick-telnet="onQuickTelnet"
       @quick-serial="onQuickSerial"
       @connect-session="onConnectSession"
+      @split-tab="onSplitTab"
     />
     <div class="content-area">
       <div class="content-body">
         <div v-if="ui.leftSidebar" class="left-sidebar" :style="{ width: ui.leftSidebarWidth + 'px' }">
           <div class="left-sidebar-divider" @mousedown="onLeftDividerDown" />
           <LeftSidebar
-      @connect-session="onConnectSession"
-      @split-tab="onSplitTab"
+            @connect-session="onConnectSession"
             @new-session="onNewSession"
             @edit-session="onEditSession"
             @close="ui.leftSidebar = false"
@@ -436,6 +456,7 @@ onUnmounted(() => {
             :tab="tab"
             @newSsh="ui.sshDialog = true"
             @edit-file="onEditFile"
+            @split-tab="onSplitTab"
           />
         </div>
       </div>

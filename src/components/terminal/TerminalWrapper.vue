@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -9,7 +9,7 @@ import { useTerminal } from '../../hooks/useTerminal'
 import { useTerminalStore } from '../../stores/terminal'
 import { useThemeStore } from '../../stores/themeStore'
 import { useAiConversation } from '../../hooks/useAiConversation'
-import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SystemInfo } from '../../types'
+import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SystemInfo, TerminalTab } from '../../types'
 import { useAiStore } from '../../stores/aiStore'
 import { useI18n } from 'vue-i18n'
 
@@ -18,11 +18,14 @@ const props = defineProps<{
   telnetInfo?: TelnetConnectionInfo
   serialInfo?: SerialConnectionInfo
   aiSessionId?: string
+  tabId?: string
+  tab?: TerminalTab
 }>()
 
 const emit = defineEmits<{
   titleChange: [title: string]
   newSsh: []
+  splitTab: [tabId: string, direction: 'horizontal' | 'vertical']
 }>()
 
 const terminalRef = ref<HTMLDivElement>()
@@ -36,6 +39,17 @@ const { t } = useI18n()
 const store = useTerminalStore()
 const aiStore = useAiStore()
 const themeStore = useThemeStore()
+
+const currentTabId = computed(() => props.tab?.id ?? props.tabId ?? store.activeTabId)
+const currentTab = computed(() => {
+  if (props.tab) return props.tab
+  if (!currentTabId.value) return null
+  return store.tabs.find(t => t.id === currentTabId.value) ?? null
+})
+
+const sshInfo = computed(() => props.sshInfo ?? props.tab?.sshInfo)
+const telnetInfo = computed(() => props.telnetInfo ?? props.tab?.telnetInfo)
+const serialInfo = computed(() => props.serialInfo ?? props.tab?.serialInfo)
 
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
@@ -163,46 +177,46 @@ async function initTerminal() {
   const unsubStatus = await listen<{ session_id: string; status: string; error?: string }>('session-status', event => {
     if (event.payload.session_id === sessionId) {
       if (event.payload.status === 'connected') {
-        store.updateSessionStatus(store.activeTabId ?? '', 'connected')
+        store.updateSessionStatus(currentTabId.value ?? '', 'connected')
       } else if (event.payload.status === 'disconnected') {
-        store.updateSessionStatus(store.activeTabId ?? '', 'disconnected')
+        store.updateSessionStatus(currentTabId.value ?? '', 'disconnected')
       }
     }
   })
   if (unsubStatus) unlisteners.push(unsubStatus)
 
   try {
-    const id = props.sshInfo
+    const id = sshInfo.value
       ? await sshConnect(
-          props.sshInfo.host,
-          props.sshInfo.port,
-          props.sshInfo.username,
-          props.sshInfo.password,
-          props.sshInfo.privateKeyPath,
-          props.sshInfo.proxyId,
-          props.sshInfo.agentForwarding,
-          props.sshInfo.x11Forwarding,
+          sshInfo.value.host,
+          sshInfo.value.port,
+          sshInfo.value.username,
+          sshInfo.value.password,
+          sshInfo.value.privateKeyPath,
+          sshInfo.value.proxyId,
+          sshInfo.value.agentForwarding,
+          sshInfo.value.x11Forwarding,
           rows,
           cols,
         )
-      : props.telnetInfo
-        ? await telnetConnect(props.telnetInfo.host, props.telnetInfo.port)
-        : props.serialInfo
-          ? await serialConnect(props.serialInfo)
-          : await createSession(rows, cols, store.activeTab?.session?.command, store.activeTab?.session?.workingDir)
+      : telnetInfo.value
+        ? await telnetConnect(telnetInfo.value.host, telnetInfo.value.port)
+        : serialInfo.value
+          ? await serialConnect(serialInfo.value)
+          : await createSession(rows, cols, currentTab.value?.session?.command, currentTab.value?.session?.workingDir)
 
     sessionId = id
-    store.updateSessionId(store.activeTabId ?? '', id)
-    if (!props.sshInfo) {
-      store.updateSessionStatus(store.activeTabId ?? '', 'connected')
+    store.updateSessionId(currentTabId.value ?? '', id)
+    if (!sshInfo.value) {
+      store.updateSessionStatus(currentTabId.value ?? '', 'connected')
     }
     const unsub = await onOutput((data: string) => {
       terminal?.write(data)
     })
     if (unsub) unlisten = unsub
 
-    if (props.sshInfo) {
-      const tabId = store.activeTabId
+    if (sshInfo.value) {
+      const tabId = currentTabId.value
       if (tabId) {
         invoke<SystemInfo>('get_remote_system_info', {
           sessionId: id,
@@ -218,7 +232,7 @@ async function initTerminal() {
   } catch (e) {
     const errMsg = typeof e === 'string' ? e : e instanceof Error ? e.message : 'Connection failed'
     terminal?.writeln(`\r\n\x1b[1;31mError:\x1b[0m ${errMsg}`)
-    store.updateSessionStatus(store.activeTabId ?? '', 'disconnected')
+    store.updateSessionStatus(currentTabId.value ?? '', 'disconnected')
   }
 }
 
@@ -365,8 +379,8 @@ function doAskAi() {
   const sel = terminal?.getSelection()
   closeContextMenu()
   if (!sel) return
-  if (store.activeTabId && !store.activeTab?.aiSidebarOpen) {
-    store.toggleAiSidebar(store.activeTabId)
+  if (currentTabId.value && !currentTab.value?.aiSidebarOpen) {
+    store.toggleAiSidebar(currentTabId.value)
   }
   nextTick(() => aiConv.startConversation(sel))
 }
@@ -381,9 +395,15 @@ function doNewSsh() {
   emit('newSsh')
 }
 
+function doSplit(dir: 'horizontal' | 'vertical') {
+  closeContextMenu()
+  const id = props.tab?.id ?? currentTabId.value
+  if (id) emit('splitTab', id, dir)
+}
+
 function doCloseTab() {
   closeContextMenu()
-  store.closeTab(store.activeTabId ?? '')
+  store.closeTab(currentTabId.value ?? '')
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -431,7 +451,7 @@ defineExpose({ focusSearch, doFit, aiConv, getTerminalContent })
       <button class="search-btn" @click="closeSearch">&#x2715;</button>
     </div>
     <div ref="terminalRef" class="terminal-xterm" />
-    <div v-if="store.activeTab?.session?.status === 'connecting'" class="connecting-overlay">
+    <div v-if="currentTab?.session?.status === 'connecting'" class="connecting-overlay">
       <div class="spinner" />
       <span>{{ t('terminal.connecting') }}</span>
     </div>
@@ -449,6 +469,9 @@ defineExpose({ focusSearch, doFit, aiConv, getTerminalContent })
         <div class="ctx-sep" />
         <div class="ctx-item" @click="doNewTab">{{ t('context_menu.new_tab') }}</div>
         <div class="ctx-item" @click="doNewSsh">{{ t('context_menu.new_ssh') }}</div>
+        <div class="ctx-sep" />
+        <div class="ctx-item" @click="doSplit('horizontal')">{{ t('tab.split_horizontal') }}</div>
+        <div class="ctx-item" @click="doSplit('vertical')">{{ t('tab.split_vertical') }}</div>
         <div class="ctx-sep" />
         <div v-if="aiStore.enabled" class="ctx-item" @click="doAskAi">{{ t('context_menu.ask_ai') }}</div>
         <div class="ctx-sep" />

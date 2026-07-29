@@ -1,40 +1,45 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import TerminalWrapper from './TerminalWrapper.vue'
-import TerminalPaneChild from './TerminalPane.vue'
 import ToolPanel from '../tools/ToolPanel.vue'
 import AiSidebar from '../ai/AiSidebar.vue'
 import { useTerminalStore } from '../../stores/terminal'
 import { saveDialog, invoke } from '@/api'
 import type { TerminalTab } from '../../types'
 
-const props = defineProps<{
+defineProps<{
   tab: TerminalTab
 }>()
 
 defineEmits<{
   newSsh: []
   editFile: [remotePath: string, connId: string]
+  splitTab: [tabId: string, direction: 'horizontal' | 'vertical']
 }>()
 
 const terminalStore = useTerminalStore()
 const termRef = ref<InstanceType<typeof TerminalWrapper>>()
 const toolWidth = ref(400)
 const aiWidth = ref(380)
-const dragging = ref(false)
+const draggingTool = ref(false)
 const draggingAi = ref(false)
 
-function onDividerDown(e: MouseEvent) {
-  dragging.value = true
+const activeSplitChildId = ref<string | null>(null)
+
+function setActiveSplitChild(id: string) {
+  activeSplitChildId.value = id
+}
+
+function onToolDividerDown(e: MouseEvent) {
+  draggingTool.value = true
   const startX = e.clientX
   const startW = toolWidth.value
   function onMove(ev: MouseEvent) {
     const delta = startX - ev.clientX
-    const newW = Math.min(Math.max(startW + delta, 260), 600)
-    toolWidth.value = newW
+    toolWidth.value = Math.min(Math.max(startW + delta, 260), 600)
   }
   function onUp() {
-    dragging.value = false
+    draggingTool.value = false
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
   }
@@ -48,8 +53,7 @@ function onAiDividerDown(e: MouseEvent) {
   const startW = aiWidth.value
   function onMove(ev: MouseEvent) {
     const delta = startX - ev.clientX
-    const newW = Math.min(Math.max(startW + delta, 280), 600)
-    aiWidth.value = newW
+    aiWidth.value = Math.min(Math.max(startW + delta, 280), 600)
   }
   function onUp() {
     draggingAi.value = false
@@ -75,7 +79,7 @@ async function doExport() {
 }
 
 watch(() => terminalStore.exportRequest, (req) => {
-  if (req && req.tabId === props.tab.id) {
+  if (req) {
     doExport()
     terminalStore.clearExportRequest()
   }
@@ -83,22 +87,35 @@ watch(() => terminalStore.exportRequest, (req) => {
 </script>
 
 <template>
-  <div class="terminal-pane-root" :class="{ dragging: dragging || draggingAi }" :style="{ flexDirection: tab.splitDirection === 'horizontal' ? 'row' : 'column' }">
-    <div class="terminal-pane" :style="{ flex: tab.children?.length ? '1 1 0' : '1' }">
-      <TerminalWrapper
-        ref="termRef"
-        :ssh-info="tab.sshInfo"
-        :telnet-info="tab.telnetInfo"
-        :serial-info="tab.serialInfo"
-        :ai-session-id="tab.aiSessionId"
-        @newSsh="$emit('newSsh')"
-      />
-    </div>
-    <template v-if="tab.children?.length">
-      <div v-for="child in tab.children" :key="child.id" class="terminal-pane" style="flex: 1 1 0">
-        <TerminalPaneChild :tab="child" @newSsh="$emit('newSsh')" @edit-file="(p, c) => $emit('editFile', p, c)" />
+  <div class="terminal-pane-root" :class="{ dragging: draggingTool || draggingAi }">
+    <div class="split-container" :class="tab.splitDirection === 'horizontal' ? 'split-row' : 'split-col'">
+      <div
+        class="split-child"
+        :class="{ 'active-split': activeSplitChildId === tab.id }"
+        @mousedown="setActiveSplitChild(tab.id)"
+      >
+        <TerminalWrapper
+          ref="termRef"
+          :tab="tab"
+          @newSsh="$emit('newSsh')"
+          @split-tab="(id, dir) => $emit('splitTab', id, dir)"
+        />
       </div>
-    </template>
+      <div
+        v-for="child in tab.children"
+        :key="child.id"
+        class="split-child"
+        :class="{ 'active-split': activeSplitChildId === child.id }"
+        @mousedown="setActiveSplitChild(child.id)"
+      >
+        <TerminalPane
+          :tab="child"
+          @newSsh="$emit('newSsh')"
+          @edit-file="(p, c) => $emit('editFile', p, c)"
+          @split-tab="(id, dir) => $emit('splitTab', id, dir)"
+        />
+      </div>
+    </div>
     <div v-if="tab.aiSidebarOpen && termRef?.aiConv" class="ai-pane" :style="{ width: aiWidth + 'px' }">
       <div class="ai-divider" @mousedown="onAiDividerDown" />
       <div class="ai-pane-body">
@@ -109,7 +126,7 @@ watch(() => terminalStore.exportRequest, (req) => {
       </div>
     </div>
     <div v-if="tab.toolSidebarOpen" class="tool-pane" :style="{ width: toolWidth + 'px' }">
-      <div class="divider" @mousedown="onDividerDown" />
+      <div class="tool-divider" @mousedown="onToolDividerDown" />
       <div class="tool-pane-body">
         <ToolPanel
           :tab-id="tab.id"
@@ -135,12 +152,43 @@ watch(() => terminalStore.exportRequest, (req) => {
   user-select: none;
 }
 
-.terminal-pane {
+.split-container {
   flex: 1;
   display: flex;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+}
+
+.split-container.split-row {
+  flex-direction: row;
+}
+
+.split-container.split-col {
+  flex-direction: column;
+}
+
+.split-child {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.split-child.active-split {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.split-container.split-row > .split-child + .split-child {
+  border-left: 1px solid var(--border-color, #444);
+}
+
+.split-container.split-col > .split-child + .split-child {
+  border-top: 1px solid var(--border-color, #444);
 }
 
 .ai-pane {
@@ -178,7 +226,7 @@ watch(() => terminalStore.exportRequest, (req) => {
   position: relative;
 }
 
-.divider {
+.tool-divider {
   width: 4px;
   cursor: col-resize;
   background: transparent;
@@ -187,7 +235,7 @@ watch(() => terminalStore.exportRequest, (req) => {
   z-index: 10;
 }
 
-.divider:hover {
+.tool-divider:hover {
   background: var(--accent-glass);
 }
 

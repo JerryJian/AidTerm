@@ -118,6 +118,8 @@ function onDocClick(e: MouseEvent) {
 
 const activeTabSessionType = computed(() => store.activeTab?.session?.type)
 
+const visibleTabs = computed(() => store.tabs)
+
 const toolTabs = computed<{ id: ToolTab; icon: string }[]>(() => {
   const all: { id: ToolTab; icon: string }[] = [
     { id: 'sftp', icon: '\uD83D\uDCC2' },
@@ -253,7 +255,7 @@ defineExpose({ onKeydown })
     <div class="tab-bar-left">
       <button class="sidebar-toggle" :class="{ active: ui.leftSidebar }" @click="ui.leftSidebar = !ui.leftSidebar" :title="t('tab.toggle_sidebar')">{{ '\u2630' }}</button>
       <div
-        v-for="tab in store.tabs"
+        v-for="tab in visibleTabs"
         :key="tab.id"
         class="tab"
         :class="{ active: tab.id === store.activeTabId }"

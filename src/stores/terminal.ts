@@ -25,6 +25,7 @@ export const useTerminalStore = defineStore('terminal', () => {
   const activeTabId = ref<string | null>(null)
   const batchMode = ref(false)
   const batchTabIds = ref<Set<string>>(new Set())
+  const { t } = useI18n()
 
   const activeTab = computed(() => {
     if (!activeTabId.value) return null
@@ -43,11 +44,9 @@ export const useTerminalStore = defineStore('terminal', () => {
     } else if (type === 'serial') {
       title = serialInfo ? `Serial ${serialInfo.portName}` : 'Serial'
     } else if (localCommand) {
-      const { t } = useI18n()
       const key = shellKeyMap[localCommand] || localCommand.replace(/\.exe$/, '')
       title = t(`shell.${key}`)
     } else {
-      const { t } = useI18n()
       title = t('shell.cmd')
     }
     const tab: TerminalTab = {
@@ -152,15 +151,46 @@ export const useTerminalStore = defineStore('terminal', () => {
     exportRequest.value = null
   }
 
-  function closeTab(id: string) {
-    const idx = tabs.value.findIndex(t => t.id === id)
-    if (idx === -1) return
+  function findTab(id: string, list: TerminalTab[] = tabs.value): TerminalTab | null {
+    for (const tab of list) {
+      if (tab.id === id) return tab
+      if (tab.children?.length) {
+        const found = findTab(id, tab.children)
+        if (found) return found
+      }
+    }
+    return null
+  }
 
-    tabs.value.splice(idx, 1)
+  function removeChildFromParent(id: string, list: TerminalTab[]): boolean {
+    const idx = list.findIndex(t => t.id === id)
+    if (idx !== -1) {
+      list.splice(idx, 1)
+      return true
+    }
+    for (const tab of list) {
+      if (tab.children?.length && removeChildFromParent(id, tab.children)) {
+        return true
+      }
+    }
+    return false
+  }
+
+  function closeTab(id: string) {
+    const tab = findTab(id)
+    if (!tab) return
+
+    if (tab.children?.length) {
+      for (const child of [...tab.children]) {
+        closeTab(child.id)
+      }
+    }
+
+    removeChildFromParent(id, tabs.value)
 
     if (activeTabId.value === id) {
       if (tabs.value.length > 0) {
-        activeTabId.value = tabs.value[Math.min(idx, tabs.value.length - 1)].id
+        activeTabId.value = tabs.value[0].id
       } else {
         activeTabId.value = null
       }
@@ -168,6 +198,8 @@ export const useTerminalStore = defineStore('terminal', () => {
   }
 
   function closeOtherTabs(id: string) {
+    const tab = findTab(id)
+    if (!tab) return
     tabs.value = tabs.value.filter(t => t.id === id)
     activeTabId.value = id
   }
@@ -245,6 +277,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     closeTab,
     closeOtherTabs,
     closeTabsToRight,
+    findTab,
     setActiveTab,
     updateTabTitle,
     updateSessionStatus,
