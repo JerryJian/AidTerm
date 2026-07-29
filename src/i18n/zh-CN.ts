@@ -8,6 +8,8 @@ export default {
   tab: {
     new_tab: '新建标签',
     close_tab: '关闭标签',
+    close_others: '关闭其他',
+    close_right: '关闭右侧',
     new_ssh: '新建 SSH',
     local: '本地',
     ssh: 'SSH',

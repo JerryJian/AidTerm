@@ -149,6 +149,18 @@ export const useTerminalStore = defineStore('terminal', () => {
     }
   }
 
+  function closeOtherTabs(id: string) {
+    tabs.value = tabs.value.filter(t => t.id === id)
+    activeTabId.value = id
+  }
+
+  function closeTabsToRight(id: string) {
+    const idx = tabs.value.findIndex(t => t.id === id)
+    if (idx === -1) return
+    tabs.value = tabs.value.slice(0, idx + 1)
+    activeTabId.value = id
+  }
+
   function setActiveTab(id: string) {
     activeTabId.value = id
   }
@@ -212,6 +224,8 @@ export const useTerminalStore = defineStore('terminal', () => {
     batchTabIds,
     addTab,
     closeTab,
+    closeOtherTabs,
+    closeTabsToRight,
     setActiveTab,
     updateTabTitle,
     updateSessionStatus,

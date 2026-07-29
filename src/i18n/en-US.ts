@@ -8,6 +8,8 @@ export default {
   tab: {
     new_tab: 'New Tab',
     close_tab: 'Close Tab',
+    close_others: 'Close Others',
+    close_right: 'Close to Right',
     new_ssh: 'New SSH',
     local: 'Local',
     ssh: 'SSH',

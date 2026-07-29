@@ -30,6 +30,45 @@ const batchFocused = ref(false)
 
 const toolsMenuOpen = ref(false)
 
+const ctxTabId = ref<string | null>(null)
+const ctxPos = ref({ x: 0, y: 0 })
+const ctxVisible = ref(false)
+
+function showTabCtx(e: MouseEvent, tabId: string) {
+  e.preventDefault()
+  ctxTabId.value = tabId
+  ctxPos.value = { x: e.clientX, y: e.clientY }
+  ctxVisible.value = true
+}
+
+function closeTabCtx() {
+  ctxVisible.value = false
+  ctxTabId.value = null
+}
+
+function ctxClose() {
+  if (ctxTabId.value) store.closeTab(ctxTabId.value)
+  closeTabCtx()
+}
+
+function ctxCloseOthers() {
+  if (ctxTabId.value) store.closeOtherTabs(ctxTabId.value)
+  closeTabCtx()
+}
+
+function ctxCloseRight() {
+  if (ctxTabId.value) store.closeTabsToRight(ctxTabId.value)
+  closeTabCtx()
+}
+
+function onDocClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (target?.closest('.tools-wrapper') || target?.closest('.new-tab-wrapper') || target?.closest('.tab-ctx-menu')) return
+  newTabMenuOpen.value = false
+  toolsMenuOpen.value = false
+  closeTabCtx()
+}
+
 const activeTabSessionType = computed(() => store.activeTab?.session?.type)
 
 const toolTabs = computed<{ id: ToolTab; icon: string }[]>(() => {
@@ -105,13 +144,6 @@ function onNewTabClick() {
   toolsMenuOpen.value = false
 }
 
-function onDocClick(e: MouseEvent) {
-  const target = e.target as HTMLElement
-  if (target?.closest('.tools-wrapper') || target?.closest('.new-tab-wrapper')) return
-  newTabMenuOpen.value = false
-  toolsMenuOpen.value = false
-}
-
 onMounted(() => document.addEventListener('click', onDocClick, true))
 onUnmounted(() => document.removeEventListener('click', onDocClick, true))
 
@@ -180,6 +212,7 @@ defineExpose({ onKeydown })
         :class="{ active: tab.id === store.activeTabId }"
         @click="store.setActiveTab(tab.id)"
         @mouseup.middle="store.closeTab(tab.id)"
+        @contextmenu.prevent="showTabCtx($event, tab.id)"
       >
         <input
           v-if="store.batchMode"
@@ -223,6 +256,16 @@ defineExpose({ onKeydown })
             </template>
           </div>
         </div>
+      </div>
+      <div
+        v-if="ctxVisible"
+        class="tab-ctx-menu"
+        :style="{ left: ctxPos.x + 'px', top: ctxPos.y + 'px' }"
+        @mousedown.prevent
+      >
+        <button class="ctx-item" @click="ctxClose">{{ $t('tab.close_tab') }}</button>
+        <button class="ctx-item" @click="ctxCloseOthers">{{ $t('tab.close_others') }}</button>
+        <button class="ctx-item" @click="ctxCloseRight">{{ $t('tab.close_right') }}</button>
       </div>
     </div>
     <div class="tab-bar-right">
@@ -675,5 +718,38 @@ defineExpose({ onKeydown })
   color: var(--text-overlay0);
   font-weight: 600;
   letter-spacing: 0.5px;
+}
+
+.tab-ctx-menu {
+  position: fixed;
+  z-index: 10000;
+  background: var(--bg-surface0);
+  border: 1px solid var(--bg-surface2);
+  border-radius: 6px;
+  padding: 4px;
+  min-width: 140px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tab-ctx-menu .ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+  text-align: left;
+  width: 100%;
+  white-space: nowrap;
+}
+.tab-ctx-menu .ctx-item:hover {
+  background: var(--accent-glass);
+  color: var(--accent);
 }
 </style>
