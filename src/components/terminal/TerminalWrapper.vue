@@ -6,6 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
 import { invoke, listen } from '@/api'
 import { useTerminal } from '../../hooks/useTerminal'
+import { stashTerminal, takeTerminal } from '../../hooks/terminalRegistry'
 import { useTerminalStore } from '../../stores/terminal'
 import { useThemeStore } from '../../stores/themeStore'
 import { useAiConversation } from '../../hooks/useAiConversation'
@@ -29,7 +30,7 @@ const emit = defineEmits<{
 }>()
 
 const terminalRef = ref<HTMLDivElement>()
-const searchAddon = ref<SearchAddon>()
+const searchAddon = ref<SearchAddon | null>(null)
 const searchVisible = ref(false)
 const searchQuery = ref('')
 const ctxMenu = ref<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -59,7 +60,7 @@ let resizeObserver: ResizeObserver | null = null
 let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 let lastSize = { w: 0, h: 0 }
 
-const { createSession, sshConnect, telnetConnect, serialConnect, writeInput, resize, onOutput, killSession } = useTerminal()
+const { createSession, sshConnect, telnetConnect, serialConnect, writeInput, resize, onOutput, killSession, sessionId: sessionIdRef, isConnected: isConnectedRef } = useTerminal()
 
 const aiConv = useAiConversation(() => terminal, writeInput, onOutput, props.aiSessionId)
 
@@ -124,6 +125,42 @@ function scheduleFit(maxAttempts = 10) {
 
 async function initTerminal() {
   if (!terminalRef.value) return
+
+  // Reuse a terminal that was stashed while this pane was relocated by a
+  // split. Re-attaching the existing instance keeps the screen content and
+  // the live session intact instead of starting a fresh one.
+  const tabId = currentTabId.value ?? ''
+  const stashed = takeTerminal(tabId)
+  if (stashed) {
+    terminal = stashed.terminal
+    fitAddon = stashed.fitAddon
+    searchAddon.value = stashed.searchAddon
+    unlisten = stashed.unlisten
+    unlisteners.push(...stashed.unlisteners)
+
+    const el = terminal.element
+    if (el && !terminalRef.value.contains(el)) {
+      terminalRef.value.appendChild(el)
+    }
+
+    const sid = stashed.sessionId ?? currentTab.value?.session?.id
+    if (sid) {
+      sessionIdRef.value = sid
+      isConnectedRef.value = true
+    }
+
+    await nextTick()
+    doFit()
+    scheduleFit(10)
+    fallbackTimer = setTimeout(() => doFit(), 300)
+
+    resizeObserver = new ResizeObserver(() => {
+      requestAnimationFrame(() => doFit())
+    })
+    resizeObserver.observe(terminalRef.value)
+
+    return
+  }
 
   fitAddon = new FitAddon()
   searchAddon.value = new SearchAddon()
@@ -245,15 +282,45 @@ onMounted(() => {
     }
   })
   onUnmounted(() => stopWatch())
+
+  // Keep the hook's session id in sync with the store (matters when the
+  // pane was relocated while a connection was still being established).
+  const stopSessionWatch = watch(
+    () => currentTab.value?.session?.id,
+    (id) => {
+      if (id && sessionIdRef.value !== id) {
+        sessionIdRef.value = id
+        isConnectedRef.value = true
+      }
+    },
+  )
+  onUnmounted(() => stopSessionWatch())
 })
 
 onUnmounted(() => {
-  killSession()
+  if (terminal) {
+    const tabId = currentTabId.value
+    if (tabId && store.findTab(tabId)) {
+      // The pane is being relocated (e.g. split restructures the tree).
+      // Keep the session and xterm instance alive and stash them for the
+      // remounted pane to reuse, so the screen content is preserved.
+      stashTerminal(tabId, {
+        terminal,
+        fitAddon,
+        searchAddon: searchAddon.value,
+        sessionId: sessionIdRef.value,
+        unlisten,
+        unlisteners,
+      })
+    } else {
+      killSession()
+      if (unlisten) unlisten()
+      unlisteners.forEach(fn => fn())
+      terminal.dispose()
+    }
+  }
   if (fallbackTimer) clearTimeout(fallbackTimer)
   if (resizeObserver) resizeObserver.disconnect()
-  if (unlisten) unlisten()
-  unlisteners.forEach(fn => fn())
-  terminal?.dispose()
   terminal = null
   fitAddon = null
 })
