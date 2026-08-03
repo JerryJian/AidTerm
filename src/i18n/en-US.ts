@@ -428,6 +428,7 @@ export default {
     analyzing: 'AI analyzing...',
     output_truncated: 'Output truncated for AI',
     no_config: 'Configure API Key in Settings → AI first',
+    no_active_terminal: 'No active terminal, please select one',
     reset: 'Reset Chat',
     dangerous_command: 'Dangerous',
     safe_command: 'Safe',

@@ -33,6 +33,21 @@ export const useTerminalStore = defineStore('terminal', () => {
     return tabs.value.find(t => t.id === activeTabId.value) ?? null
   })
 
+  function leafIdOf(tab: TerminalTab): string | null {
+    if (tab.children?.length) {
+      const next = tab.children.find(c => c.id === selectedPaneId.value)
+        ?? tab.children.find(c => c.session)
+        ?? tab.children[0]
+      return leafIdOf(next)
+    }
+    return tab.id
+  }
+
+  const activeLeafId = computed<string | null>(() => {
+    if (!activeTab.value) return null
+    return leafIdOf(activeTab.value)
+  })
+
   function addTab(type: TerminalSession['type'] = 'local', sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo, localCommand?: string, serialInfo?: SerialConnectionInfo, workingDir?: string, titleOverride?: string) {
     const id = generateId()
     let title: string
@@ -125,13 +140,6 @@ export const useTerminalStore = defineStore('terminal', () => {
   function isToolOpen(tabId: string, tool: ToolTab): boolean {
     const tab = tabs.value.find(t => t.id === tabId)
     return !!tab?.openToolTabs?.includes(tool)
-  }
-
-  function toggleAiSidebar(tabId: string) {
-    const tab = tabs.value.find(t => t.id === tabId)
-    if (tab) {
-      tab.aiSidebarOpen = !tab.aiSidebarOpen
-    }
   }
 
   function removeToolTab(tabId: string, tool: ToolTab) {
@@ -309,10 +317,10 @@ export const useTerminalStore = defineStore('terminal', () => {
     setActiveToolTab,
     toggleToolSidebar,
     isToolOpen,
-    toggleAiSidebar,
     requestExport,
     clearExportRequest,
     selectedPaneId,
     setSelectedPane,
+    activeLeafId,
   }
 })

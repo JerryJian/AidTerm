@@ -145,9 +145,7 @@ function openToolTab(tab: ToolTab) {
 }
 
 function toggleAiSidebar() {
-  if (store.activeTabId) {
-    store.toggleAiSidebar(store.activeTabId)
-  }
+  ui.aiSidebarOpen = !ui.aiSidebarOpen
 }
 
 function isToolOpen(tab: ToolTab): boolean {
@@ -339,7 +337,7 @@ defineExpose({ onKeydown })
       <button
         v-if="aiStore.enabled"
         class="ai-toggle-btn"
-        :class="{ active: store.activeTab?.aiSidebarOpen }"
+        :class="{ active: ui.aiSidebarOpen }"
         @click="toggleAiSidebar"
         :title="t('ai.sidebar_title')"
       >

@@ -10,7 +10,9 @@ import { useTerminal } from '../../hooks/useTerminal'
 import { stashTerminal, takeTerminal } from '../../hooks/terminalRegistry'
 import { useTerminalStore } from '../../stores/terminal'
 import { useThemeStore } from '../../stores/themeStore'
+import { useUiStore } from '../../stores/uiStore'
 import { useAiConversation } from '../../hooks/useAiConversation'
+import { registerAiConversation, unregisterAiConversation } from '../../hooks/terminalAiRegistry'
 import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SystemInfo, TerminalTab } from '../../types'
 import { useAiStore } from '../../stores/aiStore'
 import { useI18n } from 'vue-i18n'
@@ -41,6 +43,7 @@ const { t } = useI18n()
 const store = useTerminalStore()
 const aiStore = useAiStore()
 const themeStore = useThemeStore()
+const ui = useUiStore()
 
 const currentTabId = computed(() => props.tab?.id ?? props.tabId ?? store.activeTabId)
 const currentTab = computed(() => {
@@ -301,6 +304,12 @@ async function initTerminal() {
 onMounted(() => {
   initTerminal()
 
+  const tabId = currentTabId.value
+  if (tabId) registerAiConversation(tabId, aiConv)
+  onUnmounted(() => {
+    if (tabId) unregisterAiConversation(tabId)
+  })
+
   const stopWatch = watch(() => themeStore.mode, () => {
     if (terminal) {
       terminal.options.theme = getXtermTheme()
@@ -473,9 +482,10 @@ function doAskAi() {
   const sel = terminal?.getSelection()
   closeContextMenu()
   if (!sel) return
-  if (currentTabId.value && !currentTab.value?.aiSidebarOpen) {
-    store.toggleAiSidebar(currentTabId.value)
+  if (currentTabId.value) {
+    store.setSelectedPane(currentTabId.value)
   }
+  ui.aiSidebarOpen = true
   nextTick(() => aiConv.startConversation(sel))
 }
 
@@ -526,7 +536,7 @@ function getTerminalContent(): string {
   return lines.join('\n')
 }
 
-defineExpose({ focusSearch, doFit, aiConv, getTerminalContent })
+defineExpose({ focusSearch, doFit, getTerminalContent })
 </script>
 
 <template>

@@ -2,7 +2,6 @@
 import { ref, watch } from 'vue'
 import TerminalWrapper from './TerminalWrapper.vue'
 import ToolPanel from '../tools/ToolPanel.vue'
-import AiSidebar from '../ai/AiSidebar.vue'
 import { useTerminalStore } from '../../stores/terminal'
 import { saveDialog, invoke } from '@/api'
 import type { TerminalTab } from '../../types'
@@ -20,9 +19,7 @@ defineEmits<{
 const terminalStore = useTerminalStore()
 const termRef = ref<InstanceType<typeof TerminalWrapper>>()
 const toolWidth = ref(400)
-const aiWidth = ref(380)
 const draggingTool = ref(false)
-const draggingAi = ref(false)
 
 function isPaneSelected(tabId: string): boolean {
   return terminalStore.selectedPaneId === tabId
@@ -38,23 +35,6 @@ function onToolDividerDown(e: MouseEvent) {
   }
   function onUp() {
     draggingTool.value = false
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
-  }
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
-}
-
-function onAiDividerDown(e: MouseEvent) {
-  draggingAi.value = true
-  const startX = e.clientX
-  const startW = aiWidth.value
-  function onMove(ev: MouseEvent) {
-    const delta = startX - ev.clientX
-    aiWidth.value = Math.min(Math.max(startW + delta, 280), 600)
-  }
-  function onUp() {
-    draggingAi.value = false
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
   }
@@ -85,7 +65,7 @@ watch(() => terminalStore.exportRequest, (req) => {
 </script>
 
 <template>
-  <div class="terminal-pane-root" :class="{ dragging: draggingTool || draggingAi }">
+  <div class="terminal-pane-root" :class="{ dragging: draggingTool }">
     <div class="split-container" :class="{ 'split-row': tab.splitDirection === 'horizontal', 'split-col': tab.splitDirection === 'vertical' }">
       <template v-if="tab.session">
         <div
@@ -113,15 +93,6 @@ watch(() => terminalStore.exportRequest, (req) => {
           @newSsh="$emit('newSsh')"
           @edit-file="(p, c) => $emit('editFile', p, c)"
           @split-tab="(id, dir) => $emit('splitTab', id, dir)"
-        />
-      </div>
-    </div>
-    <div v-if="tab.aiSidebarOpen && termRef?.aiConv" class="ai-pane" :style="{ width: aiWidth + 'px' }">
-      <div class="ai-divider" @mousedown="onAiDividerDown" />
-      <div class="ai-pane-body">
-        <AiSidebar
-          :ai-conv="termRef.aiConv"
-          @close="terminalStore.toggleAiSidebar(tab.id)"
         />
       </div>
     </div>
@@ -190,34 +161,6 @@ watch(() => terminalStore.exportRequest, (req) => {
 
 .split-container.split-col > .split-child + .split-child {
   border-top: 1px solid var(--border-color, #444);
-}
-
-.ai-pane {
-  display: flex;
-  flex-direction: row;
-  overflow: hidden;
-  position: relative;
-}
-
-.ai-divider {
-  width: 4px;
-  cursor: col-resize;
-  background: transparent;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 10;
-}
-
-.ai-divider:hover {
-  background: var(--accent-glass);
-}
-
-.ai-pane-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
 }
 
 .tool-pane {

@@ -428,6 +428,7 @@ export default {
     analyzing: 'AI 分析中...',
     output_truncated: '输出较长，已截断发送给 AI',
     no_config: '请在设置 → AI 中配置 API Key 后使用 AI 助手',
+    no_active_terminal: '暂无活动终端，请选择一个终端',
     reset: '重置对话',
     dangerous_command: '危险命令',
     safe_command: '安全命令',

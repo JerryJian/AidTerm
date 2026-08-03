@@ -11,6 +11,7 @@ import TabBar from './components/terminal/TabBar.vue'
 import TitleBar from './components/titlebar/TitleBar.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
 import LeftSidebar from './components/sidebar/LeftSidebar.vue'
+import AiPanel from './components/ai/AiPanel.vue'
 
 import StatusBar from './components/status/StatusBar.vue'
 import SshDialog from './components/session/SshDialog.vue'
@@ -469,6 +470,7 @@ onUnmounted(() => {
             @split-tab="onSplitTab"
           />
         </div>
+        <AiPanel v-if="ui.aiSidebarOpen" @close="ui.aiSidebarOpen = false" />
       </div>
     </div>
     <StatusBar />
