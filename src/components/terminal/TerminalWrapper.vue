@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { Terminal } from '@xterm/xterm'
+import type { IDisposable } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SearchAddon } from '@xterm/addon-search'
@@ -56,6 +57,8 @@ let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let unlisten: (() => void) | null = null
 const unlisteners: (() => void)[] = []
+let onDataDispose: IDisposable | null = null
+let onResizeDispose: IDisposable | null = null
 let resizeObserver: ResizeObserver | null = null
 let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 let lastSize = { w: 0, h: 0 }
@@ -135,18 +138,38 @@ async function initTerminal() {
     terminal = stashed.terminal
     fitAddon = stashed.fitAddon
     searchAddon.value = stashed.searchAddon
-    unlisten = stashed.unlisten
-    unlisteners.push(...stashed.unlisteners)
 
-    const el = terminal.element
-    if (el && !terminalRef.value.contains(el)) {
-      terminalRef.value.appendChild(el)
-    }
+    // The stashed handlers were bound to the previous component instance.
+    // Their callbacks close over that instance's `terminal` (nulled on
+    // unmount) and its own `sessionId` ref, so they must be disposed here
+    // and rebound against this instance. Otherwise echo/output stops and
+    // typing appears dead after a split relocates the pane.
+    stashed.onDataDispose?.dispose()
+    stashed.onResizeDispose?.dispose()
+    stashed.unlisten?.()
+    unlisteners.push(...stashed.unlisteners)
 
     const sid = stashed.sessionId ?? currentTab.value?.session?.id
     if (sid) {
       sessionIdRef.value = sid
       isConnectedRef.value = true
+    }
+
+    onDataDispose = terminal.onData((data: string) => {
+      handleTerminalData(data)
+    })
+    onResizeDispose = terminal.onResize(({ rows, cols }) => {
+      resize(rows, cols)
+    })
+
+    const unsubOutput = await onOutput((data: string) => {
+      terminal?.write(data)
+    })
+    if (unsubOutput) unlisten = unsubOutput
+
+    const el = terminal.element
+    if (el && !terminalRef.value.contains(el)) {
+      terminalRef.value.appendChild(el)
     }
 
     await nextTick()
@@ -158,6 +181,8 @@ async function initTerminal() {
       requestAnimationFrame(() => doFit())
     })
     resizeObserver.observe(terminalRef.value)
+
+    terminal.focus()
 
     return
   }
@@ -180,7 +205,7 @@ async function initTerminal() {
   terminal.loadAddon(searchAddon.value)
   terminal.loadAddon(new WebLinksAddon())
 
-  terminal.onData((data: string) => {
+  onDataDispose = terminal.onData((data: string) => {
     handleTerminalData(data)
   })
 
@@ -194,7 +219,7 @@ async function initTerminal() {
 
   doFit()
 
-  terminal.onResize(({ rows, cols }) => {
+  onResizeDispose = terminal.onResize(({ rows, cols }) => {
     resize(rows, cols)
   })
 
@@ -311,6 +336,8 @@ onUnmounted(() => {
         sessionId: sessionIdRef.value,
         unlisten,
         unlisteners,
+        onDataDispose,
+        onResizeDispose,
       })
     } else {
       killSession()

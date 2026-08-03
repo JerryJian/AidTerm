@@ -1,4 +1,4 @@
-import type { Terminal } from '@xterm/xterm'
+import type { Terminal, IDisposable } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { SearchAddon } from '@xterm/addon-search'
 
@@ -9,6 +9,8 @@ export interface RelocatedTerminal {
   sessionId: string | null
   unlisten: (() => void) | null
   unlisteners: Array<() => void>
+  onDataDispose: IDisposable | null
+  onResizeDispose: IDisposable | null
 }
 
 const registry = new Map<string, RelocatedTerminal>()
