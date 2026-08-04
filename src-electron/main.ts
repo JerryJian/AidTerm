@@ -928,12 +928,15 @@ function registerIpcHandlers(): void {
       }
     }
 
+    const shellOut = await execCmd('basename $SHELL 2>/dev/null || echo unknown')
+    const shell = shellOut.trim() && shellOut.trim() !== 'unknown' ? shellOut.trim() : 'remote'
+
     return {
       os: osLabel,
       arch: parts[parts.length - 2] || 'remote',
       hostname: parts[1] || 'remote',
       kernel: parts[2] || 'remote',
-      shell: 'remote',
+      shell,
     }
   })
 

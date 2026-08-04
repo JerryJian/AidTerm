@@ -315,21 +315,53 @@ export function useAiConversation(
     }
   }
 
+  async function resolveSystemInfo(): Promise<SystemInfo> {
+    const termStore = useTerminalStore()
+    const leafId = termStore.selectedPaneId ?? termStore.activeLeafId
+    const leaf = leafId ? termStore.findTab(leafId) : null
+
+    // Commands run in the selected pane's shell. For SSH sessions report the
+    // remote machine info instead of the local one, falling back to local
+    // info when the remote cannot be queried (not yet connected, etc.).
+    if (leaf?.session?.type === 'ssh' && leaf.session.id) {
+      try {
+        const info = await invoke<SystemInfo>('get_remote_system_info', { sessionId: leaf.session.id })
+        termStore.updateSystemInfo(leaf.id, info)
+        return info
+      } catch {
+        // fall back to local info below
+      }
+    }
+
+    const info = await invoke<SystemInfo>('get_system_info')
+
+    // get_system_info reads the SHELL/ComSpec env vars of the app process, so
+    // on Windows it always reports cmd.exe regardless of the actual session.
+    // For local sessions use the shell that was actually spawned instead.
+    if (leaf?.session?.type === 'local' && leaf.session.command) {
+      info.shell = leaf.session.command
+    }
+
+    if (leaf) termStore.updateSystemInfo(leaf.id, info)
+    return info
+  }
+
   async function startConversation(userInput: string) {
     cancelled.value = false
     busy.value = true
 
     detectSavedPrompt()
 
+    // Build history before recording the current question, otherwise the
+    // conversation history (conversationMessages) already contains it and
+    // the explicit user message below would send it twice.
+    const historyMsgs = buildHistoryMessages(3)
+
     addConversationMessage({ role: 'user', content: userInput })
 
-    const termStore = useTerminalStore()
-    const tab = termStore.activeTab
-
-    const systemInfo = tab?.systemInfo ?? await invoke<SystemInfo>('get_system_info')
+    const systemInfo = await resolveSystemInfo()
 
     const systemPrompt = buildSystemPrompt(systemInfo, commandHistory.value)
-    const historyMsgs = buildHistoryMessages(3)
     messages.value = [
       { role: 'system', content: systemPrompt },
       ...historyMsgs,

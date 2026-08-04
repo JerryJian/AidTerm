@@ -281,8 +281,8 @@ watch(conversationMessages, async () => {
 
 .ai-title {
   font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
+  font-weight: 400;
+  color: var(--text-sub0);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

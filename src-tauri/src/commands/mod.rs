@@ -432,13 +432,19 @@ pub async fn get_remote_system_info(
     });
     log::info!("[get_remote_system_info] os-release done in {:?}", t1.elapsed());
 
+    let shell = manager.exec(&session_id, "basename $SHELL 2>/dev/null || echo unknown").await
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty() && s != "unknown")
+        .unwrap_or_else(|| "remote".to_string());
+
     log::info!("[get_remote_system_info] complete in {:?}", t0.elapsed());
     Ok(SystemInfo {
         os: os_label.unwrap_or(os),
         arch,
         hostname,
         kernel,
-        shell: "remote".to_string(),
+        shell,
     })
 }
 
