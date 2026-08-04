@@ -94,7 +94,7 @@ function closeSidebar() {
           v-if="aiConv"
           v-show="activeTool === 'ai'"
           :ai-conv="aiConv"
-          @close="closeSidebar"
+          :tab-title="activeTab?.title ?? ''"
         />
         <SftpPanel
           v-if="activeTab"

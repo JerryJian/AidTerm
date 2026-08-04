@@ -431,6 +431,7 @@ export default {
     no_config: 'Configure API Key in Settings → AI first',
     no_active_terminal: 'No active terminal, please select one',
     reset: 'Reset Chat',
+    new_conversation: 'New Chat',
     dangerous_command: 'Dangerous',
     safe_command: 'Safe',
     auto_executing: 'Auto-executing...',

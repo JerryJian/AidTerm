@@ -431,6 +431,7 @@ export default {
     no_config: '请在设置 → AI 中配置 API Key 后使用 AI 助手',
     no_active_terminal: '暂无活动终端，请选择一个终端',
     reset: '重置对话',
+    new_conversation: '新对话',
     dangerous_command: '危险命令',
     safe_command: '安全命令',
     auto_executing: '自动执行中...',

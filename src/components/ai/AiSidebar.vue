@@ -6,12 +6,9 @@ import { marked } from 'marked'
 
 const { t } = useI18n()
 
-const emit = defineEmits<{
-  close: []
-}>()
-
 const props = defineProps<{
   aiConv: ReturnType<typeof useAiConversation>
+  tabTitle?: string
 }>()
 
 const inputText = ref('')
@@ -134,11 +131,10 @@ watch(conversationMessages, async () => {
 <template>
   <div class="ai-sidebar">
     <div class="ai-header">
-      <span class="ai-title">{{ t('ai.sidebar_title') }}</span>
-      <div class="ai-header-actions">
-        <button class="ai-header-btn" @click="doReset" :title="t('ai.reset')">&#x21bb;</button>
-        <button class="ai-header-btn" @click="emit('close')">&#x2715;</button>
-      </div>
+      <span class="ai-title" :title="tabTitle">{{ tabTitle }}</span>
+      <button class="ai-header-btn" @click="doReset" :title="t('ai.new_conversation')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+      </button>
     </div>
 
     <div class="ai-messages" ref="messagesContainer" @contextmenu="onContextMenu">
@@ -277,7 +273,7 @@ watch(conversationMessages, async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 6px 10px;
   background: var(--bg-mantle);
   border-bottom: 1px solid var(--bg-surface0);
   flex-shrink: 0;
@@ -287,25 +283,31 @@ watch(conversationMessages, async () => {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
-}
-
-.ai-header-actions {
-  display: flex;
-  gap: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ai-header-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
   border: none;
   background: none;
   color: var(--text-sub0);
   cursor: pointer;
-  padding: 4px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  flex-shrink: 0;
 }
 .ai-header-btn:hover {
   background: var(--bg-surface1);
   color: var(--text);
+}
+.ai-header-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .ai-messages {
