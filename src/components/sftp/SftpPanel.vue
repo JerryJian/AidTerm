@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, reactive, onMounted, onUnmounted } from 'vue'
 import { useSftpStore } from '../../stores/sftpStore'
+import { useTerminalStore } from '../../stores/terminal'
 import { openDialog as open, saveDialog as save, listen } from '@/api'
 import { useI18n } from 'vue-i18n'
 import type { FileEntry, TerminalTab, UploadTask, SftpProgress } from '../../types'
@@ -24,6 +25,7 @@ const icons = {
 
 const { t } = useI18n()
 const store = useSftpStore()
+const terminalStore = useTerminalStore()
 
 const props = defineProps<{
   tabId: string
@@ -35,6 +37,8 @@ const emit = defineEmits<{
 }>()
 
 const s = computed(() => store.tabState(props.tabId))
+
+const sessionTab = computed(() => terminalStore.resolveSessionTab(props.tab))
 
 const host = ref('')
 const port = ref(22)
@@ -93,15 +97,16 @@ let autoConnecting = false
 
 watch(
   () => {
-    const s = props.tab.session
-    if (!s || s.type !== 'ssh' || !props.tab.sshInfo) return null
-    return `${s.id}:${s.status}:${props.tab.sshInfo.host}:${props.tab.sshInfo.port}:${props.tab.sshInfo.username}`
+    const leaf = sessionTab.value
+    const s = leaf?.session
+    if (!s || s.type !== 'ssh' || !leaf?.sshInfo) return null
+    return `${s.id}:${s.status}:${leaf.sshInfo.host}:${leaf.sshInfo.port}:${leaf.sshInfo.username}`
   },
   async (key) => {
     if (autoConnecting || s.value.connected) return
     if (props.tab.activeToolTab !== 'sftp') return
     if (key && key.includes(':connected:')) {
-      const info = props.tab.sshInfo!
+      const info = sessionTab.value!.sshInfo!
       host.value = info.host
       port.value = info.port
       username.value = info.username

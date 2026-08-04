@@ -11,7 +11,7 @@ import TabBar from './components/terminal/TabBar.vue'
 import TitleBar from './components/titlebar/TitleBar.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
 import LeftSidebar from './components/sidebar/LeftSidebar.vue'
-import AiPanel from './components/ai/AiPanel.vue'
+import RightSidebar from './components/tools/RightSidebar.vue'
 
 import StatusBar from './components/status/StatusBar.vue'
 import SshDialog from './components/session/SshDialog.vue'
@@ -230,6 +230,9 @@ function onSplitTab(tabId: string, direction: 'horizontal' | 'vertical') {
     splitDirection: direction,
     children: [tab, child],
     aiSessionId: tab.aiSessionId,
+    toolSidebarOpen: tab.toolSidebarOpen,
+    openToolTabs: tab.openToolTabs ? [...tab.openToolTabs] : undefined,
+    activeToolTab: tab.activeToolTab,
   }
 
   const result = store.findParent(tabId)
@@ -472,11 +475,10 @@ onUnmounted(() => {
             v-show="store.activeTab && tab.id === store.activeTabId"
             :tab="tab"
             @newSsh="ui.sshDialog = true"
-            @edit-file="onEditFile"
             @split-tab="onSplitTab"
           />
         </div>
-        <AiPanel v-if="ui.aiSidebarOpen" @close="ui.aiSidebarOpen = false" />
+        <RightSidebar v-if="store.activeTab?.toolSidebarOpen" @edit-file="onEditFile" />
       </div>
     </div>
     <StatusBar />

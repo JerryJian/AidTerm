@@ -124,6 +124,7 @@ export default {
     serial: '串口...',
   },
   tool_panel: {
+    ai: 'AI 助手',
     sftp: 'SFTP',
     tunnel: '隧道',
     proxy: '代理',

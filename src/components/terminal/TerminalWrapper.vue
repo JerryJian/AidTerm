@@ -10,7 +10,6 @@ import { useTerminal } from '../../hooks/useTerminal'
 import { stashTerminal, takeTerminal } from '../../hooks/terminalRegistry'
 import { useTerminalStore } from '../../stores/terminal'
 import { useThemeStore } from '../../stores/themeStore'
-import { useUiStore } from '../../stores/uiStore'
 import { getOrCreateAiConversation, registerLeafBinding, unregisterLeafBinding } from '../../hooks/terminalAiRegistry'
 import type { AiTerminalBinding } from '../../hooks/useAiConversation'
 import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SystemInfo, TerminalTab } from '../../types'
@@ -42,7 +41,6 @@ const { t } = useI18n()
 const store = useTerminalStore()
 const aiStore = useAiStore()
 const themeStore = useThemeStore()
-const ui = useUiStore()
 
 const currentTabId = computed(() => props.tab?.id ?? props.tabId ?? store.activeTabId)
 const currentTab = computed(() => {
@@ -497,7 +495,8 @@ function doAskAi() {
   }
   const conv = getTabAiConv()
   conv.bindTerminal(aiBinding)
-  ui.aiSidebarOpen = true
+  const rootId = currentTabId.value ? store.topLevelTabIdOf(currentTabId.value) : null
+  if (rootId) store.addToolTab(rootId, 'ai')
   nextTick(() => conv.startConversation(sel))
 }
 

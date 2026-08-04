@@ -1,0 +1,198 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useTerminalStore } from '../../stores/terminal'
+import { useUiStore } from '../../stores/uiStore'
+import { useAiStore } from '../../stores/aiStore'
+import { getAiConversation } from '../../hooks/terminalAiRegistry'
+import AiSidebar from '../ai/AiSidebar.vue'
+import SftpPanel from '../sftp/SftpPanel.vue'
+import TunnelPanel from '../tunnel/TunnelPanel.vue'
+import type { ToolTab } from '../../types'
+
+const emit = defineEmits<{
+  editFile: [remotePath: string, connId: string]
+}>()
+
+const { t } = useI18n()
+const store = useTerminalStore()
+const ui = useUiStore()
+const ai = useAiStore()
+
+const dragging = ref(false)
+
+const activeTab = computed(() => store.activeTab)
+
+const toolTabs = computed<{ id: ToolTab; icon: string; title: string }[]>(() => {
+  const list: { id: ToolTab; icon: string; title: string }[] = []
+  if (ai.enabled) {
+    list.push({ id: 'ai', icon: '\u{1F916}', title: t('tool_panel.ai') })
+  }
+  if (store.tabSessionType(activeTab.value) === 'ssh') {
+    list.push({ id: 'sftp', icon: '\u{1F4C2}', title: t('tool_panel.sftp') })
+    list.push({ id: 'tunnel', icon: '\u{1F50C}', title: t('tool_panel.tunnel') })
+  }
+  return list
+})
+
+const activeTool = computed<ToolTab>(() => {
+  const cur = activeTab.value?.activeToolTab ?? 'ai'
+  if (toolTabs.value.some(x => x.id === cur)) return cur
+  return toolTabs.value[0]?.id ?? 'ai'
+})
+
+const aiConv = computed(() => {
+  const tab = activeTab.value
+  if (!tab?.aiSessionId) return undefined
+  return getAiConversation(tab.aiSessionId)
+})
+
+function onDividerDown(e: MouseEvent) {
+  dragging.value = true
+  const startX = e.clientX
+  const startW = ui.rightSidebarWidth
+  function onMove(ev: MouseEvent) {
+    const delta = startX - ev.clientX
+    ui.rightSidebarWidth = Math.min(Math.max(startW + delta, 280), 600)
+  }
+  function onUp() {
+    dragging.value = false
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
+function closeSidebar() {
+  const id = activeTab.value?.id
+  if (id) store.toggleToolSidebar(id)
+}
+</script>
+
+<template>
+  <div class="right-pane" :class="{ dragging }" :style="{ width: ui.rightSidebarWidth + 'px' }">
+    <div class="right-divider" @mousedown="onDividerDown" />
+    <div class="right-sidebar">
+      <div class="right-tabs">
+        <button
+          v-for="tt in toolTabs"
+          :key="tt.id"
+          class="st-tab"
+          :class="{ active: activeTool === tt.id }"
+          :title="tt.title"
+          @click="store.setActiveToolTab(activeTab!.id, tt.id)"
+        >
+          {{ tt.icon }}
+        </button>
+        <div class="st-spacer" />
+        <button class="st-tab close-btn" :title="t('titlebar.close')" @click="closeSidebar">&#x2715;</button>
+      </div>
+      <div class="right-body">
+        <AiSidebar
+          v-if="aiConv"
+          v-show="activeTool === 'ai'"
+          :ai-conv="aiConv"
+          @close="closeSidebar"
+        />
+        <SftpPanel
+          v-if="activeTab"
+          v-show="activeTool === 'sftp'"
+          :tab-id="activeTab.id"
+          :tab="activeTab"
+          @edit-file="(p, c) => emit('editFile', p, c)"
+        />
+        <TunnelPanel
+          v-if="activeTab"
+          v-show="activeTool === 'tunnel'"
+          :tab-id="activeTab.id"
+          :tab="activeTab"
+        />
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.right-pane {
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.right-pane.dragging {
+  user-select: none;
+}
+
+.right-divider {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.right-divider:hover {
+  background: var(--accent-glass);
+}
+
+.right-sidebar {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-base);
+  border-left: 1px solid var(--bg-surface0);
+}
+
+.right-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--bg-surface0);
+  background: var(--bg-base);
+  flex-shrink: 0;
+}
+
+.st-tab {
+  border: none;
+  background: none;
+  color: var(--text-sub0);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.st-tab:hover {
+  background: var(--bg-surface0);
+  color: var(--text);
+}
+
+.st-tab.active {
+  background: var(--bg-surface1);
+  color: var(--accent);
+}
+
+.st-spacer {
+  flex: 1;
+}
+
+.close-btn {
+  font-size: 12px;
+}
+
+.right-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+</style>

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { openDialog as open } from '@/api'
 import { useI18n } from 'vue-i18n'
 import { useTunnelStore } from '../../stores/tunnelStore'
+import { useTerminalStore } from '../../stores/terminal'
 import type { TunnelCreateRequest, TerminalTab } from '../../types'
 
 const { t } = useI18n()
@@ -13,6 +14,7 @@ const props = defineProps<{
 }>()
 
 const { tunnels, create, remove, refresh, tunnelStatusText } = useTunnelStore()
+const terminalStore = useTerminalStore()
 
 const showForm = ref(false)
 const form = ref({
@@ -28,10 +30,12 @@ const form = ref({
   targetPort: 0,
 })
 
-const useCurrentSession = computed(() => props.tab?.sshInfo != null)
+const sessionTab = computed(() => terminalStore.resolveSessionTab(props.tab))
+
+const useCurrentSession = computed(() => sessionTab.value?.sshInfo != null)
 
 if (useCurrentSession.value) {
-  const info = props.tab.sshInfo!
+  const info = sessionTab.value!.sshInfo!
   form.value.host = info.host
   form.value.port = info.port
   form.value.username = info.username
@@ -66,8 +70,8 @@ async function handleCreate() {
 }
 
 function resetForm() {
-  if (useCurrentSession.value && props.tab?.sshInfo) {
-    const info = props.tab.sshInfo
+  if (useCurrentSession.value && sessionTab.value?.sshInfo) {
+    const info = sessionTab.value.sshInfo
     form.value = {
       host: info.host,
       port: info.port,

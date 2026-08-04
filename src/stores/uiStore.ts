@@ -9,8 +9,7 @@ export const useUiStore = defineStore('ui', () => {
   const settingsDialog = ref(false)
   const aboutDialog = ref(false)
   const leftSidebarWidth = ref(280)
-  const aiSidebarOpen = ref(false)
-  const aiSidebarWidth = ref(380)
+  const rightSidebarWidth = ref(380)
 
   return {
     leftSidebar,
@@ -20,7 +19,6 @@ export const useUiStore = defineStore('ui', () => {
     settingsDialog,
     aboutDialog,
     leftSidebarWidth,
-    aiSidebarOpen,
-    aiSidebarWidth,
+    rightSidebarWidth,
   }
 })

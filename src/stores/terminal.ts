@@ -47,6 +47,22 @@ export const useTerminalStore = defineStore('terminal', () => {
     return null
   }
 
+  function resolveSessionTab(tab: TerminalTab | null | undefined): TerminalTab | null {
+    if (!tab) return null
+    if (tab.session) return tab
+    if (tab.children?.length) {
+      for (const c of tab.children) {
+        const found = resolveSessionTab(c)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  function tabSessionType(tab: TerminalTab | null | undefined): TerminalSession['type'] | null {
+    return resolveSessionTab(tab)?.session?.type ?? null
+  }
+
   function leafIdOf(tab: TerminalTab): string | null {
     if (tab.children?.length) {
       const rootId = topLevelTabIdOf(tab.id)
@@ -110,7 +126,7 @@ export const useTerminalStore = defineStore('terminal', () => {
       tab.openToolTabs = []
     }
     if (!tab.activeToolTab) {
-      tab.activeToolTab = 'sftp'
+      tab.activeToolTab = 'ai'
     }
   }
 
@@ -326,6 +342,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     closeTabsToRight,
     findTab,
     findParent,
+    topLevelTabIdOf,
     setActiveTab,
     updateTabTitle,
     updateSessionStatus,
@@ -340,6 +357,8 @@ export const useTerminalStore = defineStore('terminal', () => {
     setActiveToolTab,
     toggleToolSidebar,
     isToolOpen,
+    resolveSessionTab,
+    tabSessionType,
     requestExport,
     clearExportRequest,
     selectedPaneId,

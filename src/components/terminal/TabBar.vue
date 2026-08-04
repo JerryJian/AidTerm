@@ -6,7 +6,7 @@ import { useTerminalStore } from '../../stores/terminal'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useUiStore } from '../../stores/uiStore'
 import { useAiStore } from '../../stores/aiStore'
-import type { SavedSession, ToolTab } from '../../types'
+import type { SavedSession, TerminalTab } from '../../types'
 import QuickConnectBar from '../session/QuickConnectBar.vue'
 
 const store = useTerminalStore()
@@ -28,8 +28,6 @@ const quickConnectVisible = ref(false)
 const newTabMenuOpen = ref(false)
 const batchInput = ref('')
 const batchFocused = ref(false)
-
-const toolsMenuOpen = ref(false)
 
 const ctxTabId = ref<string | null>(null)
 const ctxPos = ref({ x: 0, y: 0 })
@@ -112,46 +110,27 @@ function onRenameKeydown(e: KeyboardEvent) {
 
 function onDocClick(e: MouseEvent) {
   const target = e.target as HTMLElement
-  if (target?.closest('.tools-wrapper') || target?.closest('.new-tab-wrapper') || target?.closest('.tab-ctx-menu')) return
+  if (target?.closest('.new-tab-wrapper') || target?.closest('.tab-ctx-menu')) return
   newTabMenuOpen.value = false
-  toolsMenuOpen.value = false
   closeTabCtx()
 }
 
-const activeTabSessionType = computed(() => store.activeTab?.session?.type)
-
 const visibleTabs = computed(() => store.tabs)
 
-const toolTabs = computed<{ id: ToolTab; icon: string }[]>(() => {
-  const all: { id: ToolTab; icon: string }[] = [
-    { id: 'sftp', icon: '\uD83D\uDCC2' },
-    { id: 'tunnel', icon: '\uD83D\uDD0C' },
-  ]
-  if (activeTabSessionType.value === 'ssh') {
-    return all
-  }
-  return []
+function tabStatus(tab: TerminalTab): string {
+  return store.resolveSessionTab(tab)?.session?.status ?? ''
+}
+
+const rightSidebarAvailable = computed(() => {
+  if (!store.activeTabId) return false
+  if (aiStore.enabled) return true
+  return store.tabSessionType(store.activeTab) === 'ssh'
 })
 
-function toggleToolsMenu() {
-  toolsMenuOpen.value = !toolsMenuOpen.value
-  newTabMenuOpen.value = false
-}
-
-function openToolTab(tab: ToolTab) {
+function toggleRightSidebar() {
   if (store.activeTabId) {
-    store.addToolTab(store.activeTabId, tab)
+    store.toggleToolSidebar(store.activeTabId)
   }
-  toolsMenuOpen.value = false
-}
-
-function toggleAiSidebar() {
-  ui.aiSidebarOpen = !ui.aiSidebarOpen
-}
-
-function isToolOpen(tab: ToolTab): boolean {
-  if (!store.activeTabId) return false
-  return store.isToolOpen(store.activeTabId, tab)
 }
 
 function onSavedSessionClick(session: SavedSession) {
@@ -190,7 +169,6 @@ function openSerial() {
 
 function onNewTabClick() {
   newTabMenuOpen.value = !newTabMenuOpen.value
-  toolsMenuOpen.value = false
 }
 
 onMounted(() => document.addEventListener('click', onDocClick, true))
@@ -271,7 +249,7 @@ defineExpose({ onKeydown })
           @click.stop
           @change="(e: Event) => store.setBatchTabId(tab.id, (e.target as HTMLInputElement).checked)"
         />
-        <span class="tab-status" :class="tab.session?.status" />
+        <span class="tab-status" :class="tabStatus(tab)" />
         <span v-if="renamingTabId === tab.id" class="tab-title">
           <input
             ref="renameInputRef"
@@ -336,32 +314,16 @@ defineExpose({ onKeydown })
     </div>
     <div class="tab-bar-right">
       <button
-        v-if="aiStore.enabled"
-        class="ai-toggle-btn"
-        :class="{ active: ui.aiSidebarOpen }"
-        @click="toggleAiSidebar"
-        :title="t('ai.sidebar_title')"
+        class="tools-btn"
+        :class="{ active: store.activeTab?.toolSidebarOpen }"
+        :disabled="!rightSidebarAvailable"
+        @click="toggleRightSidebar"
+        :title="t('tab.tools')"
       >
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
-          <path d="M20 3v4"/>
-          <path d="M22 5h-4"/>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <path d="M4 21C3.44772 21 3 20.5523 3 20V4C3 3.44772 3.44772 3 4 3H20C20.5523 3 21 3.44772 21 4V20C21 20.5523 20.5523 21 20 21H4ZM8 10H5V19H8V10ZM19 10H10V19H19V10ZM19 5H5V8H19V5Z"/>
         </svg>
       </button>
-      <div class="tools-wrapper">
-        <button class="tools-btn" :class="{ active: toolsMenuOpen }" @click="toggleToolsMenu" :title="t('tab.tools')" :disabled="toolTabs.length === 0">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-            <path d="M4 21C3.44772 21 3 20.5523 3 20V4C3 3.44772 3.44772 3 4 3H20C20.5523 3 21 3.44772 21 4V20C21 20.5523 20.5523 21 20 21H4ZM8 10H5V19H8V10ZM19 10H10V19H19V10ZM19 5H5V8H19V5Z"/>
-          </svg>
-        </button>
-        <div v-if="toolsMenuOpen" class="tools-backdrop" @click="toolsMenuOpen = false" />
-        <div v-if="toolsMenuOpen" class="tools-dropdown">
-          <button v-for="t in toolTabs" :key="t.id" class="tools-item" :class="{ active: isToolOpen(t.id) }" @click="openToolTab(t.id)">
-            <span class="ti-icon">{{ t.icon }}</span>
-            <span>{{ $t('tool_panel.' + t.id) }}</span>
-          </button>
-        </div>
-      </div>
     </div>
 
   </div>
@@ -549,10 +511,6 @@ defineExpose({ onKeydown })
   flex-shrink: 0;
 }
 
-.tools-wrapper {
-  position: relative;
-}
-
 .tools-btn {
   display: flex;
   align-items: center;
@@ -578,78 +536,6 @@ defineExpose({ onKeydown })
   opacity: 0.3;
   cursor: not-allowed;
   pointer-events: none;
-}
-
-.ai-toggle-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: none;
-  color: var(--text-sub0);
-  cursor: pointer;
-  border-radius: 4px;
-  font-size: 14px;
-  margin-right: 4px;
-}
-.ai-toggle-btn:hover {
-  background: var(--bg-surface0);
-  color: var(--text);
-}
-.ai-toggle-btn.active {
-  background: var(--accent-glass);
-  color: var(--accent);
-}
-
-.tools-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 999;
-  background: transparent;
-}
-
-.tools-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  z-index: 1000;
-  background: var(--bg-base);
-  border: 1px solid var(--bg-surface0);
-  border-radius: 6px;
-  min-width: 150px;
-  padding: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-.tools-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  padding: 6px 12px;
-  border: none;
-  background: none;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 12px;
-  border-radius: 4px;
-  white-space: nowrap;
-}
-.tools-item:hover {
-  background: var(--bg-surface0);
-  color: var(--accent);
-}
-.tools-item.active {
-  color: var(--success);
-}
-
-.ti-icon {
-  width: 18px;
-  text-align: center;
-  flex-shrink: 0;
 }
 
 .batch-bar {

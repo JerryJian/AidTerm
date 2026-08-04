@@ -124,6 +124,7 @@ export default {
     serial: 'Serial...',
   },
   tool_panel: {
+    ai: 'AI Assistant',
     sftp: 'SFTP',
     tunnel: 'Tunnel',
     proxy: 'Proxy',
