@@ -169,13 +169,36 @@ async fn chat_openai(messages: Vec<ChatMessage>, config: &AiConfig) -> Result<Ai
         },
     });
 
+    let page_tool = ChatCompletionTools::Function(ChatCompletionTool {
+        function: FunctionObject {
+            name: "read_output_page".to_string(),
+            description: Some("读取命令输出中指定的一页内容。当工具结果注明输出共有 N 页时使用。参数 output_id 为命令输出的唯一标识，page 为页码（从 1 开始）。".to_string()),
+            parameters: Some(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "output_id": {
+                        "type": "string",
+                        "description": "命令输出的唯一标识"
+                    },
+                    "page": {
+                        "type": "integer",
+                        "description": "页码（从 1 开始）"
+                    }
+                },
+                "required": ["output_id", "page"]
+            })),
+            strict: None,
+        },
+    });
+
     let request = CreateChatCompletionRequestArgs::default()
         .model(&config.model)
         .messages(api_messages)
-        .tools(vec![tool])
+        .tools(vec![tool, page_tool])
         .tool_choice(ChatCompletionToolChoiceOption::Mode(
             async_openai::types::chat::ToolChoiceOptions::Auto,
         ))
+        .parallel_tool_calls(false)
         .build()
         .map_err(|e| format!("Failed to build request: {}", e))?;
 
@@ -254,26 +277,49 @@ async fn chat_ollama(messages: Vec<ChatMessage>, config: &AiConfig) -> Result<Ai
         msg
     }).collect();
 
-    let tool_info: ToolInfo = serde_json::from_value(serde_json::json!({
-        "type": "Function",
-        "function": {
-            "name": "execute_command",
-            "description": "在服务器上执行一条 shell 命令，返回命令的输出结果。执行命令后，系统会将输出结果返回给你，请根据结果继续推理。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "command": {
-                        "type": "string",
-                        "description": "要执行的 shell 命令"
-                    }
-                },
-                "required": ["command"]
+    let tool_info: Vec<ToolInfo> = vec![
+        serde_json::from_value(serde_json::json!({
+            "type": "Function",
+            "function": {
+                "name": "execute_command",
+                "description": "在服务器上执行一条 shell 命令，返回命令的输出结果。执行命令后，系统会将输出结果返回给你，请根据结果继续推理。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "command": {
+                            "type": "string",
+                            "description": "要执行的 shell 命令"
+                        }
+                    },
+                    "required": ["command"]
+                }
             }
-        }
-    })).map_err(|e| format!("Failed to build tool info: {}", e))?;
+        })).map_err(|e| format!("Failed to build tool info: {}", e))?,
+        serde_json::from_value(serde_json::json!({
+            "type": "Function",
+            "function": {
+                "name": "read_output_page",
+                "description": "读取命令输出中指定的一页内容。当工具结果注明输出共有 N 页时使用。参数 output_id 为命令输出的唯一标识，page 为页码（从 1 开始）。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "output_id": {
+                            "type": "string",
+                            "description": "命令输出的唯一标识"
+                        },
+                        "page": {
+                            "type": "integer",
+                            "description": "页码（从 1 开始）"
+                        }
+                    },
+                    "required": ["output_id", "page"]
+                }
+            }
+        })).map_err(|e| format!("Failed to build tool info: {}", e))?,
+    ];
 
     let request = ChatMessageRequest::new(config.model.clone(), ollama_messages)
-        .tools(vec![tool_info]);
+        .tools(tool_info);
 
     let response = ollama.send_chat_messages(request)
         .await

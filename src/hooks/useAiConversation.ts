@@ -1,19 +1,38 @@
 import { ref, reactive, computed } from 'vue'
 import { invoke } from '@/api'
 import type { Terminal } from '@xterm/xterm'
-import { useAiStore, type AiMessage } from '../stores/aiStore'
+import { useAiStore, type AiMessage, type ToolCall, type AiResponse } from '../stores/aiStore'
 import { useTerminalStore } from '../stores/terminal'
 import { getLeafBinding } from './terminalAiRegistry'
 import type { SystemInfo } from '../types'
 
 const MAX_HISTORY = 10
-const LONG_OUTPUT_THRESHOLD = 5000
-const LONG_OUTPUT_TRUNCATE = 8000
+const PAGE_SIZE = 10000
+const MAX_PAGES_PER_OUTPUT = 200
+const MAX_OUTPUTS = 10
 const PROMPT_TIMEOUT = 30000
 
 interface CommandRecord {
   command: string
   result: string
+  outputId?: string
+  pageCount?: number
+}
+
+function paginate(text: string, maxChars: number): string[] {
+  if (!text) return ['']
+  const pages: string[] = []
+  let current = ''
+  for (const line of text.split('\n')) {
+    if (current !== '' && current.length + 1 + line.length > maxChars) {
+      pages.push(current)
+      current = line
+    } else {
+      current = current === '' ? line : current + '\n' + line
+    }
+  }
+  if (current !== '') pages.push(current)
+  return pages
 }
 
 export interface ConversationMessage {
@@ -45,12 +64,24 @@ function buildSystemPrompt(systemInfo: SystemInfo, history: CommandRecord[]): st
     lines.push('', '=== 最近执行的命令 ===')
     for (const h of history) {
       lines.push(`$ ${h.command}`)
+      if (h.outputId) {
+        const pageInfo = h.pageCount && h.pageCount > 1
+          ? ` 共 ${h.pageCount} 页，可通过 read_output_page(output_id="${h.outputId}", page) 读取其他页`
+          : ''
+        lines.push(`[输出 #${h.outputId}${pageInfo}]`)
+      }
       const resultPreview = h.result.length > 200 ? h.result.slice(0, 200) + '...(已截断)' : h.result
       if (resultPreview) lines.push(resultPreview)
     }
   }
 
   lines.push(
+    '',
+    '=== 输出分页规则 ===',
+    '执行命令后，如果输出较长，工具结果会以"共 N 页（每页约 10000 字符）"的形式返回，其中只包含第 1 页。',
+    '此时你必须调用 read_output_page(output_id, page) 按需读取其他页码，直到获得回答用户问题所需的全部信息，再给出最终回答。',
+    '不要只凭第 1 页就下结论。若某个输出已不可用，工具会返回错误提示，请按提示重新执行命令。',
+    '命令输出只在内存中保留最近 10 份（每份最多 200 页），对话重置或应用退出后清空。',
     '',
     '=== 命令安全分类规则 ===',
     '当你建议执行命令时，必须在回复文本的第一行以 [SAFE] 或 [DANGER] 开头标注命令的安全等级：',
@@ -209,6 +240,38 @@ export function useAiConversation(
   const messages = ref<AiMessage[]>([])
   const commandHistory = ref<CommandRecord[]>([])
   const savedPrompt = ref('$ ')
+
+  const outputPages = new Map<string, string[]>()
+
+  function storeOutput(id: string, text: string): string[] {
+    const all = paginate(text, PAGE_SIZE)
+    const pages = all.length > MAX_PAGES_PER_OUTPUT
+      ? [...all.slice(0, MAX_PAGES_PER_OUTPUT), `...(输出共 ${all.length} 页，仅保留前 ${MAX_PAGES_PER_OUTPUT} 页，其余内容未记录)`]
+      : all
+    outputPages.delete(id)
+    outputPages.set(id, pages)
+    while (outputPages.size > MAX_OUTPUTS) {
+      const oldest = outputPages.keys().next().value as string | undefined
+      if (oldest === undefined) break
+      outputPages.delete(oldest)
+    }
+    return pages
+  }
+
+  function getPageText(id: string, page: number): { ok: true; content: string } | { ok: false; error: string } {
+    const pages = outputPages.get(id)
+    if (!pages) {
+      const ids = [...outputPages.keys()].join(', ')
+      return {
+        ok: false,
+        error: `[错误] 输出 #${id} 已不可用。当前可用的输出: ${ids || '无'}。如需该数据，请重新执行原命令。`,
+      }
+    }
+    if (!Number.isInteger(page) || page < 1 || page > pages.length) {
+      return { ok: false, error: `[错误] 页码 ${page} 超出范围（1-${pages.length}）。输出 #${id} 共 ${pages.length} 页。` }
+    }
+    return { ok: true, content: `[第 ${page}/${pages.length} 页，输出 #${id}]\n${pages[page - 1]}` }
+  }
 
   const conversationMessages = reactive<ConversationMessage[]>([])
 
@@ -446,55 +509,90 @@ export function useAiConversation(
       const response = await ai.chat([...messages.value], aiSessionId)
       if (cancelled.value) return
       removeLastThinking()
-
-      if (response.tool_calls && response.tool_calls.length > 0) {
-        const tc = response.tool_calls[0]
-        const args = JSON.parse(tc.function.arguments)
-        const cmd = args.command || ''
-        pendingCommand.value = cmd
-        pendingToolId.value = tc.id
-        pendingAiMsg.value = response.text || ''
-
-        const aiText = response.text || ''
-        const dangerous = determineDanger(aiText, cmd)
-        const cleanText = cleanAiText(aiText)
-
-        messages.value.push({
-          role: 'assistant',
-          content: aiText,
-        })
-
-        if (cleanText) {
-          addConversationMessage({ role: 'assistant', content: cleanText })
-        }
-
-        addConversationMessage({
-          role: 'command',
-          content: cmd,
-          command: cmd,
-          toolCallId: tc.id,
-          dangerous,
-        })
-
-        if (!dangerous && ai.config.auto_execute) {
-          updateLastCommandAutoExecStatus(tc.id, 'executing')
-          await onConfirmCommand()
-        } else {
-          showConfirm.value = true
-        }
-      } else if (response.text) {
-        const cleanText = cleanAiText(response.text)
-        addConversationMessage({ role: 'assistant', content: cleanText || response.text })
-        messages.value.push({ role: 'assistant', content: response.text })
-        endConversation()
-      } else {
-        endConversation()
-      }
-    } catch (e: any) {
+      await handleAiResponse(response)
+    } catch (e: unknown) {
       removeLastThinking()
       addConversationMessage({ role: 'error', content: `错误: ${e}` })
       endConversation()
     }
+  }
+
+  async function continueWithToolResult(toolId: string, result: string) {
+    messages.value.push({ role: 'tool', content: result, tool_call_id: toolId })
+    const response = await ai.continueWithResult(toolId, result, aiSessionId)
+    if (cancelled.value) return
+    removeLastThinking()
+    await handleAiResponse(response)
+  }
+
+  async function handleAiResponse(response: AiResponse) {
+    if (response.text) {
+      messages.value.push({ role: 'assistant', content: response.text })
+    }
+
+    if (response.tool_calls && response.tool_calls.length > 0) {
+      const tc = response.tool_calls[0]
+      try {
+        if (tc.function.name === 'read_output_page') {
+          await handleReadOutputPage(tc)
+        } else {
+          await handleExecuteCommandTool(tc, response.text || '')
+        }
+      } catch (e: unknown) {
+        removeLastThinking()
+        addConversationMessage({ role: 'error', content: `工具处理错误: ${e}` })
+        endConversation()
+      }
+    } else if (response.text) {
+      const cleanText = cleanAiText(response.text)
+      addConversationMessage({ role: 'assistant', content: cleanText || response.text })
+      endConversation()
+    } else {
+      endConversation()
+    }
+  }
+
+  async function handleExecuteCommandTool(tc: ToolCall, aiText: string) {
+    const args = JSON.parse(tc.function.arguments)
+    const cmd = args.command || ''
+    pendingCommand.value = cmd
+    pendingToolId.value = tc.id
+    pendingAiMsg.value = aiText
+
+    const dangerous = determineDanger(aiText, cmd)
+    const cleanText = cleanAiText(aiText)
+
+    if (cleanText) {
+      addConversationMessage({ role: 'assistant', content: cleanText })
+    }
+
+    addConversationMessage({
+      role: 'command',
+      content: cmd,
+      command: cmd,
+      toolCallId: tc.id,
+      dangerous,
+    })
+
+    if (!dangerous && ai.config.auto_execute) {
+      updateLastCommandAutoExecStatus(tc.id, 'executing')
+      await onConfirmCommand()
+    } else {
+      showConfirm.value = true
+    }
+  }
+
+  async function handleReadOutputPage(tc: ToolCall) {
+    let content: string
+    try {
+      const args = JSON.parse(tc.function.arguments)
+      const res = getPageText(String(args.output_id ?? ''), Number(args.page))
+      content = res.ok ? res.content : res.error
+    } catch {
+      content = '[错误] read_output_page 参数解析失败，需要 output_id(string) 与 page(integer)'
+    }
+    addConversationMessage({ role: 'thinking', content: `读取输出页...` })
+    await continueWithToolResult(tc.id, content)
   }
 
   async function onConfirmCommand() {
@@ -516,74 +614,20 @@ export function useAiConversation(
 
       addConversationMessage({ role: 'result', content: displayResult })
 
-      let resultForAI = displayResult
-      if (displayResult.length > LONG_OUTPUT_THRESHOLD) {
-        resultForAI = displayResult.slice(0, LONG_OUTPUT_TRUNCATE) +
-          `\n\n...(输出过长，仅显示前 ${LONG_OUTPUT_TRUNCATE} 字符，共 ${displayResult.length} 字符)`
-        addConversationMessage({
-          role: 'error',
-          content: `输出较长 (${displayResult.length} 字符)，已截断发送给 AI`,
-        })
-      }
+      const pages = storeOutput(toolId, displayResult)
+      const resultForAI = pages.length > 1
+        ? `[命令输出 #${toolId} 共 ${pages.length} 页（每页约 ${PAGE_SIZE} 字符）。以下为第 1 页：\n${pages[0]}\n\n如需查看更多，请调用 read_output_page 工具，参数 output_id="${toolId}"、page=<页码>（1-${pages.length}）。]`
+        : displayResult
 
-      commandHistory.value.unshift({ command: cmd, result: displayResult })
+      commandHistory.value.unshift({ command: cmd, result: displayResult, outputId: toolId, pageCount: pages.length })
       if (commandHistory.value.length > MAX_HISTORY) {
         commandHistory.value = commandHistory.value.slice(0, MAX_HISTORY)
       }
 
       addConversationMessage({ role: 'thinking', content: 'AI 分析中...' })
 
-      messages.value.push({
-        role: 'tool',
-        content: resultForAI,
-        tool_call_id: toolId,
-      })
-
-      const response = await ai.continueWithResult(toolId, resultForAI, aiSessionId)
-      if (cancelled.value) return
-      removeLastThinking()
-
-      if (response.text) {
-        messages.value.push({ role: 'assistant', content: response.text })
-      }
-
-      if (response.tool_calls && response.tool_calls.length > 0) {
-        const tc = response.tool_calls[0]
-        const args = JSON.parse(tc.function.arguments)
-        const nextCmd = args.command || ''
-        pendingCommand.value = nextCmd
-        pendingToolId.value = tc.id
-        pendingAiMsg.value = response.text || ''
-
-        const aiText = response.text || ''
-        const dangerous = determineDanger(aiText, nextCmd)
-        const cleanText = cleanAiText(aiText)
-
-        if (cleanText) {
-          addConversationMessage({ role: 'assistant', content: cleanText })
-        }
-
-        addConversationMessage({
-          role: 'command',
-          content: nextCmd,
-          command: nextCmd,
-          toolCallId: tc.id,
-          dangerous,
-        })
-
-        if (!dangerous && ai.config.auto_execute) {
-          updateLastCommandAutoExecStatus(tc.id, 'executing')
-          await onConfirmCommand()
-        } else {
-          showConfirm.value = true
-        }
-      } else if (response.text) {
-        addConversationMessage({ role: 'assistant', content: response.text })
-        endConversation()
-      } else {
-        endConversation()
-      }
-    } catch (e: any) {
+      await continueWithToolResult(toolId, resultForAI)
+    } catch (e: unknown) {
       updateLastCommandAutoExecStatus(toolId, 'completed')
       removeLastThinking()
       addConversationMessage({ role: 'error', content: `执行错误: ${e}` })
@@ -628,6 +672,7 @@ export function useAiConversation(
 
   function resetConversation() {
     ai.clearHistory(aiSessionId)
+    outputPages.clear()
     endConversation()
     messages.value = []
     conversationMessages.length = 0

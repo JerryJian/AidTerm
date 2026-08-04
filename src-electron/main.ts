@@ -1121,21 +1121,39 @@ async function callAiChat(messages: AiMessage[], config: AiConfig): Promise<AiRe
   const response = await client.chat.completions.create({
     model,
     messages: apiMessages,
-    tools: [{
-      type: 'function',
-      function: {
-        name: 'execute_command',
-        description: '在服务器上执行一条 shell 命令，返回命令的输出结果。执行命令后，系统会将输出结果返回给你，请根据结果继续推理。',
-        parameters: {
-          type: 'object',
-          properties: {
-            command: { type: 'string', description: '要执行的 shell 命令' },
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'execute_command',
+          description: '在服务器上执行一条 shell 命令，返回命令的输出结果。执行命令后，系统会将输出结果返回给你，请根据结果继续推理。',
+          parameters: {
+            type: 'object',
+            properties: {
+              command: { type: 'string', description: '要执行的 shell 命令' },
+            },
+            required: ['command'],
           },
-          required: ['command'],
         },
       },
-    }],
+      {
+        type: 'function',
+        function: {
+          name: 'read_output_page',
+          description: '读取命令输出中指定的一页内容。当工具结果注明输出共有 N 页时使用。参数 output_id 为命令输出的唯一标识，page 为页码（从 1 开始）。',
+          parameters: {
+            type: 'object',
+            properties: {
+              output_id: { type: 'string', description: '命令输出的唯一标识' },
+              page: { type: 'integer', description: '页码（从 1 开始）' },
+            },
+            required: ['output_id', 'page'],
+          },
+        },
+      },
+    ],
     tool_choice: 'auto',
+    parallel_tool_calls: false,
   })
 
   const choice = response.choices?.[0]
