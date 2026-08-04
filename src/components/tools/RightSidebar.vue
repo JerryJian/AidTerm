@@ -83,7 +83,8 @@ function closeSidebar() {
           :title="tt.title"
           @click="store.setActiveToolTab(activeTab!.id, tt.id)"
         >
-          {{ tt.icon }}
+          <span class="tt-icon">{{ tt.icon }}</span>
+          <span class="tt-title">{{ tt.title }}</span>
         </button>
         <div class="st-spacer" />
         <button class="st-tab close-btn" :title="t('titlebar.close')" @click="closeSidebar">&#x2715;</button>
@@ -164,10 +165,18 @@ function closeSidebar() {
   background: none;
   color: var(--text-sub0);
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 7px 10px;
   border-radius: 4px;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tt-title {
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .st-tab:hover {

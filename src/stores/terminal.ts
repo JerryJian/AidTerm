@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useSftpStore } from './sftpStore'
 import type { TerminalTab, TerminalSession, SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SystemInfo, ToolTab } from '../types'
 
 let nextId = 1
@@ -231,9 +232,18 @@ export const useTerminalStore = defineStore('terminal', () => {
     return false
   }
 
+  function disposeTabResources(tabId: string) {
+    const sftp = useSftpStore()
+    if (sftp.connId(tabId)) {
+      sftp.disconnect(tabId).catch(() => {})
+    }
+  }
+
   function closeTab(id: string) {
     const tab = findTab(id)
     if (!tab) return
+
+    const isTopLevel = tabs.value.some(t => t.id === id)
 
     if (tab.children?.length) {
       for (const child of [...tab.children]) {
@@ -242,6 +252,10 @@ export const useTerminalStore = defineStore('terminal', () => {
     }
 
     removeChildFromParent(id, tabs.value)
+
+    if (isTopLevel) {
+      disposeTabResources(id)
+    }
 
     if (activeTabId.value === id) {
       if (tabs.value.length > 0) {
@@ -255,14 +269,18 @@ export const useTerminalStore = defineStore('terminal', () => {
   function closeOtherTabs(id: string) {
     const tab = findTab(id)
     if (!tab) return
+    const closed = tabs.value.filter(t => t.id !== id)
     tabs.value = tabs.value.filter(t => t.id === id)
+    closed.forEach(t => disposeTabResources(t.id))
     activeTabId.value = id
   }
 
   function closeTabsToRight(id: string) {
     const idx = tabs.value.findIndex(t => t.id === id)
     if (idx === -1) return
+    const closed = tabs.value.slice(idx + 1)
     tabs.value = tabs.value.slice(0, idx + 1)
+    closed.forEach(t => disposeTabResources(t.id))
     activeTabId.value = id
   }
 

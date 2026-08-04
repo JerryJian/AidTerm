@@ -95,6 +95,26 @@ function onPathSubmit() {
 
 let autoConnecting = false
 
+async function autoConnect() {
+  if (autoConnecting || s.value.connected) return
+  const leaf = sessionTab.value
+  const info = leaf?.sshInfo
+  const ss = leaf?.session
+  if (!ss || ss.type !== 'ssh' || ss.status !== 'connected' || !info) return
+  host.value = info.host
+  port.value = info.port
+  username.value = info.username
+  password.value = info.password || ''
+  if (!host.value.trim()) return
+  autoConnecting = true
+  connecting.value = true
+  try {
+    await store.connect(props.tabId, info.host, info.port, info.username, info.password || '')
+  } catch { /* ignored */ }
+  connecting.value = false
+  autoConnecting = false
+}
+
 watch(
   () => {
     const leaf = sessionTab.value
@@ -103,27 +123,15 @@ watch(
     return `${s.id}:${s.status}:${leaf.sshInfo.host}:${leaf.sshInfo.port}:${leaf.sshInfo.username}`
   },
   async (key) => {
-    if (autoConnecting || s.value.connected) return
     if (props.tab.activeToolTab !== 'sftp') return
-    if (key && key.includes(':connected:')) {
-      const info = sessionTab.value!.sshInfo!
-      host.value = info.host
-      port.value = info.port
-      username.value = info.username
-      password.value = info.password || ''
-      if (host.value.trim()) {
-        autoConnecting = true
-        connecting.value = true
-        try {
-          await store.connect(props.tabId, info.host, info.port, info.username, info.password || '')
-        } catch { /* ignored */ }
-        connecting.value = false
-        autoConnecting = false
-      }
-    }
+    if (key && key.includes(':connected:')) await autoConnect()
   },
   { immediate: true },
 )
+
+watch(() => props.tab.activeToolTab, (tab) => {
+  if (tab === 'sftp') autoConnect()
+})
 
 function onRowCtxMenu(e: MouseEvent, entry: FileEntry) {
   e.preventDefault()
@@ -192,17 +200,8 @@ onMounted(async () => {
   unlistens.push(un2)
 })
 
-watch(() => props.tab.openToolTabs, (tabs) => {
-  if (tabs && !tabs.includes('sftp') && s.value.connected) {
-    store.disconnect(props.tabId)
-  }
-})
-
 onUnmounted(() => {
   unlistens.forEach(fn => fn())
-  if (s.value.connected) {
-    store.disconnect(props.tabId)
-  }
 })
 
 function formatSize(size: number): string {
