@@ -10,6 +10,7 @@ import { useTerminal } from '../../hooks/useTerminal'
 import { stashTerminal, takeTerminal } from '../../hooks/terminalRegistry'
 import { useTerminalStore } from '../../stores/terminal'
 import { useThemeStore } from '../../stores/themeStore'
+import { useSettingsStore } from '../../stores/settingsStore'
 import { getOrCreateAiConversation, registerLeafBinding, unregisterLeafBinding } from '../../hooks/terminalAiRegistry'
 import type { AiTerminalBinding } from '../../hooks/useAiConversation'
 import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SystemInfo, TerminalTab } from '../../types'
@@ -41,6 +42,10 @@ const { t } = useI18n()
 const store = useTerminalStore()
 const aiStore = useAiStore()
 const themeStore = useThemeStore()
+const settings = useSettingsStore()
+
+const disconnected = ref(false)
+const reconnecting = ref(false)
 
 const currentTabId = computed(() => props.tab?.id ?? props.tabId ?? store.activeTabId)
 const currentTab = computed(() => {
@@ -103,6 +108,7 @@ function getXtermTheme() {
 }
 
 function handleTerminalData(data: string) {
+  if (disconnected.value || reconnecting.value) return
   writeInput(data)
 }
 
@@ -141,6 +147,23 @@ async function initTerminal() {
   // split. Re-attaching the existing instance keeps the screen content and
   // the live session intact instead of starting a fresh one.
   const tabId = currentTabId.value ?? ''
+
+  // Listen for backend session lifecycle events. Registered before the
+  // stash check so it also applies to relocated panes: a disconnect after a
+  // split relocation must still trigger the reconnect overlay.
+  const unsubStatus = await listen<{ session_id: string; status: string; error?: string }>('session-status', event => {
+    if (event.payload.session_id === sessionIdRef.value) {
+      if (event.payload.status === 'connected') {
+        disconnected.value = false
+        store.updateSessionStatus(currentTabId.value ?? '', 'connected')
+      } else if (event.payload.status === 'disconnected') {
+        disconnected.value = true
+        store.updateSessionStatus(currentTabId.value ?? '', 'disconnected')
+      }
+    }
+  })
+  if (unsubStatus) unlisteners.push(unsubStatus)
+
   const stashed = takeTerminal(tabId)
   if (stashed) {
     terminal = stashed.terminal
@@ -162,6 +185,7 @@ async function initTerminal() {
       sessionIdRef.value = sid
       isConnectedRef.value = true
     }
+    disconnected.value = currentTab.value?.session?.status === 'disconnected'
 
     onDataDispose = terminal.onData((data: string) => {
       handleTerminalData(data)
@@ -204,6 +228,7 @@ async function initTerminal() {
     fontSize: 14,
     fontFamily: 'Consolas, "Courier New", Menlo, "SF Mono", monospace',
     allowTransparency: true,
+    scrollback: settings.scrollback,
     cols: 80,
     rows: 24,
     theme: getXtermTheme(),
@@ -240,20 +265,22 @@ async function initTerminal() {
   })
   resizeObserver.observe(terminalRef.value)
 
+  await startSession()
+}
+
+async function startSession() {
+  if (!terminal) return
   const rows = terminal.rows
   const cols = terminal.cols
 
-  let sessionId: string | null = null
-  const unsubStatus = await listen<{ session_id: string; status: string; error?: string }>('session-status', event => {
-    if (event.payload.session_id === sessionId) {
-      if (event.payload.status === 'connected') {
-        store.updateSessionStatus(currentTabId.value ?? '', 'connected')
-      } else if (event.payload.status === 'disconnected') {
-        store.updateSessionStatus(currentTabId.value ?? '', 'disconnected')
-      }
+  if (unlisten) {
+    try {
+      unlisten()
+    } catch {
+      // ignore stale subscription cleanup errors
     }
-  })
-  if (unsubStatus) unlisteners.push(unsubStatus)
+    unlisten = null
+  }
 
   try {
     const id = sshInfo.value
@@ -275,11 +302,10 @@ async function initTerminal() {
           ? await serialConnect(serialInfo.value)
           : await createSession(rows, cols, currentTab.value?.session?.command, currentTab.value?.session?.workingDir)
 
-    sessionId = id
     store.updateSessionId(currentTabId.value ?? '', id)
-    if (!sshInfo.value) {
-      store.updateSessionStatus(currentTabId.value ?? '', 'connected')
-    }
+    disconnected.value = false
+    store.updateSessionStatus(currentTabId.value ?? '', 'connected')
+
     const unsub = await onOutput((data: string) => {
       terminal?.write(data)
     })
@@ -302,8 +328,28 @@ async function initTerminal() {
   } catch (e) {
     const errMsg = typeof e === 'string' ? e : e instanceof Error ? e.message : 'Connection failed'
     terminal?.writeln(`\r\n\x1b[1;31mError:\x1b[0m ${errMsg}`)
+    disconnected.value = true
     store.updateSessionStatus(currentTabId.value ?? '', 'disconnected')
   }
+}
+
+async function reconnect() {
+  if (reconnecting.value) return
+  reconnecting.value = true
+  const tabId = currentTabId.value ?? ''
+  store.updateSessionStatus(tabId, 'connecting')
+  disconnected.value = false
+  try {
+    await killSession()
+  } catch {
+    // ignore stale session cleanup errors
+  }
+  await startSession()
+  reconnecting.value = false
+}
+
+function focusTerminal() {
+  terminal?.focus()
 }
 
 onMounted(() => {
@@ -324,6 +370,13 @@ onMounted(() => {
     }
   })
   onUnmounted(() => stopWatch())
+
+  const stopScrollbackWatch = watch(() => settings.scrollback, (v) => {
+    if (terminal) {
+      terminal.options.scrollback = v
+    }
+  })
+  onUnmounted(() => stopScrollbackWatch())
 
   // Keep the hook's session id in sync with the store (matters when the
   // pane was relocated while a connection was still being established).
@@ -392,6 +445,12 @@ function closeSearch() {
 }
 
 function onTerminalKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && disconnected.value && !reconnecting.value) {
+    e.preventDefault()
+    e.stopPropagation()
+    reconnect()
+    return
+  }
   if (e.ctrlKey && e.key === 'c' && !e.altKey && !e.metaKey) {
     if (terminal?.hasSelection()) {
       e.preventDefault()
@@ -521,6 +580,11 @@ function doCloseTab() {
   store.closeTab(currentTabId.value ?? '')
 }
 
+function doReconnect() {
+  closeContextMenu()
+  reconnect()
+}
+
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && ctxVisible.value) {
     closeContextMenu()
@@ -570,6 +634,11 @@ defineExpose({ focusSearch, doFit, getTerminalContent })
       <div class="spinner" />
       <span>{{ t('terminal.connecting') }}</span>
     </div>
+    <div v-if="disconnected" class="reconnect-overlay" @click="focusTerminal">
+      <span class="reconnect-title">{{ t('terminal.disconnected') }}</span>
+      <button class="reconnect-btn" @click.stop="reconnect">{{ t('terminal.reconnect') }}</button>
+      <span class="reconnect-hint">{{ t('terminal.enter_to_reconnect') }}</span>
+    </div>
 
     <!-- Context menu -->
     <teleport to="body">
@@ -578,6 +647,7 @@ defineExpose({ focusSearch, doFit, getTerminalContent })
         <div class="ctx-item" @click="doCopy">{{ t('context_menu.copy') }}</div>
         <div class="ctx-item" @click="doPaste">{{ t('context_menu.paste') }}</div>
         <div class="ctx-item" @click="doSelectAll">{{ t('context_menu.select_all') }}</div>
+        <div v-if="disconnected" class="ctx-item" @click="doReconnect">{{ t('context_menu.reconnect') }}</div>
         <div class="ctx-sep" />
         <div class="ctx-item" @click="doToggleSearch">{{ t('context_menu.search') }}</div>
         <div class="ctx-item" @click="doClear">{{ t('context_menu.clear') }}</div>
@@ -704,6 +774,47 @@ defineExpose({ focusSearch, doFit, getTerminalContent })
   color: var(--text-sub0);
   font-size: 14px;
   z-index: 10;
+}
+
+.reconnect-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--bg-base);
+  color: var(--text-sub0);
+  font-size: 14px;
+  z-index: 10;
+  cursor: pointer;
+}
+
+.reconnect-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.reconnect-btn {
+  padding: 8px 24px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--bg-base);
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reconnect-btn:hover {
+  opacity: 0.85;
+}
+
+.reconnect-hint {
+  font-size: 12px;
+  color: var(--text-sub0);
 }
 
 .spinner {

@@ -159,6 +159,18 @@ async function toggleFullscreen() {
             />
           </div>
           <div class="setting-row">
+            <label>{{ t('settings.scrollback') }}</label>
+            <select :value="settings.scrollback" @change="(e: any) => settings.scrollback = parseInt(e.target.value, 10)">
+              <option :value="1000">1000</option>
+              <option :value="5000">5000</option>
+              <option :value="10000">10000</option>
+              <option :value="50000">50000</option>
+              <option :value="100000">100000</option>
+              <option :value="500000">500000</option>
+              <option :value="1000000">1000000</option>
+            </select>
+          </div>
+          <div class="setting-row">
             <label>{{ t('settings.background_image') }}</label>
             <div class="row-actions">
               <button class="action-btn" @click="selectBackgroundImage">{{ t('settings.select_image') }}</button>

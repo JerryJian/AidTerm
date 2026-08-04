@@ -39,6 +39,7 @@ export default {
     new_ssh: 'New SSH',
     close_tab: 'Close Tab',
     ask_ai: '🤖 AI Explain Selection',
+    reconnect: 'Reconnect',
   },
   quick_connect: {
     title: 'Quick Connect',
@@ -360,6 +361,7 @@ export default {
     background_image: 'Background Image',
     select_image: 'Select Image',
     clear_image: 'Clear Image',
+    scrollback: 'Scrollback Lines',
     general: 'General',
     appearance: 'Appearance',
     fullscreen: 'Fullscreen',
@@ -461,6 +463,9 @@ export default {
   },
   terminal: {
     connecting: 'Connecting...',
+    disconnected: 'Connection lost',
+    reconnect: 'Reconnect',
+    enter_to_reconnect: 'Press Enter to reconnect',
   },
   about: {
     title: 'About',

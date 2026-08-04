@@ -39,6 +39,7 @@ export default {
     new_ssh: '新建 SSH',
     close_tab: '关闭标签',
     ask_ai: '🤖 AI 解释选中内容',
+    reconnect: '重新连接',
   },
   quick_connect: {
     title: '快速连接',
@@ -360,6 +361,7 @@ export default {
     background_image: '背景图片',
     select_image: '选择图片',
     clear_image: '清除图片',
+    scrollback: '回滚行数',
     general: '常规',
     appearance: '外观',
     fullscreen: '全屏',
@@ -461,6 +463,9 @@ export default {
   },
   terminal: {
     connecting: '连接中...',
+    disconnected: '连接已断开',
+    reconnect: '重新连接',
+    enter_to_reconnect: '按 Enter 键重新连接',
   },
   about: {
     title: '关于',
