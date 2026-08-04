@@ -17,8 +17,9 @@ const ui = useUiStore()
 const draggingAi = ref(false)
 
 const aiConv = computed(() => {
-  const id = store.activeLeafId
-  return id ? getAiConversation(id) : undefined
+  const tab = store.activeTab
+  if (!tab) return undefined
+  return tab.aiSessionId ? getAiConversation(tab.aiSessionId) : undefined
 })
 
 function onAiDividerDown(e: MouseEvent) {

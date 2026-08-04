@@ -1,7 +1,9 @@
 import { ref, reactive, computed } from 'vue'
 import { invoke } from '@/api'
+import type { Terminal } from '@xterm/xterm'
 import { useAiStore, type AiMessage } from '../stores/aiStore'
 import { useTerminalStore } from '../stores/terminal'
+import { getLeafBinding } from './terminalAiRegistry'
 import type { SystemInfo } from '../types'
 
 const MAX_HISTORY = 10
@@ -183,13 +185,20 @@ function isDangerousByHeuristic(cmd: string): boolean {
   return DANGEROUS_CMD_PATTERNS.some(p => p.test(trimmed))
 }
 
+export interface AiTerminalBinding {
+  getTerminal: () => Terminal | null
+  writeToBackend?: (data: string) => void
+  rawOnOutput?: (cb: (data: string) => void) => Promise<(() => void) | null | undefined>
+}
+
 export function useAiConversation(
-  getTerminal: () => any | null,
+  getTerminal: () => Terminal | null,
   writeToBackend?: (data: string) => void,
   rawOnOutput?: (cb: (data: string) => void) => Promise<(() => void) | null | undefined>,
   aiSessionId?: string,
 ) {
   const ai = useAiStore()
+  const binding = ref<AiTerminalBinding | null>({ getTerminal, writeToBackend, rawOnOutput })
   const showConfirm = ref(false)
   const pendingCommand = ref('')
   const pendingToolId = ref('')
@@ -203,8 +212,19 @@ export function useAiConversation(
 
   const conversationMessages = reactive<ConversationMessage[]>([])
 
+  function bindTerminal(b: AiTerminalBinding | null) {
+    binding.value = b
+  }
+
+  function bindToSelectedPane() {
+    const termStore = useTerminalStore()
+    const id = termStore.selectedPaneId ?? termStore.activeLeafId
+    const b = getLeafBinding(id)
+    if (b) binding.value = b
+  }
+
   function detectSavedPrompt() {
-    const t = getTerminal()
+    const t = binding.value?.getTerminal()
     if (!t) return
     try {
       const buf = t.buffer.active
@@ -220,7 +240,8 @@ export function useAiConversation(
   }
 
   async function waitForPrompt(cmd: string): Promise<string> {
-    if (!rawOnOutput || !writeToBackend) {
+    const b = binding.value
+    if (!b || !b.rawOnOutput || !b.writeToBackend) {
       return ai.executeCommand(cmd)
     }
 
@@ -236,13 +257,13 @@ export function useAiConversation(
         }
       }
 
-      rawOnOutput!((data: string) => {
+      b.rawOnOutput!((data: string) => {
         output += data
       }).then((un: (() => void) | null | undefined) => {
         if (un) unsub = un
       })
 
-      writeToBackend!(cmd + '\r')
+      b.writeToBackend!(cmd + '\r')
 
       const t0 = Date.now()
 
@@ -545,7 +566,7 @@ export function useAiConversation(
     pendingToolId.value = ''
 
     addConversationMessage({ role: 'error', content: '已取消命令执行' })
-    writeToBackend?.('\x03')
+    binding.value?.writeToBackend?.('\x03')
     endConversation()
   }
 
@@ -569,11 +590,12 @@ export function useAiConversation(
       return
     }
 
+    bindToSelectedPane()
     startConversation(trimmed)
   }
 
   function resetConversation() {
-    ai.clearHistory()
+    ai.clearHistory(aiSessionId)
     endConversation()
     messages.value = []
     conversationMessages.length = 0
@@ -597,6 +619,7 @@ export function useAiConversation(
     busy,
     cancelled,
     conversationMessages,
+    bindTerminal,
     onConfirmCommand,
     onCancelCommand,
     onModifyCommand,

@@ -24,6 +24,7 @@ export const useTerminalStore = defineStore('terminal', () => {
   const tabs = ref<TerminalTab[]>([])
   const activeTabId = ref<string | null>(null)
   const selectedPaneId = ref<string | null>(null)
+  const selectedPaneByTab = ref<Record<string, string>>({})
   const batchMode = ref(false)
   const batchTabIds = ref<Set<string>>(new Set())
   const { t } = useI18n()
@@ -33,9 +34,27 @@ export const useTerminalStore = defineStore('terminal', () => {
     return tabs.value.find(t => t.id === activeTabId.value) ?? null
   })
 
+  function isDescendant(tab: TerminalTab, id: string): boolean {
+    if (tab.id === id) return true
+    if (tab.children?.length) return tab.children.some(c => isDescendant(c, id))
+    return false
+  }
+
+  function topLevelTabIdOf(id: string): string | null {
+    for (const root of tabs.value) {
+      if (isDescendant(root, id)) return root.id
+    }
+    return null
+  }
+
   function leafIdOf(tab: TerminalTab): string | null {
     if (tab.children?.length) {
-      const next = tab.children.find(c => c.id === selectedPaneId.value)
+      const rootId = topLevelTabIdOf(tab.id)
+      const remembered = rootId ? selectedPaneByTab.value[rootId] : null
+      const sel = remembered && isDescendant(tab, remembered) ? remembered : null
+      const next = (sel
+        ? tab.children.find(c => isDescendant(c, sel))
+        : null)
         ?? tab.children.find(c => c.session)
         ?? tab.children[0]
       return leafIdOf(next)
@@ -237,6 +256,10 @@ export const useTerminalStore = defineStore('terminal', () => {
 
   function setSelectedPane(id: string | null) {
     selectedPaneId.value = id
+    if (id) {
+      const rootId = topLevelTabIdOf(id)
+      if (rootId) selectedPaneByTab.value[rootId] = id
+    }
   }
 
   function updateTabTitle(id: string, title: string) {
@@ -322,5 +345,6 @@ export const useTerminalStore = defineStore('terminal', () => {
     selectedPaneId,
     setSelectedPane,
     activeLeafId,
+    leafIdOf,
   }
 })

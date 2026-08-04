@@ -87,7 +87,8 @@ function ctxExport() {
 }
 
 function ctxSplit(dir: 'horizontal' | 'vertical') {
-  const targetId = store.selectedPaneId ?? ctxTabId.value
+  const tab = store.tabs.find(t => t.id === ctxTabId.value)
+  const targetId = tab ? (store.leafIdOf(tab) ?? tab.id) : ctxTabId.value
   if (targetId) emit('splitTab', targetId, dir)
   closeTabCtx()
 }
@@ -325,8 +326,8 @@ defineExpose({ onKeydown })
         <div class="ctx-divider" />
         <button class="ctx-item" @click="ctxExport">{{ $t('tab.export_text') }}</button>
         <div class="ctx-divider" />
-        <button class="ctx-item" :disabled="!store.selectedPaneId" @click="ctxSplit('horizontal')">{{ $t('tab.split_horizontal') }}</button>
-        <button class="ctx-item" :disabled="!store.selectedPaneId" @click="ctxSplit('vertical')">{{ $t('tab.split_vertical') }}</button>
+        <button class="ctx-item" @click="ctxSplit('horizontal')">{{ $t('tab.split_horizontal') }}</button>
+        <button class="ctx-item" @click="ctxSplit('vertical')">{{ $t('tab.split_vertical') }}</button>
         <div class="ctx-divider" />
         <button class="ctx-item" @click="ctxClose">{{ $t('tab.close_tab') }}</button>
         <button class="ctx-item" @click="ctxCloseOthers">{{ $t('tab.close_others') }}</button>

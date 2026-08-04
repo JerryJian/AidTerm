@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, reactive, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, reactive, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useTerminalStore } from './stores/terminal'
 import { useSessionStore } from './stores/sessionStore'
 import { useSettingsStore } from './stores/settingsStore'
@@ -22,6 +22,7 @@ import AboutDialog from './components/about/AboutDialog.vue'
 import FileEditor from './components/editor/FileEditor.vue'
 import LockScreen from './components/lock/LockScreen.vue'
 import { useTriggerWatcher } from './hooks/useTriggerWatcher'
+import { pruneAiConversations } from './hooks/terminalAiRegistry'
 
 const store = useTerminalStore()
 const sessionStore = useSessionStore()
@@ -123,6 +124,11 @@ if (store.tabs.length === 0) {
   store.addTab('local')
 }
 
+watch(
+  () => store.tabs.map(t => t.aiSessionId),
+  (ids) => pruneAiConversations(ids.filter((id): id is string => !!id)),
+)
+
 function onSshConnect(info: SshConnectionInfo) {
   ui.sshDialog = false
   store.addTab('ssh', info)
@@ -214,7 +220,7 @@ function onSplitTab(tabId: string, direction: 'horizontal' | 'vertical') {
     sshInfo: tab.sshInfo,
     telnetInfo: tab.telnetInfo,
     serialInfo: tab.serialInfo,
-    aiSessionId: `ai-${id}`,
+    aiSessionId: tab.aiSessionId,
   }
 
   const container: TerminalTab = {
@@ -223,7 +229,7 @@ function onSplitTab(tabId: string, direction: 'horizontal' | 'vertical') {
     session: null,
     splitDirection: direction,
     children: [tab, child],
-    aiSessionId: `ai-split-${id}`,
+    aiSessionId: tab.aiSessionId,
   }
 
   const result = store.findParent(tabId)

@@ -11,8 +11,8 @@ import { stashTerminal, takeTerminal } from '../../hooks/terminalRegistry'
 import { useTerminalStore } from '../../stores/terminal'
 import { useThemeStore } from '../../stores/themeStore'
 import { useUiStore } from '../../stores/uiStore'
-import { useAiConversation } from '../../hooks/useAiConversation'
-import { registerAiConversation, unregisterAiConversation } from '../../hooks/terminalAiRegistry'
+import { getOrCreateAiConversation, registerLeafBinding, unregisterLeafBinding } from '../../hooks/terminalAiRegistry'
+import type { AiTerminalBinding } from '../../hooks/useAiConversation'
 import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SystemInfo, TerminalTab } from '../../types'
 import { useAiStore } from '../../stores/aiStore'
 import { useI18n } from 'vue-i18n'
@@ -21,7 +21,6 @@ const props = defineProps<{
   sshInfo?: SshConnectionInfo
   telnetInfo?: TelnetConnectionInfo
   serialInfo?: SerialConnectionInfo
-  aiSessionId?: string
   tabId?: string
   tab?: TerminalTab
 }>()
@@ -68,7 +67,15 @@ let lastSize = { w: 0, h: 0 }
 
 const { createSession, sshConnect, telnetConnect, serialConnect, writeInput, resize, onOutput, killSession, sessionId: sessionIdRef, isConnected: isConnectedRef } = useTerminal()
 
-const aiConv = useAiConversation(() => terminal, writeInput, onOutput, props.aiSessionId)
+const aiBinding: AiTerminalBinding = {
+  getTerminal: () => terminal,
+  writeToBackend: writeInput,
+  rawOnOutput: onOutput,
+}
+
+function getTabAiConv() {
+  return getOrCreateAiConversation(props.tab?.aiSessionId ?? currentTabId.value ?? '')
+}
 
 function getXtermTheme() {
   const s = getComputedStyle(document.documentElement)
@@ -305,9 +312,12 @@ onMounted(() => {
   initTerminal()
 
   const tabId = currentTabId.value
-  if (tabId) registerAiConversation(tabId, aiConv)
+  if (tabId) {
+    registerLeafBinding(tabId, aiBinding)
+    getOrCreateAiConversation(props.tab?.aiSessionId ?? tabId)
+  }
   onUnmounted(() => {
-    if (tabId) unregisterAiConversation(tabId)
+    if (tabId) unregisterLeafBinding(tabId)
   })
 
   const stopWatch = watch(() => themeStore.mode, () => {
@@ -485,8 +495,10 @@ function doAskAi() {
   if (currentTabId.value) {
     store.setSelectedPane(currentTabId.value)
   }
+  const conv = getTabAiConv()
+  conv.bindTerminal(aiBinding)
   ui.aiSidebarOpen = true
-  nextTick(() => aiConv.startConversation(sel))
+  nextTick(() => conv.startConversation(sel))
 }
 
 function doNewTab() {

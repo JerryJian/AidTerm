@@ -6,8 +6,16 @@ import { useI18n } from 'vue-i18n'
 const store = useTerminalStore()
 const { t } = useI18n()
 
-const statusText = computed(() => {
+const leafTab = computed(() => {
   const tab = store.activeTab
+  if (!tab) return null
+  const leafId = store.leafIdOf(tab)
+  if (!leafId || leafId === tab.id) return tab
+  return store.findTab(leafId) ?? tab
+})
+
+const statusText = computed(() => {
+  const tab = leafTab.value
   if (!tab) return ''
   const s = tab.session
   if (!s) return t('status.local')
@@ -49,7 +57,7 @@ const statusText = computed(() => {
 })
 
 const statusTooltip = computed(() => {
-  const tab = store.activeTab
+  const tab = leafTab.value
   if (!tab) return ''
   const s = tab.session
   if (!s) return t('status.local')
@@ -109,7 +117,7 @@ const statusTooltip = computed(() => {
 <template>
   <div class="status-bar">
     <span v-if="statusText" class="status-left" :title="statusTooltip">
-      <span v-if="store.activeTab" class="status-dot" :class="store.activeTab.session?.status" />
+      <span v-if="leafTab" class="status-dot" :class="leafTab.session?.status" />
       {{ statusText }}
     </span>
     <span v-else class="status-left" />
