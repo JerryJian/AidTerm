@@ -70,7 +70,6 @@ watch(() => terminalStore.exportRequest, (req) => {
       <template v-if="tab.session">
         <div
           class="split-child"
-          :class="{ 'active-split': isPaneSelected(tab.id) }"
           @mousedown.stop="terminalStore.setSelectedPane(tab.id)"
         >
           <TerminalWrapper

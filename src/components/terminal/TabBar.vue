@@ -325,8 +325,8 @@ defineExpose({ onKeydown })
         <div class="ctx-divider" />
         <button class="ctx-item" @click="ctxExport">{{ $t('tab.export_text') }}</button>
         <div class="ctx-divider" />
-        <button class="ctx-item" @click="ctxSplit('horizontal')">{{ $t('tab.split_horizontal') }}</button>
-        <button class="ctx-item" @click="ctxSplit('vertical')">{{ $t('tab.split_vertical') }}</button>
+        <button class="ctx-item" :disabled="!store.selectedPaneId" @click="ctxSplit('horizontal')">{{ $t('tab.split_horizontal') }}</button>
+        <button class="ctx-item" :disabled="!store.selectedPaneId" @click="ctxSplit('vertical')">{{ $t('tab.split_vertical') }}</button>
         <div class="ctx-divider" />
         <button class="ctx-item" @click="ctxClose">{{ $t('tab.close_tab') }}</button>
         <button class="ctx-item" @click="ctxCloseOthers">{{ $t('tab.close_others') }}</button>
@@ -816,6 +816,15 @@ defineExpose({ onKeydown })
 .tab-ctx-menu .ctx-item:hover {
   background: var(--accent-glass);
   color: var(--accent);
+}
+.tab-ctx-menu .ctx-item:disabled {
+  color: var(--text-overlay0);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.tab-ctx-menu .ctx-item:disabled:hover {
+  background: none;
+  color: var(--text-overlay0);
 }
 
 .ctx-divider {
