@@ -85,13 +85,20 @@ impl SerialConnection {
                     return;
                 }
             };
-            if let Err(e) = rt.block_on(Self::run_session_async(
+            let result = rt.block_on(Self::run_session_async(
                 &config, write_rx, kill_rx, &app_handle, &id,
-            )) {
+            ));
+            if let Err(e) = &result {
+                log::error!("[serial] Session error ({}): {}", id, e);
                 let _ = app_handle.emit("terminal-output", serde_json::json!({
                     "session_id": id, "data": format!("\r\n[Serial Error: {}]\r\n", e),
                 }));
             }
+            // Notify on every session end (normal close or error) so the
+            // frontend disconnect overlay always appears.
+            let _ = app_handle.emit("session-status", serde_json::json!({
+                "session_id": id, "status": "disconnected",
+            }));
         });
 
         Ok(Self { write_tx, kill_tx: Some(kill_tx), handle: Some(handle) })
@@ -148,9 +155,6 @@ impl SerialConnection {
             }
         }
 
-        let _ = app_handle.emit("session-status", serde_json::json!({
-            "session_id": session_id, "status": "disconnected",
-        }));
         Ok(())
     }
 

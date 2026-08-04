@@ -1,4 +1,5 @@
 use std::io::{Read, Write};
+use std::time::Duration;
 use portable_pty::{PtyPair, MasterPty, PtySize, PtySystem, ChildKiller};
 use tauri::{AppHandle, Emitter};
 
@@ -90,25 +91,41 @@ impl LocalSession {
             let mut buf = [0u8; 4096];
             loop {
                 match reader.read(&mut buf) {
-                    Ok(0) => break,
+                    Ok(0) | Err(_) => break,
                     Ok(n) => {
                         let data = decode_windows_output(&buf[..n]);
                         let _ = app_h.emit("terminal-output", serde_json::json!({
                             "session_id": sid, "data": data,
                         }));
                     }
-                    Err(_) => break,
                 }
             }
-            let _ = app_h.emit("terminal-output", serde_json::json!({
-                "session_id": sid, "data": "\r\n[Process exited]\r\n",
+        });
+
+        // Watcher thread: owns the child and polls for its exit. On Windows the
+        // ConPTY output pipe never signals EOF when the shell exits, so the
+        // reader thread alone can never detect a disconnect. Detecting the
+        // child process exit here works on all platforms.
+        let killer = child.clone_killer();
+        let watch_sid = id.clone();
+        let watch_app = app_handle.clone();
+        std::thread::spawn(move || {
+            let mut child = child;
+            loop {
+                match child.try_wait() {
+                    Ok(Some(_)) | Err(_) => break,
+                    Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+                }
+            }
+            let _ = watch_app.emit("terminal-output", serde_json::json!({
+                "session_id": watch_sid, "data": "\r\n[Process exited]\r\n",
             }));
-            let _ = app_h.emit("session-status", serde_json::json!({
-                "session_id": sid, "status": "disconnected",
+            let _ = watch_app.emit("session-status", serde_json::json!({
+                "session_id": watch_sid, "status": "disconnected",
             }));
         });
 
-        Ok(Self { writer: Box::new(writer), master, killer: child })
+        Ok(Self { writer: Box::new(writer), master, killer })
     }
 
     pub fn write(&mut self, data: &str) -> Result<(), String> {

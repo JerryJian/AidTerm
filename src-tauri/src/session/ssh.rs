@@ -155,15 +155,16 @@ impl SshConnection {
                         write_rx, resize_rx, kill_rx, exec_rx,
                         &app_handle, &session_id,
                     ).await;
-                    if let Err(e) = result {
+                    let err = result.err();
+                    if let Some(e) = &err {
                         log::error!("[ssh] Session error ({}): {}", session_id, e);
                         let _ = app_handle.emit("terminal-output", serde_json::json!({
                             "session_id": session_id, "data": format!("\r\n[SSH Error: {}]\r\n", e),
                         }));
-                        let _ = app_handle.emit("session-status", serde_json::json!({
-                            "session_id": session_id, "status": "disconnected", "error": e,
-                        }));
                     }
+                    let _ = app_handle.emit("session-status", serde_json::json!({
+                        "session_id": session_id, "status": "disconnected", "error": err,
+                    }));
                 });
             });
 
@@ -187,15 +188,16 @@ impl SshConnection {
                         rows, cols, write_rx, resize_rx, kill_rx, exec_rx,
                         &app_handle, &session_id,
                     ).await;
-                    if let Err(e) = result {
+                    let err = result.err();
+                    if let Some(e) = &err {
                         log::error!("[ssh] Session error ({}): {}", session_id, e);
                         let _ = app_handle.emit("terminal-output", serde_json::json!({
                             "session_id": session_id, "data": format!("\r\n[SSH Error: {}]\r\n", e),
                         }));
-                        let _ = app_handle.emit("session-status", serde_json::json!({
-                            "session_id": session_id, "status": "disconnected", "error": e,
-                        }));
                     }
+                    let _ = app_handle.emit("session-status", serde_json::json!({
+                        "session_id": session_id, "status": "disconnected", "error": err,
+                    }));
                 });
             });
 

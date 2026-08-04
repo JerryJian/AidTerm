@@ -24,11 +24,16 @@ impl TelnetConnection {
             let result = Self::run_session(
                 &host, port, write_rx, kill_rx, &app_handle, &id,
             );
-            if let Err(e) = result {
+            if let Err(e) = &result {
                 let _ = app_handle.emit("terminal-output", serde_json::json!({
                     "session_id": id, "data": format!("\r\n[Telnet Error: {}]\r\n", e),
                 }));
             }
+            // Notify on every session end (normal close or error) so the
+            // frontend disconnect overlay always appears.
+            let _ = app_handle.emit("session-status", serde_json::json!({
+                "session_id": id, "status": "disconnected",
+            }));
         });
 
         Ok(Self { write_tx, kill_tx: Some(kill_tx), handle: Some(handle) })
@@ -81,9 +86,6 @@ impl TelnetConnection {
             }
         }
 
-        let _ = app_handle.emit("session-status", serde_json::json!({
-            "session_id": session_id, "status": "disconnected",
-        }));
         Ok(())
     }
 
