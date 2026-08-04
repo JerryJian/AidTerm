@@ -16,6 +16,14 @@ const messagesContainer = ref<HTMLDivElement>()
 
 const conversationMessages = computed(() => props.aiConv.conversationMessages)
 
+const lastCommand = computed(() => {
+  const msgs = conversationMessages.value
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === 'command') return msgs[i]
+  }
+  return null
+})
+
 function renderMarkdown(text: string): string {
   try {
     return marked.parse(text, { async: false }) as string
@@ -192,9 +200,13 @@ watch(conversationMessages, async () => {
             <div v-else-if="aiConv.showConfirm.value && aiConv.pendingToolId.value !== msg.toolCallId" class="command-pending">
               {{ t('ai.thinking') }}
             </div>
-            <div v-else-if="!msg.dangerous && aiConv.autoExecute" class="command-auto" :class="{ 'command-auto-done': msg.autoExecStatus === 'completed' }">
-              <span v-if="msg.autoExecStatus === 'completed'">✅ {{ t('ai.auto_execute_done') }}</span>
-              <span v-else>⏳ {{ t('ai.auto_executing') }}</span>
+            <div v-else-if="!msg.dangerous && aiConv.autoExecute && msg.autoExecStatus === 'completed'" class="command-auto command-auto-done">
+              ✅ {{ t('ai.auto_execute_done') }}
+            </div>
+            <div v-if="(aiConv.waitingForCommand.value && msg === lastCommand) || (!msg.dangerous && aiConv.autoExecute && msg.autoExecStatus === 'executing')" class="command-footer">
+              <span v-if="!msg.dangerous && aiConv.autoExecute" class="command-auto-running">⏳ {{ t('ai.auto_executing') }}</span>
+              <span class="command-footer-spacer"></span>
+              <button v-if="aiConv.waitingForCommand.value && msg === lastCommand" class="ai-stop-btn" @click="aiConv.stopWaitingForCommand()" :title="t('ai.stop_waiting')">⏹ {{ t('ai.stop_waiting') }}</button>
             </div>
           </div>
         </div>
@@ -241,11 +253,16 @@ watch(conversationMessages, async () => {
       />
       <button
         class="ai-send-btn"
-        @click="doSend"
-        :disabled="!inputText.trim() || aiConv.busy.value"
+        :class="{ 'ai-send-btn-cancel': aiConv.busy.value }"
+        :title="aiConv.busy.value ? t('ai.cancel_conversation') : t('ai.send')"
+        @click="aiConv.busy.value ? aiConv.cancelConversation() : doSend()"
+        :disabled="!aiConv.busy.value && !inputText.trim()"
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg v-if="!aiConv.busy.value" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4Z" />
+        </svg>
+        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
         </svg>
       </button>
     </div>
@@ -376,7 +393,7 @@ watch(conversationMessages, async () => {
 
 .ai-msg-time {
   font-size: 10px;
-  color: var(--text-overlay0);
+  color: var(--text-sub0);
   opacity: 0;
   transition: opacity 0.15s;
 }
@@ -553,17 +570,20 @@ watch(conversationMessages, async () => {
 }
 
 .command-auto {
-  padding: 8px 10px;
+  padding: 6px 10px;
   font-size: 11px;
   color: var(--accent);
   border-top: 1px solid var(--bg-surface0);
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .command-auto-done {
   color: var(--success);
+}
+
+.command-auto-running {
+  color: var(--accent);
+  white-space: nowrap;
+  font-size: 11px;
 }
 
 .result-block {
@@ -628,6 +648,35 @@ watch(conversationMessages, async () => {
   flex-shrink: 0;
 }
 
+.ai-stop-btn {
+  padding: 3px 12px;
+  font-size: 12px;
+  border: 1px solid var(--bg-surface1);
+  border-radius: 4px;
+  background: var(--bg-surface0);
+  color: var(--text);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.ai-stop-btn:hover {
+  background: var(--danger);
+  color: var(--bg-base);
+  border-color: var(--danger);
+}
+
+.command-footer {
+  padding: 6px 10px;
+  background: var(--bg-mantle);
+  border-top: 1px solid var(--bg-surface0);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.command-footer-spacer {
+  flex: 1;
+}
+
 .ai-input {
   width: 100%;
   padding: 8px 44px 8px 10px;
@@ -683,6 +732,12 @@ watch(conversationMessages, async () => {
   cursor: not-allowed;
   box-shadow: none;
 }
+.ai-send-btn-cancel {
+  background: var(--danger);
+}
+.ai-send-btn-cancel:hover:not(:disabled) {
+  background: var(--rosewater, var(--danger));
+}
 
 .copy-btn {
   display: inline-flex;
@@ -690,7 +745,7 @@ watch(conversationMessages, async () => {
   justify-content: center;
   background: none;
   border: none;
-  color: var(--text-overlay0);
+  color: var(--text-sub0);
   cursor: pointer;
   padding: 2px;
   border-radius: 3px;
@@ -715,8 +770,9 @@ watch(conversationMessages, async () => {
   height: 11px;
 }
 .ai-msg:hover > .ai-msg-header .copy-btn,
-.ai-msg:hover > .ai-msg-header .ai-msg-time {
-  opacity: 0.6;
+.ai-msg:hover > .ai-msg-header .ai-msg-time,
+.ai-msg:hover .command-header .copy-btn {
+  opacity: 1;
 }
 
 .ai-ctx-overlay {

@@ -10,7 +10,6 @@ const MAX_HISTORY = 10
 const PAGE_SIZE = 10000
 const MAX_PAGES_PER_OUTPUT = 200
 const MAX_OUTPUTS = 10
-const PROMPT_TIMEOUT = 30000
 
 interface CommandRecord {
   command: string
@@ -241,6 +240,11 @@ export function useAiConversation(
   const commandHistory = ref<CommandRecord[]>([])
   const savedPrompt = ref('$ ')
 
+  const waitingForCommand = ref(false)
+  let resolveWait: ((result: string) => void) | null = null
+  let waitCmd = ''
+  let waitRaw = ''
+
   const outputPages = new Map<string, string[]>()
 
   function storeOutput(id: string, text: string): string[] {
@@ -320,40 +324,49 @@ export function useAiConversation(
         }
       }
 
+      const finish = (result: string) => {
+        if (resolved) return
+        resolved = true
+        cleanup()
+        resolveWait = null
+        waitCmd = ''
+        waitRaw = ''
+        waitingForCommand.value = false
+        resolve(result)
+      }
+
+      waitCmd = cmd
+      waitRaw = ''
+      waitingForCommand.value = true
+      resolveWait = finish
+
       b.rawOnOutput!((data: string) => {
         output += data
+        waitRaw = output
       }).then((un: (() => void) | null | undefined) => {
         if (un) unsub = un
       })
 
       b.writeToBackend!(cmd + '\r')
 
-      const t0 = Date.now()
-
       const check = () => {
         if (resolved) return
-
         if (detectPromptInOutput(output, savedPrompt.value)) {
-          resolved = true
-          cleanup()
-          const result = cleanCommandOutput(output, cmd, savedPrompt.value)
-          resolve(result)
+          finish(cleanCommandOutput(output, cmd, savedPrompt.value))
           return
         }
-
-        if (Date.now() - t0 > PROMPT_TIMEOUT) {
-          resolved = true
-          cleanup()
-          const result = cleanCommandOutput(output, cmd, savedPrompt.value)
-          resolve(result || output)
-          return
-        }
-
         setTimeout(check, 100)
       }
 
       setTimeout(check, 300)
     })
+  }
+
+  function stopWaitingForCommand() {
+    if (resolveWait) {
+      binding.value?.writeToBackend?.('\x03')
+      resolveWait(cleanCommandOutput(waitRaw, waitCmd, savedPrompt.value) || waitRaw)
+    }
   }
 
   function addConversationMessage(msg: ConversationMessage) {
@@ -657,6 +670,17 @@ export function useAiConversation(
     ai.pendingToolCall = null
   }
 
+  function cancelConversation() {
+    cancelled.value = true
+    showConfirm.value = false
+    pendingCommand.value = ''
+    pendingToolId.value = ''
+    if (resolveWait) resolveWait('')
+    removeLastThinking()
+    endConversation()
+    addConversationMessage({ role: 'error', content: '已取消本次问答' })
+  }
+
   function submitInput(text: string) {
     const trimmed = text.trim()
     if (!trimmed) return
@@ -700,6 +724,9 @@ export function useAiConversation(
     onConfirmCommand,
     onCancelCommand,
     onModifyCommand,
+    stopWaitingForCommand,
+    waitingForCommand,
+    cancelConversation,
     resetConversation,
     startConversation,
     commandHistory,
