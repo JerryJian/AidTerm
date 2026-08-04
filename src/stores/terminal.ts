@@ -84,6 +84,11 @@ export const useTerminalStore = defineStore('terminal', () => {
     return leafIdOf(activeTab.value)
   })
 
+  function syncSelectedPane() {
+    const tab = activeTab.value
+    selectedPaneId.value = tab ? leafIdOf(tab) : null
+  }
+
   function addTab(type: TerminalSession['type'] = 'local', sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo, localCommand?: string, serialInfo?: SerialConnectionInfo, workingDir?: string, titleOverride?: string) {
     const id = generateId()
     let title: string
@@ -119,6 +124,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     }
     tabs.value.push(tab)
     activeTabId.value = id
+    syncSelectedPane()
     return tab
   }
 
@@ -255,6 +261,7 @@ export const useTerminalStore = defineStore('terminal', () => {
 
     if (isTopLevel) {
       disposeTabResources(id)
+      delete selectedPaneByTab.value[id]
     }
 
     if (activeTabId.value === id) {
@@ -264,6 +271,7 @@ export const useTerminalStore = defineStore('terminal', () => {
         activeTabId.value = null
       }
     }
+    syncSelectedPane()
   }
 
   function closeOtherTabs(id: string) {
@@ -272,7 +280,9 @@ export const useTerminalStore = defineStore('terminal', () => {
     const closed = tabs.value.filter(t => t.id !== id)
     tabs.value = tabs.value.filter(t => t.id === id)
     closed.forEach(t => disposeTabResources(t.id))
+    closed.forEach(t => delete selectedPaneByTab.value[t.id])
     activeTabId.value = id
+    syncSelectedPane()
   }
 
   function closeTabsToRight(id: string) {
@@ -281,11 +291,14 @@ export const useTerminalStore = defineStore('terminal', () => {
     const closed = tabs.value.slice(idx + 1)
     tabs.value = tabs.value.slice(0, idx + 1)
     closed.forEach(t => disposeTabResources(t.id))
+    closed.forEach(t => delete selectedPaneByTab.value[t.id])
     activeTabId.value = id
+    syncSelectedPane()
   }
 
   function setActiveTab(id: string) {
     activeTabId.value = id
+    syncSelectedPane()
   }
 
   function setSelectedPane(id: string | null) {
