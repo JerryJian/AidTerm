@@ -263,7 +263,7 @@ export const useTerminalStore = defineStore('terminal', () => {
   }
 
   function updateTabTitle(id: string, title: string) {
-    const tab = tabs.value.find(t => t.id === id)
+    const tab = findTab(id)
     if (tab) {
       tab.title = title
       if (tab.session) {
@@ -273,21 +273,21 @@ export const useTerminalStore = defineStore('terminal', () => {
   }
 
   function updateSessionStatus(id: string, status: TerminalSession['status']) {
-    const tab = tabs.value.find(t => t.id === id)
+    const tab = findTab(id)
     if (tab?.session) {
       tab.session.status = status
     }
   }
 
   function updateSessionId(tabId: string, sessionId: string) {
-    const tab = tabs.value.find(t => t.id === tabId)
+    const tab = findTab(tabId)
     if (tab?.session) {
       tab.session.id = sessionId
     }
   }
 
   function updateSystemInfo(tabId: string, info: SystemInfo) {
-    const tab = tabs.value.find(t => t.id === tabId)
+    const tab = findTab(tabId)
     if (tab) {
       tab.systemInfo = info
     }
