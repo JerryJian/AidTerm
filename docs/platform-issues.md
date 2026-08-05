@@ -9,9 +9,6 @@
 
 | # | 问题 | 位置 | 说明 |
 |---|------|------|------|
-| 1 | **Linux 无窗口控制按钮** | `src/components/titlebar/TitleBar.vue:16-29,86,144,172` + `src-tauri/tauri.conf.json:21` | `decorations: false` 无边框窗口，但模板只有 Windows（最小化/最大化/关闭）与 macOS（红绿灯）分支，Linux 上没有任何窗口控制按钮，且右键菜单也被 `v-if="isWindows"` 隐藏。 |
-| 2 | **背景图被 WebView 拦截** | `src/App.vue:113` | 原实现用裸 `file:///` URL 且未 URL 编码（路径含空格/`#` 即坏）。Tauri 页面运行在 `http://tauri.localhost`，跨 scheme 访问 `file://` 被 WebView2 / WebKitGTK / WKWebView 拦截；Windows WebView2 更宽松所以"看似可用"。已改为 `convertFileSrc`（Tauri）/ data URL（Electron），见下文"已修复"。 |
-| 3 | **hostname 恒为 "unknown"** | `src-tauri/src/commands/mod.rs:362-364` | 只读环境变量 `COMPUTERNAME` / `HOSTNAME`。Windows 桌面进程必有 `COMPUTERNAME`；Linux/macOS 上 GUI 启动的应用（Finder/桌面环境）通常没有 `HOSTNAME` → `get_system_info` 返回 `hostname: "unknown"`。应改用 `gethostname()` / 调用 `hostname` 命令。 |
 | 4 | **关闭 Tab 子进程残留（孤儿）** | `src-tauri/src/session/local.rs:143-145`；`src-electron/main.ts:120,395` | Rust 用 `portable_pty` 的 `kill()`（Unix 发 SIGKILL），Electron 的 `pty.kill()` 只杀 shell PID 不杀进程组。Windows ConPTY 会杀整棵进程树；Unix 上 `vim`/`top`/后台 `&` 任务在关 Tab 后继续残留，且 SIGKILL 不给 shell 收尾机会。Unix 应先发 SIGHUP / 杀进程组。 |
 | 5 | **导入私钥 0644 世界可读** | `src-electron/main.ts:1043`（`key_import` 拷贝后无 chmod）；`src-tauri/src/crypto.rs:27`（`.store_key`） | Linux/macOS 上按默认 umask 落盘，通常 0644 world-readable。私钥被其他本地用户可读，且后续交给 git/ssh-agent 会触发 "UNPROTECTED PRIVATE KEY FILE" 拒绝。应 `fs.chmod(priv, 0o600)` / `OpenOptionsExt::mode(0o600)`。 |
 | 6 | **打包后 CLI 参数错位** | `src-electron/main.ts:943` `process.argv.slice(2)` | 打包版 argv 第一个元素是应用可执行文件路径，`slice(2)` 会把首参吞掉、其余参数整体前移。应 `app.isPackaged ? process.argv.slice(1) : process.argv.slice(2)`（macOS 还要过滤 `-psn_0_xxx`）。 |
@@ -49,16 +46,16 @@
 
 ## 已修复（本轮）
 
+- **hostname 恒为 "unknown"**：`src-tauri/src/commands/mod.rs`——新增 `get_hostname()`：优先 `COMPUTERNAME`/`HOSTNAME` 环境变量，缺失时回退 `hostname` 命令、再回退 `uname -n`，Linux/macOS GUI 启动不再返回 "unknown"。
+- **Linux 窗口控制按钮**：`src/components/titlebar/TitleBar.vue`——新增 `isLinux` 分支，Linux 上与 Windows 一致显示最小化/最大化/关闭按钮，右键菜单不再被 `v-if="isWindows"` 隐藏；拖拽/最大化还原由 `3fb8606` 处理。
 - **背景图加载**：`src/App.vue` + `src/api/{index,tauri,electron}.ts` + `src-electron/main.ts`（`file_to_data_url`）+ `src-tauri/tauri.conf.json`（`assetProtocol`）——弃用裸 `file:///`，Tauri 用 `convertFileSrc`、Electron 用 data URL。
 - **终端透出背景**：`src/components/terminal/TerminalWrapper.vue`——背景图开启时终端容器与 xterm 主题背景改为透明。
 - **detect_shells 返回形状统一**：`src-electron/main.ts`（`detect_shells` 改为与 Tauri 一致的 `{name,command,icon}` 对象数组）+ `src/App.vue`（`initBuiltInLocalProfiles` 归一化两种形状）——Electron 模式下内置本地会话 profile 字段不再 undefined。
 
 ## 修复建议优先级
 
-1. hostname（#3）：`gethostname()` / `hostname` 命令。
-2. 孤儿进程（#4）：Unix 先 SIGHUP / 杀进程组再兜底 SIGKILL。
-3. 私钥权限（#5）：`chmod 0600`。
-4. Linux 窗口按钮（#1）：给 Linux 补最小化/最大化/关闭。
-5. `ssh-keygen` 依赖（#8）：改用 `russh::keys`。
-6. 换行符统一（#10、#11）。
-7. known_hosts（#14）三处 bug。
+1. 孤儿进程（#4）：Unix 先 SIGHUP / 杀进程组再兜底 SIGKILL。
+2. 私钥权限（#5）：`chmod 0600`。
+3. `ssh-keygen` 依赖（#8）：改用 `russh::keys`。
+4. 换行符统一（#10、#11）。
+5. known_hosts（#14）三处 bug。

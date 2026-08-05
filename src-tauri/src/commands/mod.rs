@@ -355,13 +355,42 @@ pub struct SystemInfo {
     pub shell: String,
 }
 
+fn run_hostname_cmd() -> Option<String> {
+    let mut cmd = std::process::Command::new("hostname");
+    #[cfg(target_os = "windows")]
+    {
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    cmd.output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn get_hostname() -> String {
+    if let Ok(name) = std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")) {
+        return name;
+    }
+    if let Some(name) = run_hostname_cmd() {
+        return name;
+    }
+    if let Ok(output) = std::process::Command::new("uname").arg("-n").output() {
+        if let Ok(name) = String::from_utf8(output.stdout) {
+            let trimmed = name.trim().to_string();
+            if !trimmed.is_empty() {
+                return trimmed;
+            }
+        }
+    }
+    "unknown".to_string()
+}
+
 #[tauri::command]
 pub async fn get_system_info() -> SystemInfo {
     let os = std::env::consts::OS.to_string();
     let arch = std::env::consts::ARCH.to_string();
-    let hostname = std::env::var("COMPUTERNAME")
-        .or_else(|_| std::env::var("HOSTNAME"))
-        .unwrap_or_else(|_| "unknown".to_string());
+    let hostname = get_hostname();
 
     let kernel = if cfg!(target_os = "windows") {
         #[cfg(target_os = "windows")]
