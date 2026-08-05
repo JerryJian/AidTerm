@@ -130,7 +130,7 @@ impl SshConnection {
         _x11_forwarding: bool,
         app_handle: AppHandle,
     ) -> Result<Self, String> {
-        let addr = format!("{}:{}", host, port);
+        let addr = crate::netaddr::sock_addr(&host, port);
 
         let (write_tx, write_rx) = tokio_mpsc::unbounded_channel();
         let (resize_tx, resize_rx) = tokio_mpsc::unbounded_channel();
@@ -313,10 +313,8 @@ impl SshConnection {
         app_handle: &AppHandle,
         session_id: &str,
     ) -> Result<(), String> {
-        let target_host = addr.rsplitn(2, ':').nth(1).unwrap_or(addr);
-        let target_port: u16 = addr.rsplitn(2, ':').next().unwrap_or("22").parse().unwrap_or(22);
-
-        let stream = proxy::connect_async(proxy_config, target_host, target_port).await?;
+        let (target_host, target_port) = crate::netaddr::split_host_port(addr);
+        let stream = proxy::connect_async(proxy_config, &target_host, target_port).await?;
 
         let config = Arc::new(client::Config::default());
         let mut handle = client::connect_stream(config, stream, SshHandler).await

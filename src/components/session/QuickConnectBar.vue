@@ -20,6 +20,46 @@ watch(() => props.visible, (v) => {
   }
 })
 
+function parseTarget(input: string, defaultPort: number): { host: string; port: number; username?: string } | null {
+  let s = input.trim()
+  let username: string | undefined
+  const at = s.lastIndexOf('@')
+  if (at > 0) {
+    username = s.slice(0, at)
+    s = s.slice(at + 1)
+  }
+
+  let host: string
+  let port: number
+  if (s.startsWith('[')) {
+    const close = s.indexOf(']')
+    if (close === -1) return null
+    host = s.slice(1, close)
+    const rest = s.slice(close + 1)
+    if (rest === '') {
+      port = defaultPort
+    } else {
+      if (!rest.startsWith(':')) return null
+      port = parseInt(rest.slice(1), 10)
+      if (Number.isNaN(port)) return null
+    }
+  } else {
+    const colonIdx = s.lastIndexOf(':')
+    if (colonIdx > 0) {
+      host = s.slice(0, colonIdx)
+      const p = parseInt(s.slice(colonIdx + 1), 10)
+      if (Number.isNaN(p)) return null
+      port = p
+    } else {
+      host = s
+      port = defaultPort
+    }
+  }
+
+  if (!host || host.includes(':')) return null
+  return { host, port, username }
+}
+
 function parseAndSubmit() {
   const raw = input.value.trim()
   if (!raw) return
@@ -32,38 +72,20 @@ function parseAndSubmit() {
   if (str.startsWith('telnet ')) {
     str = str.slice(7).trim()
     const parts = str.split(/\s+/)
-    const addr = parts[0]
-    const colonIdx = addr.lastIndexOf(':')
-    let host: string
-    let port: number
-    if (colonIdx > 0) {
-      host = addr.slice(0, colonIdx)
-      port = parseInt(addr.slice(colonIdx + 1)) || 23
-    } else {
-      host = addr
-      port = 23
-    }
+    const parsed = parseTarget(parts[0], 23)
     input.value = ''
     emit('close')
-    emit('telnetConnect', host, port)
+    if (!parsed) return
+    emit('telnetConnect', parsed.host, parsed.port)
     return
   }
 
-  const regex = /^(?:(\w[\w.-]*)@)?([\w.-]+)(?::(\d+))?$/
-  const m = str.match(regex)
-  if (!m) {
-    input.value = ''
-    emit('close')
-    return
-  }
-
-  const username = m[1] || ''
-  const host = m[2]
-  const port = m[3] ? parseInt(m[3]) : 22
-
+  const parsed = parseTarget(str, 22)
   input.value = ''
   emit('close')
-  emit('sshConnect', host, port, username)
+  if (!parsed) return
+
+  emit('sshConnect', parsed.host, parsed.port, parsed.username || '')
 }
 
 function onKeydown(e: KeyboardEvent) {

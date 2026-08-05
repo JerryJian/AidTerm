@@ -3,6 +3,7 @@ mod commands;
 mod crypto;
 mod keychain;
 mod known_hosts;
+mod netaddr;
 mod proxy;
 mod serial;
 mod session;

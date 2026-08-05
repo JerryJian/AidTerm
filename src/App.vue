@@ -328,7 +328,7 @@ async function handleDeepLink(payload: string) {
     const url = new URL(payload)
     if (url.protocol === 'ssh:') {
       const username = url.username || 'root'
-      const host = url.hostname
+      const host = (url.hostname || '').replace(/^\[|\]$/g, '')
       const port = parseInt(url.port, 10) || 22
       sshDialogPrefill.value = { host, port, username }
       ui.sshDialog = true
@@ -346,11 +346,28 @@ async function handleCliArgs() {
         if (args[i] === '--ssh' && i + 1 < args.length) {
           const val = args[i + 1]
           if (val.includes('@')) {
-            const [user, hostPort] = val.split('@')
-            const [host, portStr] = hostPort.split(':')
+            const at = val.lastIndexOf('@')
+            const user = val.slice(0, at)
+            let hostPort = val.slice(at + 1)
+            let host: string
+            let port = 22
+            if (hostPort.startsWith('[')) {
+              const close = hostPort.indexOf(']')
+              host = close === -1 ? hostPort : hostPort.slice(1, close)
+              const rest = close === -1 ? '' : hostPort.slice(close + 1)
+              if (rest.startsWith(':')) port = parseInt(rest.slice(1), 10) || 22
+            } else {
+              const colonIdx = hostPort.lastIndexOf(':')
+              if (colonIdx > 0) {
+                host = hostPort.slice(0, colonIdx)
+                port = parseInt(hostPort.slice(colonIdx + 1), 10) || 22
+              } else {
+                host = hostPort
+              }
+            }
             sshDialogPrefill.value = {
-              host: host || val,
-              port: portStr ? parseInt(portStr, 10) : 22,
+              host,
+              port,
               username: user || 'root',
             }
             ui.sshDialog = true

@@ -102,14 +102,15 @@ async fn http_connect_async(
     target_host: &str,
     target_port: u16,
 ) -> Result<    Box<dyn ProxyStream>, String> {
-    let addr = format!("{}:{}", proxy_host, proxy_port);
+    let addr = crate::netaddr::sock_addr(proxy_host, proxy_port);
     let mut stream = TokioTcpStream::connect(&addr)
         .await
         .map_err(|e| format!("Proxy TCP connect: {}", e))?;
 
+    let target = crate::netaddr::sock_addr(target_host, target_port);
     let connect_req = format!(
-        "CONNECT {}:{} HTTP/1.1\r\nHost: {}:{}\r\n\r\n",
-        target_host, target_port, target_host, target_port
+        "CONNECT {} HTTP/1.1\r\nHost: {}\r\n\r\n",
+        target, target
     );
     stream
         .write_all(connect_req.as_bytes())
@@ -138,7 +139,7 @@ async fn socks5_connect_async(
     target_host: &str,
     target_port: u16,
 ) -> Result<    Box<dyn ProxyStream>, String> {
-    let addr = format!("{}:{}", proxy_host, proxy_port);
+    let addr = crate::netaddr::sock_addr(proxy_host, proxy_port);
     let stream = TokioTcpStream::connect(&addr)
         .await
         .map_err(|e| format!("SOCKS5 TCP connect: {}", e))?;
@@ -155,7 +156,7 @@ async fn connect_via_jump_host_async(
     target_host: &str,
     target_port: u16,
 ) -> Result<    Box<dyn ProxyStream>, String> {
-    let addr = format!("{}:{}", jump.host, jump.port);
+    let addr = crate::netaddr::sock_addr(&jump.host, jump.port);
     let config = Arc::new(client::Config::default());
     let mut handle = client::connect(config, &addr, JumpHostHandler)
         .await

@@ -154,7 +154,7 @@ async fn connect_and_auth<H: client::Handler<Error = anyhow::Error> + 'static>(
     auth: &SshAuth,
     handler: H,
 ) -> Result<client::Handle<H>, String> {
-    let addr = format!("{}:{}", auth.host, auth.port);
+    let addr = crate::netaddr::sock_addr(&auth.host, auth.port);
     let config = Arc::new(client::Config::default());
     let mut handle = client::connect(config, &addr, handler)
         .await
@@ -317,7 +317,7 @@ async fn run_local_tunnel(
         connect_and_auth(auth, TunnelHandler).await?,
     ));
 
-    let listener = TcpListener::bind(format!("{}:{}", bind_addr, bind_port))
+    let listener = TcpListener::bind(crate::netaddr::sock_addr(bind_addr, bind_port))
         .map_err(|e| format!("Bind {}:{}: {}", bind_addr, bind_port, e))?;
     listener.set_nonblocking(true)
         .map_err(|e| format!("Set nonblocking: {}", e))?;
@@ -370,7 +370,7 @@ async fn run_remote_tunnel(
                 return Ok(());
             }
             Some((channel, _connected_addr, _connected_port, _originator_addr, _originator_port)) = incoming_rx.recv() => {
-                let remote = match TcpStream::connect(format!("{}:{}", target_host, target_port)) {
+                let remote = match TcpStream::connect(crate::netaddr::sock_addr(target_host, target_port)) {
                     Ok(s) => s,
                     Err(e) => {
                         log::error!("Connect to target {}:{}: {}", target_host, target_port, e);
@@ -395,7 +395,7 @@ async fn run_dynamic_tunnel(
         connect_and_auth(auth, TunnelHandler).await?,
     ));
 
-    let listener = TcpListener::bind(format!("{}:{}", bind_addr, bind_port))
+    let listener = TcpListener::bind(crate::netaddr::sock_addr(bind_addr, bind_port))
         .map_err(|e| format!("Bind {}:{}: {}", bind_addr, bind_port, e))?;
     listener.set_nonblocking(true)
         .map_err(|e| format!("Set nonblocking: {}", e))?;

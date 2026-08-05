@@ -149,7 +149,7 @@ impl SftpConnection {
     ) -> Result<Self, String> {
         let (cmd_tx, cmd_rx) = mpsc::channel();
         let (kill_tx, kill_rx) = mpsc::channel();
-        let addr = format!("{}:{}", host, port);
+        let addr = crate::netaddr::sock_addr(&host, port);
 
         let cancel_flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>> = Arc::new(Mutex::new(HashMap::new()));
         let cf = cancel_flags.clone();
