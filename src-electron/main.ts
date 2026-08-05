@@ -221,8 +221,14 @@ function saveKeyIndex(): void {
 }
 
 function runCmd(cmd: string, args: string[]): string {
-  const { execSync } = require('child_process') as typeof import('child_process')
-  return execSync(`${cmd} ${args.join(' ')}`, { encoding: 'utf8', timeout: 30000 })
+  const { spawnSync } = require('child_process') as typeof import('child_process')
+  const res = spawnSync(cmd, args, { encoding: 'utf8', timeout: 30000 })
+  if (res.error) throw res.error
+  if (res.status !== 0) {
+    const detail = (res.stderr || res.stdout || '').toString().trim()
+    throw new Error(`${cmd} failed (exit ${res.status}): ${detail}`)
+  }
+  return (res.stdout || '').toString()
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1021,11 +1027,11 @@ function registerIpcHandlers(): void {
     const privPath = path.join(keysDir, `${name}_id_rsa`)
     const pubPath = `${privPath}.pub`
 
-    const passArgs = passphrase ? `-N ${JSON.stringify(passphrase)}` : `-N ""`
-    runCmd('ssh-keygen', ['-t', 'rsa', '-b', String(bits || 2048), '-f', JSON.stringify(privPath), '-C', `aidterm-${name}`, passArgs])
+    const keyArgs = ['-t', 'rsa', '-b', String(bits || 2048), '-f', privPath, '-C', `aidterm-${name}`, '-N', passphrase || '']
+    runCmd('ssh-keygen', keyArgs)
 
     const pubContent = fs.readFileSync(pubPath, 'utf8').trim()
-    const fpOut = runCmd('ssh-keygen', ['-l', '-f', JSON.stringify(privPath)])
+    const fpOut = runCmd('ssh-keygen', ['-l', '-f', privPath])
     const fingerprint = fpOut.trim().split(/\s+/)[0] || ''
 
     const info: KeyInfo = {
@@ -1046,11 +1052,11 @@ function registerIpcHandlers(): void {
     const privPath = path.join(keysDir, `${name}_id_ed25519`)
     const pubPath = `${privPath}.pub`
 
-    const passArgs = passphrase ? `-N ${JSON.stringify(passphrase)}` : `-N ""`
-    runCmd('ssh-keygen', ['-t', 'ed25519', '-f', JSON.stringify(privPath), '-C', `aidterm-${name}`, passArgs])
+    const keyArgs = ['-t', 'ed25519', '-f', privPath, '-C', `aidterm-${name}`, '-N', passphrase || '']
+    runCmd('ssh-keygen', keyArgs)
 
     const pubContent = fs.readFileSync(pubPath, 'utf8').trim()
-    const fpOut = runCmd('ssh-keygen', ['-l', '-f', JSON.stringify(privPath)])
+    const fpOut = runCmd('ssh-keygen', ['-l', '-f', privPath])
     const fingerprint = fpOut.trim().split(/\s+/)[0] || ''
 
     const info: KeyInfo = {
@@ -1087,8 +1093,7 @@ function registerIpcHandlers(): void {
 
     let pubContent = ''
     try {
-      const { execSync } = require('child_process') as typeof import('child_process')
-      pubContent = execSync(`ssh-keygen -y -f "${destPriv}"`, { encoding: 'utf8', timeout: 10000 }).trim()
+      pubContent = runCmd('ssh-keygen', ['-y', '-f', destPriv]).trim()
     } catch (err: unknown) {
       const e = err as { message?: string }
       throw new Error(`Failed to extract public key: ${e.message}`)
@@ -1105,7 +1110,7 @@ function registerIpcHandlers(): void {
 
     let fingerprint = ''
     try {
-      const fpOut = runCmd('ssh-keygen', ['-l', '-f', JSON.stringify(destPriv)])
+      const fpOut = runCmd('ssh-keygen', ['-l', '-f', destPriv])
       fingerprint = fpOut.trim().split(/\s+/)[0] || ''
     } catch {}
 
