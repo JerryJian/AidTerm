@@ -77,6 +77,8 @@ function createWindow(): void {
     height: 800,
     title: 'AidTerm',
     frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
     icon: (isWindows || isLinux) ? iconPath : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
