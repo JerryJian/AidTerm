@@ -154,7 +154,7 @@ async fn chat_openai(messages: Vec<ChatMessage>, config: &AiConfig) -> Result<Ai
     let tool = ChatCompletionTools::Function(ChatCompletionTool {
         function: FunctionObject {
             name: "execute_command".to_string(),
-            description: Some("在服务器上执行一条 shell 命令，返回命令的输出结果。执行命令后，系统会将输出结果返回给你，请根据结果继续推理。".to_string()),
+            description: Some("在用户当前终端中执行一条 shell 命令（若连接了 SSH 则在远端执行），返回命令的输出结果。执行命令后，系统会将输出结果返回给你，请根据结果继续推理。".to_string()),
             parameters: Some(serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -282,7 +282,7 @@ async fn chat_ollama(messages: Vec<ChatMessage>, config: &AiConfig) -> Result<Ai
             "type": "Function",
             "function": {
                 "name": "execute_command",
-                "description": "在服务器上执行一条 shell 命令，返回命令的输出结果。执行命令后，系统会将输出结果返回给你，请根据结果继续推理。",
+                "description": "在用户当前终端中执行一条 shell 命令（若连接了 SSH 则在远端执行），返回命令的输出结果。执行命令后，系统会将输出结果返回给你，请根据结果继续推理。",
                 "parameters": {
                     "type": "object",
                     "properties": {

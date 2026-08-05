@@ -5,6 +5,7 @@ use std::sync::Mutex;
 
 use russh::keys::{Algorithm, HashAlg, PrivateKey};
 use russh::keys::ssh_key::LineEnding;
+use russh::keys::ssh_key::private::RsaKeypair;
 
 pub struct KeychainManager {
     keys_dir: PathBuf,
@@ -58,16 +59,14 @@ impl KeychainManager {
         }
     }
 
-    fn generate_key(
-        algorithm: Algorithm,
+    fn write_key(
+        mut key: PrivateKey,
         passphrase: Option<&str>,
         priv_path: &Path,
         pub_path: &Path,
         comment: &str,
     ) -> Result<(String, String), String> {
         let mut rng = rand::rng();
-        let mut key = PrivateKey::random(&mut rng, algorithm)
-            .map_err(|e| format!("Failed to generate key: {}", e))?;
         if let Some(pass) = passphrase.filter(|p| !p.is_empty()) {
             key = key
                 .encrypt(&mut rng, pass)
@@ -87,16 +86,21 @@ impl KeychainManager {
         Ok((pub_line.trim().to_string(), fingerprint))
     }
 
-    pub fn generate_rsa(&self, name: String, _bits: u32, passphrase: Option<String>) -> Result<KeyInfo, String> {
+    pub fn generate_rsa(&self, name: String, bits: u32, passphrase: Option<String>) -> Result<KeyInfo, String> {
         let id = uuid::Uuid::new_v4().to_string();
         let priv_path = self.keys_dir.join(format!("{}_{}", &name, "id_rsa"));
         let priv_str = priv_path.to_string_lossy().to_string();
         let pub_path = self.keys_dir.join(format!("{}_{}.pub", &name, "id_rsa"));
         let comment = format!("aidterm-{}", name);
 
-        // ssh-key generates RSA keys at a fixed 4096-bit size
-        let (public_key, fingerprint) = Self::generate_key(
-            Algorithm::Rsa { hash: None },
+        let bits = bits.clamp(2048, 8192);
+        let mut rng = rand::rng();
+        let keypair = RsaKeypair::random(&mut rng, bits as usize)
+            .map_err(|e| format!("Failed to generate RSA key: {}", e))?;
+        let key = PrivateKey::from(keypair);
+
+        let (public_key, fingerprint) = Self::write_key(
+            key,
             passphrase.as_deref(),
             &priv_path,
             &pub_path,
@@ -107,7 +111,7 @@ impl KeychainManager {
             id,
             name,
             key_type: "RSA".to_string(),
-            bits: 4096,
+            bits,
             public_key,
             fingerprint,
             private_key_path: priv_str,
@@ -130,8 +134,12 @@ impl KeychainManager {
         let pub_path = self.keys_dir.join(format!("{}_{}.pub", &name, "id_ed25519"));
         let comment = format!("aidterm-{}", name);
 
-        let (public_key, fingerprint) = Self::generate_key(
-            Algorithm::Ed25519,
+        let mut rng = rand::rng();
+        let key = PrivateKey::random(&mut rng, Algorithm::Ed25519)
+            .map_err(|e| format!("Failed to generate key: {}", e))?;
+
+        let (public_key, fingerprint) = Self::write_key(
+            key,
             passphrase.as_deref(),
             &priv_path,
             &pub_path,

@@ -1272,7 +1272,7 @@ async function callAiChat(messages: AiMessage[], config: AiConfig): Promise<AiRe
         type: 'function',
         function: {
           name: 'execute_command',
-          description: '在服务器上执行一条 shell 命令，返回命令的输出结果。执行命令后，系统会将输出结果返回给你，请根据结果继续推理。',
+          description: '在用户当前终端中执行一条 shell 命令（若连接了 SSH 则在远端执行），返回命令的输出结果。执行命令后，系统会将输出结果返回给你，请根据结果继续推理。',
           parameters: {
             type: 'object',
             properties: {
