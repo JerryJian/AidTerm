@@ -38,3 +38,5 @@ base64 = "0.22"
 async-openai = { version = "0.41", default-features = false, features = ["chat-completion", "model"] }
 ollama-rs = "0.3"
 tokio-serial = "5.5"
+libc = "0.2"
+rand = { version = "0.10", features = ["thread_rng"] }

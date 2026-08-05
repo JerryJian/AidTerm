@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::process::Command;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+
+use russh::keys::{Algorithm, HashAlg, PrivateKey};
+use russh::keys::ssh_key::LineEnding;
 
 pub struct KeychainManager {
     keys_dir: PathBuf,
@@ -49,60 +49,66 @@ impl KeychainManager {
         }
     }
 
-    fn run_ssh_keygen(args: &[&str]) -> Result<String, String> {
-        let mut cmd = Command::new("ssh-keygen");
-        cmd.args(args);
-        #[cfg(target_os = "windows")]
-        {
-            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    fn key_type_of(key: &PrivateKey) -> &'static str {
+        match key.public_key().algorithm() {
+            Algorithm::Ed25519 => "ED25519",
+            Algorithm::Rsa { .. } => "RSA",
+            Algorithm::Ecdsa { .. } => "ECDSA",
+            _ => "Unknown",
         }
-        let output = cmd
-            .output()
-            .map_err(|e| format!("ssh-keygen not found: {}. Install OpenSSH client.", e))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("ssh-keygen failed: {}", stderr));
-        }
-
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 
-    pub fn generate_rsa(&self, name: String, bits: u32, passphrase: Option<String>) -> Result<KeyInfo, String> {
+    fn generate_key(
+        algorithm: Algorithm,
+        passphrase: Option<&str>,
+        priv_path: &Path,
+        pub_path: &Path,
+        comment: &str,
+    ) -> Result<(String, String), String> {
+        let mut rng = rand::rng();
+        let mut key = PrivateKey::random(&mut rng, algorithm)
+            .map_err(|e| format!("Failed to generate key: {}", e))?;
+        if let Some(pass) = passphrase.filter(|p| !p.is_empty()) {
+            key = key
+                .encrypt(&mut rng, pass)
+                .map_err(|e| format!("Failed to encrypt key: {}", e))?;
+        }
+        let public_key = key
+            .public_key()
+            .to_openssh()
+            .map_err(|e| format!("Failed to encode public key: {}", e))?;
+        let pub_line = format!("{} {}\n", public_key, comment);
+        // write_openssh_file applies 0600 permissions on Unix
+        key.write_openssh_file(priv_path, LineEnding::LF)
+            .map_err(|e| format!("Failed to write private key: {}", e))?;
+        fs::write(pub_path, pub_line.as_bytes())
+            .map_err(|e| format!("Failed to write public key: {}", e))?;
+        let fingerprint = key.public_key().fingerprint(HashAlg::Sha256).to_string();
+        Ok((pub_line.trim().to_string(), fingerprint))
+    }
+
+    pub fn generate_rsa(&self, name: String, _bits: u32, passphrase: Option<String>) -> Result<KeyInfo, String> {
         let id = uuid::Uuid::new_v4().to_string();
         let priv_path = self.keys_dir.join(format!("{}_{}", &name, "id_rsa"));
         let priv_str = priv_path.to_string_lossy().to_string();
-        let bits_str = bits.to_string();
+        let pub_path = self.keys_dir.join(format!("{}_{}.pub", &name, "id_rsa"));
         let comment = format!("aidterm-{}", name);
 
-        let mut args = vec![
-            "-t", "rsa",
-            "-b", bits_str.as_str(),
-            "-f", priv_str.as_str(),
-            "-C", comment.as_str(),
-        ];
-
-        if let Some(ref pass) = passphrase {
-            args.extend_from_slice(&["-N", pass]);
-        } else {
-            args.extend_from_slice(&["-N", ""]);
-        }
-
-        Self::run_ssh_keygen(&args)?;
-
-        let pub_path = self.keys_dir.join(format!("{}_{}.pub", &name, "id_rsa"));
-        let pub_content = fs::read_to_string(&pub_path)
-            .map_err(|e| format!("Failed to read public key: {}", e))?;
-
-        let fingerprint = Self::run_ssh_keygen(&["-l", "-f", &priv_str])?;
-        let fingerprint = fingerprint.trim().split_whitespace().next().unwrap_or("").to_string();
+        // ssh-key generates RSA keys at a fixed 4096-bit size
+        let (public_key, fingerprint) = Self::generate_key(
+            Algorithm::Rsa { hash: None },
+            passphrase.as_deref(),
+            &priv_path,
+            &pub_path,
+            &comment,
+        )?;
 
         let info = KeyInfo {
             id,
             name,
             key_type: "RSA".to_string(),
-            bits,
-            public_key: pub_content.trim().to_string(),
+            bits: 4096,
+            public_key,
             fingerprint,
             private_key_path: priv_str,
             public_key_path: pub_path.to_string_lossy().to_string(),
@@ -121,35 +127,23 @@ impl KeychainManager {
         let id = uuid::Uuid::new_v4().to_string();
         let priv_path = self.keys_dir.join(format!("{}_{}", &name, "id_ed25519"));
         let priv_str = priv_path.to_string_lossy().to_string();
+        let pub_path = self.keys_dir.join(format!("{}_{}.pub", &name, "id_ed25519"));
         let comment = format!("aidterm-{}", name);
 
-        let mut args = vec![
-            "-t", "ed25519",
-            "-f", priv_str.as_str(),
-            "-C", comment.as_str(),
-        ];
-
-        if let Some(ref pass) = passphrase {
-            args.extend_from_slice(&["-N", pass]);
-        } else {
-            args.extend_from_slice(&["-N", ""]);
-        }
-
-        Self::run_ssh_keygen(&args)?;
-
-        let pub_path = self.keys_dir.join(format!("{}_{}.pub", &name, "id_ed25519"));
-        let pub_content = fs::read_to_string(&pub_path)
-            .map_err(|e| format!("Failed to read public key: {}", e))?;
-
-        let fingerprint = Self::run_ssh_keygen(&["-l", "-f", &priv_str])?;
-        let fingerprint = fingerprint.trim().split_whitespace().next().unwrap_or("").to_string();
+        let (public_key, fingerprint) = Self::generate_key(
+            Algorithm::Ed25519,
+            passphrase.as_deref(),
+            &priv_path,
+            &pub_path,
+            &comment,
+        )?;
 
         let info = KeyInfo {
             id,
             name,
             key_type: "ED25519".to_string(),
             bits: 256,
-            public_key: pub_content.trim().to_string(),
+            public_key,
             fingerprint,
             private_key_path: priv_str,
             public_key_path: pub_path.to_string_lossy().to_string(),
@@ -183,33 +177,22 @@ impl KeychainManager {
     }
 
     pub fn import(&self, name: String, private_key_path: String) -> Result<KeyInfo, String> {
-        // Import an existing key - just registers it in our index
         let path = PathBuf::from(&private_key_path);
         if !path.exists() {
             return Err("Private key file not found".to_string());
         }
 
+        let key = russh::keys::load_secret_key(&path, None)
+            .map_err(|e| format!("Failed to load private key: {}", e))?;
+
         let id = uuid::Uuid::new_v4().to_string();
         let pub_path = path.with_extension("pub");
-        let pub_content = if pub_path.exists() {
-            fs::read_to_string(&pub_path).unwrap_or_default()
-        } else {
-            // Try to extract public key
-            String::new()
-        };
-
-        let fingerprint = Self::run_ssh_keygen(&["-l", "-f", &private_key_path])
-            .ok()
-            .and_then(|out| out.trim().split_whitespace().next().map(|s| s.to_string()))
-            .unwrap_or_default();
-
-        let key_type = if pub_content.contains("ssh-ed25519") {
-            "ED25519"
-        } else if pub_content.contains("ssh-rsa") {
-            "RSA"
-        } else {
-            "Unknown"
-        };
+        let pub_content = key
+            .public_key()
+            .to_openssh()
+            .map_err(|e| format!("Failed to extract public key: {}", e))?;
+        let fingerprint = key.public_key().fingerprint(HashAlg::Sha256).to_string();
+        let key_type = Self::key_type_of(&key);
 
         let info = KeyInfo {
             id,
