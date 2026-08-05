@@ -51,6 +51,11 @@ export async function clipboardRead(): Promise<string> {
   return mod.clipboardRead()
 }
 
+export async function toFileUrl(filePath: string): Promise<string> {
+  const mod = await getMod()
+  return mod.toFileUrl(filePath)
+}
+
 export function getCurrentWindow() {
   // getCurrentWindow is synchronous in both implementations
   // We need to handle this differently - return a proxy that lazy-loads

@@ -106,3 +106,7 @@ export function clipboardWrite(text: string): Promise<void> {
 export function clipboardRead(): Promise<string> {
   return getApi().clipboardRead()
 }
+
+export async function toFileUrl(filePath: string): Promise<string> {
+  return getApi().invoke('file_to_data_url', { path: filePath })
+}

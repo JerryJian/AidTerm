@@ -2,7 +2,7 @@
  * Tauri implementation — wraps @tauri-apps APIs 1:1.
  */
 
-import { invoke as tauriInvoke } from '@tauri-apps/api/core'
+import { invoke as tauriInvoke, convertFileSrc } from '@tauri-apps/api/core'
 import { listen as tauriListen } from '@tauri-apps/api/event'
 import { getCurrentWindow as tauriGetCurrentWindow } from '@tauri-apps/api/window'
 import { save as tauriSave, open as tauriOpen } from '@tauri-apps/plugin-dialog'
@@ -50,4 +50,8 @@ export function clipboardWrite(text: string): Promise<void> {
 
 export function clipboardRead(): Promise<string> {
   return tauriInvoke<string>('plugin:clipboard-manager|read_text')
+}
+
+export async function toFileUrl(filePath: string): Promise<string> {
+  return convertFileSrc(filePath)
 }

@@ -6,7 +6,7 @@ import { useSettingsStore } from './stores/settingsStore'
 import { useUiStore } from './stores/uiStore'
 import { useThemeStore } from './stores/themeStore'
 import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SavedSession, TerminalTab } from './types'
-import { invoke, listen, getCurrentWindow, saveDialog as save } from '@/api'
+import { invoke, listen, getCurrentWindow, toFileUrl, saveDialog as save } from '@/api'
 import TabBar from './components/terminal/TabBar.vue'
 import TitleBar from './components/titlebar/TitleBar.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
@@ -104,13 +104,23 @@ function inputCtxAction(action: 'cut' | 'copy' | 'paste' | 'selectAll') {
   }
 }
 
+const bgUrl = ref('')
+
+watch(
+  () => settings.backgroundImage,
+  async (v) => {
+    bgUrl.value = v ? await toFileUrl(v) : ''
+  },
+  { immediate: true },
+)
+
 const appStyle = computed(() => {
   const style: Record<string, string> = {}
   if (settings.transparency < 1) {
     style.opacity = String(settings.transparency)
   }
-  if (settings.backgroundImage) {
-    style.backgroundImage = `url('file:///${settings.backgroundImage.replace(/\\/g, '/')}')`
+  if (bgUrl.value) {
+    style.backgroundImage = `url('${bgUrl.value}')`
     style.backgroundSize = 'cover'
     style.backgroundPosition = 'center'
     style.backgroundRepeat = 'no-repeat'

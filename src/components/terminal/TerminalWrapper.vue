@@ -84,7 +84,7 @@ function getXtermTheme() {
   const s = getComputedStyle(document.documentElement)
   const v = (name: string, fallback: string) => s.getPropertyValue(name).trim() || fallback
   return {
-    background: v('--bg-base', '#1e1e1e'),
+    background: settings.backgroundImage ? 'rgba(0,0,0,0)' : v('--bg-base', '#1e1e1e'),
     foreground: v('--text-sub1', '#cccccc'),
     cursor: v('--text', '#d4d4d4'),
     selectionBackground: v('--term-selection', '#264f78'),
@@ -371,6 +371,13 @@ onMounted(() => {
   })
   onUnmounted(() => stopWatch())
 
+  const stopBgWatch = watch(() => settings.backgroundImage, () => {
+    if (terminal) {
+      terminal.options.theme = getXtermTheme()
+    }
+  })
+  onUnmounted(() => stopBgWatch())
+
   const stopScrollbackWatch = watch(() => settings.scrollback, (v) => {
     if (terminal) {
       terminal.options.scrollback = v
@@ -615,7 +622,7 @@ defineExpose({ focusSearch, doFit, getTerminalContent })
 </script>
 
 <template>
-  <div class="terminal-container" @contextmenu="showContextMenu" @keydown.capture="onTerminalKeydown">
+  <div class="terminal-container" :class="{ 'has-bg-image': !!settings.backgroundImage }" @contextmenu="showContextMenu" @keydown.capture="onTerminalKeydown">
     <div class="search-bar" v-if="searchVisible">
       <input
         v-model="searchQuery"
@@ -676,6 +683,17 @@ defineExpose({ focusSearch, doFit, getTerminalContent })
   min-width: 0;
   position: relative;
   background: var(--bg-base);
+}
+
+.terminal-container.has-bg-image {
+  background: transparent;
+}
+
+.terminal-container.has-bg-image :deep(.xterm-scrollable-element),
+.terminal-container.has-bg-image :deep(.xterm-viewport),
+.terminal-container.has-bg-image :deep(.xterm-scroll-area),
+.terminal-container.has-bg-image :deep(.xterm-screen) {
+  background-color: transparent !important;
 }
 
 .terminal-xterm {

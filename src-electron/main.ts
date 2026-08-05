@@ -335,6 +335,19 @@ function registerIpcHandlers(): void {
   ipcMain.handle('clipboard:write', (_, args: ClipboardWriteArgs) => { clipboard.writeText(args.text) })
   ipcMain.handle('clipboard:read', () => clipboard.readText())
 
+  // ═══ File → data URL (background image etc.) ═══
+  ipcMain.handle('file_to_data_url', async (_e, args: { path: string }) => {
+    const data = fs.readFileSync(args.path)
+    const ext = path.extname(args.path).slice(1).toLowerCase()
+    const mime = ext === 'png' ? 'image/png'
+      : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+      : ext === 'gif' ? 'image/gif'
+      : ext === 'webp' ? 'image/webp'
+      : ext === 'svg' ? 'image/svg+xml'
+      : 'application/octet-stream'
+    return `data:${mime};base64,${data.toString('base64')}`
+  })
+
   // ══════════════════════════════════════════════════════
   //  PTY (node-pty)
   // ══════════════════════════════════════════════════════
