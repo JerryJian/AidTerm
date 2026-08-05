@@ -188,6 +188,7 @@ watch(conversationMessages, async () => {
             <div class="command-header">
               <span v-if="msg.dangerous" class="danger-badge">⚠️ {{ t('ai.dangerous_command') }}</span>
               <span v-else class="safe-badge">✅ {{ t('ai.safe_command') }}</span>
+              <button v-if="aiConv.waitingForCommand.value && msg === lastCommand" class="ai-stop-btn" @click="aiConv.stopWaitingForCommand()" :title="t('ai.stop_waiting')" />
               <button class="copy-btn copy-btn-sm" @click="copyMessage(msg)" :title="t('ai.copy')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               </button>
@@ -203,10 +204,8 @@ watch(conversationMessages, async () => {
             <div v-else-if="!msg.dangerous && aiConv.autoExecute && msg.autoExecStatus === 'completed'" class="command-auto command-auto-done">
               ✅ {{ t('ai.auto_execute_done') }}
             </div>
-            <div v-if="(aiConv.waitingForCommand.value && msg === lastCommand) || (!msg.dangerous && aiConv.autoExecute && msg.autoExecStatus === 'executing')" class="command-footer">
-              <span v-if="!msg.dangerous && aiConv.autoExecute" class="command-auto-running">⏳ {{ t('ai.auto_executing') }}</span>
-              <span class="command-footer-spacer"></span>
-              <button v-if="aiConv.waitingForCommand.value && msg === lastCommand" class="ai-stop-btn" @click="aiConv.stopWaitingForCommand()" :title="t('ai.stop_waiting')">⏹ {{ t('ai.stop_waiting') }}</button>
+            <div v-if="!msg.dangerous && aiConv.autoExecute && msg.autoExecStatus === 'executing'" class="command-footer">
+              <span class="command-auto-running">⏳ {{ t('ai.auto_executing') }}</span>
             </div>
           </div>
         </div>
@@ -505,6 +504,9 @@ watch(conversationMessages, async () => {
   align-items: center;
   gap: 4px;
 }
+.command-header .copy-btn {
+  opacity: 1;
+}
 
 .danger-badge {
   color: var(--danger);
@@ -649,19 +651,20 @@ watch(conversationMessages, async () => {
 }
 
 .ai-stop-btn {
-  padding: 3px 12px;
-  font-size: 12px;
-  border: 1px solid var(--bg-surface1);
-  border-radius: 4px;
-  background: var(--bg-surface0);
-  color: var(--text);
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  background: var(--danger);
   cursor: pointer;
   flex-shrink: 0;
+  opacity: 0.85;
+  transition: opacity 0.15s;
 }
 .ai-stop-btn:hover {
-  background: var(--danger);
-  color: var(--bg-base);
-  border-color: var(--danger);
+  opacity: 1;
 }
 
 .command-footer {
@@ -671,10 +674,6 @@ watch(conversationMessages, async () => {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.command-footer-spacer {
-  flex: 1;
 }
 
 .ai-input {
