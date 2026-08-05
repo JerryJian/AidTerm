@@ -5,21 +5,10 @@
 
 ---
 
-## 高优先级（Linux/macOS 上真实出错）
-
-| # | 问题 | 位置 | 说明 |
-|---|------|------|------|
-| 5 | **导入私钥 0644 世界可读** | `src-electron/main.ts:1043`（`key_import` 拷贝后无 chmod）；`src-tauri/src/crypto.rs:27`（`.store_key`） | Linux/macOS 上按默认 umask 落盘，通常 0644 world-readable。私钥被其他本地用户可读，且后续交给 git/ssh-agent 会触发 "UNPROTECTED PRIVATE KEY FILE" 拒绝。应 `fs.chmod(priv, 0o600)` / `OpenOptionsExt::mode(0o600)`。 |
-| 6 | **打包后 CLI 参数错位** | `src-electron/main.ts:943` `process.argv.slice(2)` | 打包版 argv 第一个元素是应用可执行文件路径，`slice(2)` 会把首参吞掉、其余参数整体前移。应 `app.isPackaged ? process.argv.slice(1) : process.argv.slice(2)`（macOS 还要过滤 `-psn_0_xxx`）。 |
-| 7 | **Local 隧道依赖远程 `nc`** | `src-electron/main.ts:724` | Local 端口转发在远程服务器执行 `nc host port`。Linux 精简发行版/容器未装 netcat、macOS 新版 `nc` 被移除（或只在 Xcode 中）→ Local 隧道失效且无降级。 |
-
----
-
 ## 中优先级
 
 | # | 问题 | 位置 | 说明 |
 |---|------|------|------|
-| 14 | **known_hosts 三处缺陷** | `src-tauri/src/known_hosts/mod.rs:53-54,78-80,85-99`；`src-electron/main.ts:248` | ① 指纹切片 `key[key.len()-8..]` 在 key<8 时 debug 下溢 panic；② `add()` 不创建 `~/.ssh` 目录（新装/未用过 ssh 的 Linux 机器常见）；③ `remove()` 整文件重写会丢失 hash host（`\|1\|...\|`）、`@cert-authority`、`@revoked`、注释行并改顺序；host 比较大小写敏感，与系统 ssh 共享文件时删不掉 `GitHub.com` 条目。 |
 | 15 | **detect_shells Linux/macOS 分支不做存在性检查** | `src-tauri/src/commands/mod.rs:664-669,624-633` | Windows 分支对 `pwsh.exe`/`wsl.exe` 做了 `exe_in_path` 检查；Linux/macOS 分支对 `bash`/`sh` 无条件推送，且 `exe_in_path` 在 Unix 上只判断存在、不检查可执行位（`mode & 0o111`）。 |
 | 16 | **强制 `LANG=en_US.UTF-8`** | `src-tauri/src/session/local.rs:69-71`；`src-electron/main.ts:355` | macOS GUI 启动通常无 `LANG`/`LC_ALL`，会命中兜底把用户 shell 强制切成英文 locale（提示符/程序输出变英文）；精简 Linux 可能未生成 `en_US.UTF-8` locale 而产生告警。 |
 | 17 | **AI 危险命令启发式仅 Unix** | `src/hooks/useAiConversation.ts:195-211`；`src/stores/aiStore.ts:164-173` | `rm/mv/chmod/apt/brew/systemctl` 等有，Windows 的 `del/rd/taskkill/format/ipconfig` 无。Linux/macOS 上无碍；Windows 上 `del /s /q` 会被判定安全而自动执行。 |
@@ -40,6 +29,9 @@
 
 ## 已修复（本轮）
 
+- **导入私钥 0644（#5）**：`src-electron/main.ts`（`key_import` 拷贝后 `chmodSync(destPriv, 0o600)`）+ `src-tauri/src/crypto.rs`（`.store_key` 用 `OpenOptionsExt::mode(0o600)`）——Linux/macOS 落盘不再 world-readable，git/ssh-agent 不再报 "UNPROTECTED PRIVATE KEY FILE"。
+- **打包后 CLI 参数错位（#6）**：`src-electron/main.ts` `cli_args`——`app.isPackaged ? process.argv.slice(1) : process.argv.slice(2)` 并过滤 macOS 的 `-psn_0_xxx`，打包版不再吞首参/参数前移。
+- **Local 隧道依赖远程 `nc`（#7）**：`src-electron/main.ts` `tunnel_create`——改用 `conn.forwardOut()`（direct-tcpip）直连目标端口，不再在远程执行 `nc host port`，精简 Linux/容器/macOS 无 `nc` 时隧道仍可用。
 - **关闭 Tab 子进程残留（孤儿）**：`src-tauri/src/session/local.rs`（新增 `pid` 字段，`kill()` Unix 下对进程组先 `SIGHUP`、300ms 后兜底 `SIGKILL`，并直接信号前台进程组）+ `src-electron/main.ts`（新增 `killPty()`，Unix 下 `process.kill(-pid, SIGHUP)` → 500ms 后 `SIGKILL`，Windows 仍走 `term.kill()` 整树）——`vim`/`top`/后台 `&` 任务不再残留。
 - **hostname 恒为 "unknown"**：`src-tauri/src/commands/mod.rs`——新增 `get_hostname()`：优先 `COMPUTERNAME`/`HOSTNAME` 环境变量，缺失时回退 `hostname` 命令、再回退 `uname -n`，Linux/macOS GUI 启动不再返回 "unknown"。
 - **Linux 窗口控制按钮**：`src/components/titlebar/TitleBar.vue`——新增 `isLinux` 分支，Linux 上与 Windows 一致显示最小化/最大化/关闭按钮，右键菜单不再被 `v-if="isWindows"` 隐藏；拖拽/最大化还原由 `3fb8606` 处理。
@@ -51,8 +43,9 @@
 - **触发器匹配换行归一化（#11）**：`src/stores/triggerStore.ts` `findMatch`——匹配前将 `\r\n` 与孤立 `\r` 归一化为 `\n`。后端注入横幅（`[Process exited]`、SSH/Telnet/Serial 错误）全平台用 `\r\n`，而 Unix PTY 原生输出只有 `\n`；归一化后锚定正则（如 `/\[Process exited\]$/`）在 Unix 上不再失配，Windows 也不受影响。
 - **Tab 标题平台错误（#12）**：`src/stores/terminal.ts`——① `shellKeyMap` 补充 Unix 绝对路径键（`/bin/bash`、`/usr/bin/bash`、`/bin/zsh`、`/usr/bin/zsh`、`/bin/sh`、`/usr/bin/sh`、`/usr/bin/fish`、`/usr/bin/pwsh`）；② 命令未命中映射表时取 basename（含 `.exe` 归一化）再查表，未知 shell 用 `te` 检测回退显示 basename，不再出现原始 key `shell./bin/bash`；③ 新建本地 Tab 不传命令时默认标题从 `shell.cmd`（「命令提示符」，仅 Windows 正确）改为平台中立 `menu.local_shell`（「本地终端」/「Local Shell」）。
 - **密钥命令 shell 引用问题（#13）**：`src-electron/main.ts`——`runCmd` 从 `execSync` 字符串拼接改为 `spawnSync(cmd, args)`（`shell: false`，数组参数原样传递）；`key_generate_rsa`/`key_generate_ed25519` 的 `-N ${JSON.stringify(passphrase)}` 改为独立的 `'-N', passphrase || ''` 参数，路径不再包 `JSON.stringify`；`key_import` 的公钥提取从 `execSync("ssh-keygen -y -f \"${destPriv}\"")` 改为 `runCmd('ssh-keygen', ['-y', '-f', destPriv])`。路径/口令含 `$`、反引号、空格、`\`、引号时不再被 shell 展开或破坏（`ai_execute` 的 `sh -c ${JSON.stringify(cmd)}` 属 #22 另计）。
+- **known_hosts 三处缺陷（#14）**：`src-tauri/src/known_hosts/mod.rs` + `src-electron/main.ts`——① 指纹切片 `&key[key.len()-8..]` 改 `key.len().saturating_sub(8)`，短 key 不再 debug 下溢 panic；② `add()` 写文件前 `create_dir_all` `~/.ssh`，新装/未用 ssh 的机器不再报错；③ `remove()` 改为按行过滤文件（仅删除匹配的 host 条目），注释、空行、hash host（`|1|...|`）、`@cert-authority`/`@revoked` 及原有顺序全部保留；host/key_type 比较改为 `eq_ignore_ascii_case`，可删掉 `GitHub.com` 这类大小写不同的条目；`reload()`/`loadKnownHosts()` 跳过 `@` 开头标记行，不再把 `@cert-authority` 当 host 条目展示。Electron 侧同步了「跳过 `@` 行」与「大小写不敏感删除」。
 
-## 复测指南（#5–#8、#10–#13）
+## 复测指南（#5–#8、#10–#14）
 
 以下为各修复的复现条件与验证方法（Linux/macOS 优先）。
 
@@ -64,7 +57,11 @@
 - **#11 触发器锚定正则**：复现条件——任何平台新建触发器，pattern 填 `^\[Process exited\]$`，response 填任意内容，然后关闭一个本地终端 Tab（或连接一个无法连通的 SSH/Serial 目标）。修复前 Unix 上匹配不到（注入横幅是 `\r\n` 结尾而 shell 原生输出是 `\n`）；修复后触发器触发（`\r\n` 与孤立 `\r` 已在匹配前归一化为 `\n`）。Windows 上行为不变。
 - **#12 Tab 标题平台错误**：复现条件——① Linux/macOS 上点击「新建本地终端」或首次启动自动建 Tab（不传命令），修复前标题为「命令提示符」，修复后为「本地终端」/「Local Shell」；② 会话管理中新建本地会话、命令填 `/bin/bash`（或任意绝对路径 shell）后打开，修复前标题显示原始 key `shell./bin/bash`，修复后显示「Bash」；③ 命令填不常见路径（如 `/usr/local/bin/tcsh`）时显示 basename `tcsh` 而非原始 key。
 - **#13 密钥命令 shell 引用**：复现条件——Electron 后端（`src-electron/` 下 `npm run dev`），密钥管理里生成/导入时口令或名称含特殊字符（如口令 `pa$s "wd\`、名称 `my key`）。修复前 `-N ${JSON.stringify(...)}` 与 `"${path}"` 字符串拼接在 Linux/macOS 被 sh 展开、Windows 反斜杠错乱 → 生成失败或口令错误；修复后 `spawnSync` 数组参数原样传递。验证：口令含 `$`/空格/反引号/双引号时能成功生成并用该口令解出私钥（`ssh-keygen -y -f <key>` 输入口令成功）；路径含空格时导入/生成不报错。
+- **#14 known_hosts 三处缺陷**：复现条件——① `~/.ssh/known_hosts` 里放一行 key 短于 8 字符的伪条目后打开「密钥管理→主机」，修复前 Rust debug 构建直接 panic（`key[len()-8..]` 越界），修复后正常列出；② 全新 Linux 机器（无 `~/.ssh`）在「主机」面板添加主机，修复前 `Failed to write known_hosts`（目录不存在），修复后自动创建 `~/.ssh`；③ 在 known_hosts 文件里放 hash host（`|1|...` 行）、`@cert-authority`、`#` 注释，用「主机」面板删除某个普通条目，修复前重写后注释/hash host/`@cert-authority`/顺序全部丢失，修复后仅目标条目被删其余原样保留；host 写 `GitHub.com` 时以 `github.com` 删除也能命中（大小写不敏感）。
 
 ## 修复建议优先级
 
-1. known_hosts（#14）三处 bug。
+1. detect_shells 存在性/可执行位检查（#15）。
+2. AI 危险命令启发式补 Windows（#17）。
+3. LANG 强制切换问题（#16）。
+4. IPv6 解析（#18）等低优先级项。

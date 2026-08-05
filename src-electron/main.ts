@@ -244,6 +244,7 @@ function loadKnownHosts(): KnownHostEntry[] {
     if (!trimmed || trimmed.startsWith('#')) continue
     const parts = trimmed.split(/\s+/)
     if (parts.length < 3) continue
+    if (parts[0].startsWith('@')) continue
     entries.push({
       host: parts[0],
       key_type: parts[1],
@@ -268,7 +269,10 @@ function removeKnownHost(host: string, keyType: string): void {
     const t = l.trim()
     if (!t || t.startsWith('#')) return true
     const parts = t.split(/\s+/)
-    return !(parts[0] === host && parts[1] === keyType)
+    if (parts.length < 3) return true
+    if (parts[0].startsWith('@')) return true
+    return !(parts[0].toLowerCase() === host.toLowerCase()
+      && parts[1].toLowerCase() === keyType.toLowerCase())
   })
   fs.writeFileSync(knownHostsPath, filtered.join('\n'))
 }
