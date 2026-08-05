@@ -31,7 +31,7 @@
 - **macOS Cmd+Shift+I 不触发 DevTools（#21）**：`src-electron/main.ts` `before-input-event`——原 `Ctrl+Shift+I` 判断只认 `input.control`（Windows/Linux 正确），macOS 上用户按 `Cmd+Shift+I`（`input.meta`，`control=false`）不生效。改为 `isCmdLike = input.control || (process.platform === 'darwin' && input.meta)`，macOS 上 `Cmd+Shift+I` 与 `Ctrl+Shift+I` 均可切换 DevTools，其他平台行为不变（`F12` 不受影响）。
 - **AI 命令 GBK 解码 + `sh -c` 引用（#22）**：`src-tauri/src/ai/mod.rs` + `src-electron/main.ts`——① Rust `execute_command` 新增 `decode_cmd_output`：Windows 上先试 UTF-8 严格解码，失败依次回退 `encoding_rs::GBK` → `WINDOWS_1252` → lossy（`cmd /C` 输出 GBK 时不再乱码；Unix 分支保持 lossy）；② Electron `ai_execute` 弃用 `execSync("sh -c ${JSON.stringify(cmd)}")` 字符串拼接（外层 shell 会对双引号内的 `$`/反引号先展开一次导致二次展开/命令替换语义偏差），改为 `spawnSync('sh', ['-c', command], { shell: false, windowsHide: true })` / `spawnSync('cmd', ['/C', command], ...)`——命令字符串原样传给 `sh -c`/`cmd /C`，`$`、反引号只被目标 shell 求值一次，且不再有外层 shell 注入面；超时/找不到命令通过 `res.error` 返回；输出同样走 UTF-8→GBK 回退解码（`TextDecoder('gbk')`）。
 
-## 复测指南（#5–#8、#10–#14）
+## 复测指南（#5–#22）
 
 以下为各修复的复现条件与验证方法（Linux/macOS 优先）。
 
