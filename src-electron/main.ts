@@ -972,7 +972,12 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('cli_args', () => process.argv.slice(2))
+  ipcMain.handle('cli_args', () => {
+    // Packaged builds put the executable path in argv[0]; dev mode has
+    // [electron, main.js, ...]. Also drop macOS Finder's -psn_0_xxx arg.
+    const args = process.argv.slice(app.isPackaged ? 1 : 2)
+    return args.filter((a) => !a.startsWith('-psn_0_'))
+  })
   ipcMain.handle('detect_shells', (): Array<{ name: string; command: string; icon: string }> => {
     const shells: Array<{ name: string; command: string; icon: string }> = []
     const has = (exe: string) => { try { runCmd('which', [exe]); return true } catch { return false } }
