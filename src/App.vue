@@ -542,6 +542,7 @@ body,
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg-base: #1e1e1e;
   --bg-mantle: #252526;
   --bg-surface0: #3c3c3c;
@@ -583,6 +584,7 @@ body,
 }
 
 [data-theme="light"] {
+  color-scheme: light;
   --bg-base: #ffffff;
   --bg-mantle: #f3f3f3;
   --bg-surface0: #d4d4d4;
