@@ -389,12 +389,15 @@ function registerIpcHandlers(): void {
       ? (process.env.ComSpec || 'cmd.exe')
       : (process.env.SHELL || (process.platform === 'darwin' ? 'zsh' : 'bash')))
 
+    const termEnv: NodeJS.ProcessEnv = { ...process.env, TERM: 'xterm-256color' }
+    if (!process.env.LANG && !process.env.LC_ALL && !process.env.LC_CTYPE) termEnv.LANG = 'C.UTF-8'
+
     const term = ptyModule.spawn(shellCmd, [], {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,
       cwd: process.env.HOME || process.env.USERPROFILE || '.',
-      env: { ...process.env, TERM: 'xterm-256color', LANG: 'en_US.UTF-8' },
+      env: termEnv,
     })
 
     ptySessions.set(id, term)

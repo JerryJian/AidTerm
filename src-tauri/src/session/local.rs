@@ -68,8 +68,8 @@ impl LocalSession {
         }
         cmd_builder.env("TERM", "xterm-256color");
         // Ensure UTF-8 locale so shells handle multi-byte characters correctly
-        if std::env::var("LANG").is_err() && std::env::var("LC_ALL").is_err() {
-            cmd_builder.env("LANG", "en_US.UTF-8");
+        if ["LANG", "LC_ALL", "LC_CTYPE"].iter().all(|k| std::env::var(k).is_err()) {
+            cmd_builder.env("LANG", "C.UTF-8");
         }
         let child = pair
             .slave
