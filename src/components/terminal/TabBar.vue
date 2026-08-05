@@ -276,7 +276,7 @@ defineExpose({ onKeydown })
           <div v-if="hasSavedSessions" class="menu-divider" />
           <div v-if="hasSavedSessions" class="saved-sessions-list">
             <template v-for="gs in groupedSavedSessions" :key="gs.group.id">
-              <div v-if="gs.sessions.length > 0" class="saved-group-label">{{ gs.group.name }}</div>
+              <div v-if="gs.sessions.length > 0" class="saved-group-label">{{ sessionStore.groupName(gs.group) }}</div>
               <button v-for="s in gs.sessions" :key="s.id" class="menu-item" @click="onSavedSessionClick(s)">
                 <span class="mi-icon">{{ s.session_type === 'ssh' ? '\uD83D\uDD12' : s.session_type === 'serial' ? '\uD83D\uDD04' : '\uD83D\uDD0C' }}</span>
                 <span class="saved-session-name">{{ s.name }}</span>

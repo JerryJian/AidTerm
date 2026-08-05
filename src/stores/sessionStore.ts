@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, toRaw } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@/api'
 import type { SavedSession, SavedSessionGroup, SessionStoreData } from '../types'
 
@@ -8,6 +9,7 @@ function genId(): string {
 }
 
 export const useSessionStore = defineStore('sessions', () => {
+  const { t, te } = useI18n()
   const groups = ref<SavedSessionGroup[]>([])
   const sessions = ref<SavedSession[]>([])
   const loaded = ref(false)
@@ -18,6 +20,14 @@ export const useSessionStore = defineStore('sessions', () => {
       groups.value = data.groups
       sessions.value = data.sessions
       loaded.value = true
+      let migrated = false
+      for (const g of groups.value) {
+        if (g.name === '本地终端' && !g.built_in) {
+          g.built_in = true
+          migrated = true
+        }
+      }
+      if (migrated) save()
     } catch (e) {
       console.error('Failed to load sessions:', e)
     }
@@ -58,8 +68,14 @@ export const useSessionStore = defineStore('sessions', () => {
     const g = groups.value.find(g => g.id === id)
     if (g) {
       g.name = name
+      g.built_in = false
       save()
     }
+  }
+
+  function groupName(group: SavedSessionGroup): string {
+    if (group.built_in && te('menu.local_shell')) return t('menu.local_shell')
+    return group.name
   }
 
   function addSession(
@@ -131,10 +147,10 @@ export const useSessionStore = defineStore('sessions', () => {
 
   function initBuiltInProfiles(shells: Array<{ name: string; command: string; icon: string }>) {
     if (sessions.value.some(s => s.session_type === 'local' && s.built_in)) return
-    const groupName = '本地终端'
-    let group = groups.value.find(g => g.name === groupName)
+    const groupName = te('menu.local_shell') ? t('menu.local_shell') : 'Local Shell'
+    let group = groups.value.find(g => g.built_in)
     if (!group) {
-      group = { id: genId(), name: groupName, expanded: true }
+      group = { id: genId(), name: groupName, expanded: true, built_in: true }
       groups.value.push(group)
     }
     for (const shell of shells) {
@@ -231,6 +247,7 @@ export const useSessionStore = defineStore('sessions', () => {
     getUngroupedSessions,
     ensureGroup,
     hasBuiltInLocalProfiles,
+    groupName,
     toggleSessionHidden,
     initBuiltInProfiles,
   }

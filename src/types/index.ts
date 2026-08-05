@@ -111,6 +111,7 @@ export interface SavedSessionGroup {
   id: string
   name: string
   expanded: boolean
+  built_in?: boolean
 }
 
 export interface UploadTask {

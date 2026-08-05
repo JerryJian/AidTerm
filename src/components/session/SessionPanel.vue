@@ -59,7 +59,7 @@ function onDeleteSession(e: MouseEvent, session: SavedSession) {
       <div v-for="group in store.groups" :key="group.id" class="group-section">
         <div class="group-header" @click="group.expanded = !group.expanded">
           <span class="group-arrow">{{ group.expanded ? '▼' : '▶' }}</span>
-          <span class="group-name">{{ group.name }}</span>
+          <span class="group-name">{{ store.groupName(group) }}</span>
           <button class="group-del" @click.stop="store.removeGroup(group.id)">✕</button>
         </div>
         <div v-if="group.expanded" class="group-sessions">
