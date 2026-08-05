@@ -93,6 +93,7 @@ function createWindow(): void {
   }
 
   mainWindow.once('ready-to-show', () => { mainWindow?.show() })
+  mainWindow.on('resize', () => emitToRenderer('window:resized', {}))
   mainWindow.on('closed', () => {
     cleanupAllSessions()
     mainWindow = null
@@ -286,6 +287,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle('window:setFullscreen', (_, args: WindowSetFullscreenArgs) => mainWindow?.setFullScreen(args.fullscreen))
   ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
   ipcMain.handle('window:minimize', () => mainWindow?.minimize())
+  ipcMain.handle('window:maximize', () => mainWindow?.maximize())
+  ipcMain.handle('window:unmaximize', () => mainWindow?.unmaximize())
   ipcMain.handle('window:toggleMaximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize()
     else mainWindow?.maximize()

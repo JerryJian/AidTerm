@@ -2,7 +2,7 @@
  * Electron implementation — bridges to the preload-exposed electronAPI.
  */
 
-import type { UnlistenFn, ListenEvent, WindowHandle } from './types'
+import type { UnlistenFn, ListenEvent, WindowHandle, ResizeDirection } from './types'
 
 export type { UnlistenFn }
 
@@ -18,8 +18,11 @@ interface ElectronAPI {
     setFullscreen(fullscreen: boolean): Promise<void>
     isMaximized(): Promise<boolean>
     minimize(): Promise<void>
+    maximize(): Promise<void>
+    unmaximize(): Promise<void>
     toggleMaximize(): Promise<void>
     startDragging(): Promise<void>
+    startResizeDragging(direction: ResizeDirection): Promise<void>
     show(): Promise<void>
     hide(): Promise<void>
     close(): Promise<void>
@@ -72,9 +75,13 @@ export function getCurrentWindow(): WindowHandle {
     isFullscreen: () => api.window.isFullscreen(),
     setFullscreen: (f) => api.window.setFullscreen(f),
     isMaximized: () => api.window.isMaximized(),
+    onResized: (cb) => Promise.resolve(api.on('window:resized', () => cb())),
     minimize: () => api.window.minimize(),
+    maximize: () => api.window.maximize(),
+    unmaximize: () => api.window.unmaximize(),
     toggleMaximize: () => api.window.toggleMaximize(),
     startDragging: () => api.window.startDragging(),
+    startResizeDragging: () => Promise.resolve(),
     show: () => api.window.show(),
     hide: () => api.window.hide(),
     close: () => api.window.close(),

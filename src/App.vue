@@ -9,6 +9,7 @@ import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, Sav
 import { invoke, listen, getCurrentWindow, toFileUrl, saveDialog as save } from '@/api'
 import TabBar from './components/terminal/TabBar.vue'
 import TitleBar from './components/titlebar/TitleBar.vue'
+import WindowResizeHandles from './components/titlebar/WindowResizeHandles.vue'
 import TerminalPane from './components/terminal/TerminalPane.vue'
 import LeftSidebar from './components/sidebar/LeftSidebar.vue'
 import RightSidebar from './components/tools/RightSidebar.vue'
@@ -492,6 +493,7 @@ onUnmounted(() => {
     </div>
     <StatusBar />
   </div>
+  <WindowResizeHandles />
 
   <SshDialog
     v-if="ui.sshDialog"

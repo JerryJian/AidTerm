@@ -13,30 +13,57 @@ const emit = defineEmits<{
 
 const win = getCurrentWindow()
 const isMaximized = ref(false)
+let trackedMaximized = false
 const isWindows = ref(false)
 const isMacOS = ref(false)
 const isLinux = ref(false)
-let lastClickTime = 0
 
 const ctxMenu = ref<{ x: number; y: number } | null>(null)
+let lastToggle = 0
+let syncTimer: ReturnType<typeof setTimeout> | null = null
 
 onMounted(async () => {
   try {
-    isMaximized.value = await win.isMaximized()
+    const maximized = await win.isMaximized()
+    isMaximized.value = maximized
     const platform = await invoke<string>('get_platform')
     isWindows.value = platform === 'windows'
     isMacOS.value = platform === 'macos'
     isLinux.value = platform === 'linux'
+    if (isLinux.value) trackedMaximized = maximized
+  } catch { /* ignore */ }
+  try {
+    await win.onResized(() => syncMaximized())
   } catch { /* ignore */ }
 })
+
+async function syncMaximized() {
+  if (Date.now() - lastToggle < 500) return
+  if (syncTimer) clearTimeout(syncTimer)
+  syncTimer = setTimeout(async () => {
+    try {
+      const maximized = await win.isMaximized()
+      if (isLinux.value) trackedMaximized = maximized
+      isMaximized.value = maximized
+    } catch { /* ignore */ }
+  }, 50)
+}
 
 async function onMinimize() {
   await win.minimize()
 }
 
-async function onMaximize() {
-  await win.toggleMaximize()
-  isMaximized.value = await win.isMaximized()
+async function toggleMaximize() {
+  if (isLinux.value) {
+    lastToggle = Date.now()
+    if (trackedMaximized) await win.unmaximize()
+    else await win.maximize()
+    trackedMaximized = !trackedMaximized
+    isMaximized.value = trackedMaximized
+  } else {
+    await win.toggleMaximize()
+    isMaximized.value = await win.isMaximized()
+  }
 }
 
 async function onClose() {
@@ -46,14 +73,14 @@ async function onClose() {
 function onPointerDown(e: PointerEvent) {
   if (e.button !== 0) return
   if ((e.target as HTMLElement).closest('.titlebar-actions, .traffic-lights')) return
+  if (!isLinux.value) return
 
-  const now = Date.now()
-  if (now - lastClickTime < 300) {
-    lastClickTime = 0
-    onMaximize()
+  e.preventDefault()
+
+  if (e.detail >= 2) {
+    toggleMaximize()
     return
   }
-  lastClickTime = now
   win.startDragging()
 }
 
@@ -70,7 +97,7 @@ function closeCtxMenu() {
 async function onRestore() {
   ctxMenu.value = null
   try {
-    if (isMaximized.value) await win.toggleMaximize()
+    if (isMaximized.value) await toggleMaximize()
   } catch { /* ignore */ }
 }
 
@@ -97,7 +124,7 @@ async function onInspect() {
           <line x1="2" y1="6" x2="10" y2="6" stroke="#995700" stroke-width="1.2" />
         </svg>
       </button>
-      <button class="tl-btn tl-maximize" @click="onMaximize" :title="isMaximized ? t('titlebar.restore') : t('titlebar.maximize')">
+      <button class="tl-btn tl-maximize" @click="toggleMaximize" :title="isMaximized ? t('titlebar.restore') : t('titlebar.maximize')">
         <svg viewBox="0 0 12 12" width="12" height="12" class="tl-icon">
           <path v-if="!isMaximized" d="M3 3h6v6H3z" fill="none" stroke="#006500" stroke-width="1.2" />
           <template v-else>
@@ -144,7 +171,7 @@ async function onInspect() {
             <rect x="2" y="5.5" width="8" height="1" fill="currentColor" />
           </svg>
         </button>
-        <button class="tb-btn maximize" @click="onMaximize" :title="isMaximized ? t('titlebar.restore') : t('titlebar.maximize')">
+        <button class="tb-btn maximize" @click="toggleMaximize" :title="isMaximized ? t('titlebar.restore') : t('titlebar.maximize')">
           <svg v-if="!isMaximized" viewBox="0 0 12 12" width="12" height="12">
             <rect x="2" y="2" width="8" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1" />
           </svg>
@@ -168,7 +195,7 @@ async function onInspect() {
       <template v-if="isWindows || isLinux">
         <button class="ctx-item" :disabled="!isMaximized" @click="onRestore()">{{ t('titlebar.restore') }}</button>
         <button class="ctx-item" @click="onMinimize(); ctxMenu = null">{{ t('titlebar.minimize') }}</button>
-        <button class="ctx-item" @click="onMaximize(); ctxMenu = null">{{ isMaximized ? t('titlebar.restore') : t('titlebar.maximize') }}</button>
+        <button class="ctx-item" @click="toggleMaximize(); ctxMenu = null">{{ isMaximized ? t('titlebar.restore') : t('titlebar.maximize') }}</button>
         <div class="ctx-divider" />
         <button class="ctx-item" @click="onClose(); ctxMenu = null">{{ t('titlebar.close') }}</button>
         <div class="ctx-divider" />

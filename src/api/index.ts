@@ -72,9 +72,21 @@ export function getCurrentWindow() {
       const mod = await getMod()
       return mod.getCurrentWindow().isMaximized()
     },
+    async onResized(cb: () => void) {
+      const mod = await getMod()
+      return mod.getCurrentWindow().onResized(cb)
+    },
     async minimize() {
       const mod = await getMod()
       return mod.getCurrentWindow().minimize()
+    },
+    async maximize() {
+      const mod = await getMod()
+      return mod.getCurrentWindow().maximize()
+    },
+    async unmaximize() {
+      const mod = await getMod()
+      return mod.getCurrentWindow().unmaximize()
     },
     async toggleMaximize() {
       const mod = await getMod()
@@ -83,6 +95,10 @@ export function getCurrentWindow() {
     async startDragging() {
       const mod = await getMod()
       return mod.getCurrentWindow().startDragging()
+    },
+    async startResizeDragging(direction: import('./types').ResizeDirection) {
+      const mod = await getMod()
+      return mod.getCurrentWindow().startResizeDragging(direction)
     },
     async show() {
       const mod = await getMod()
