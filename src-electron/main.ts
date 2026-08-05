@@ -957,17 +957,21 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('cli_args', () => process.argv.slice(2))
-  ipcMain.handle('detect_shells', (): string[] => {
+  ipcMain.handle('detect_shells', (): Array<{ name: string; command: string; icon: string }> => {
+    const shells: Array<{ name: string; command: string; icon: string }> = []
+    const has = (exe: string) => { try { runCmd('which', [exe]); return true } catch { return false } }
     if (process.platform === 'win32') {
-      const shells = ['cmd.exe']
-      if (fs.existsSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')) shells.push('powershell.exe')
-      try { runCmd('where', ['pwsh.exe']); shells.push('pwsh.exe') } catch {}
-      try { runCmd('where', ['wsl.exe']); shells.push('wsl.exe') } catch {}
+      shells.push({ name: '命令提示符', command: 'cmd.exe', icon: '\u{1F4DF}' })
+      if (fs.existsSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')) shells.push({ name: 'Windows PowerShell', command: 'powershell.exe', icon: '\u{1F4DF}' })
+      try { runCmd('where', ['pwsh.exe']); shells.push({ name: 'PowerShell', command: 'pwsh.exe', icon: '\u{1F4DF}' }) } catch {}
+      try { runCmd('where', ['wsl.exe']); shells.push({ name: 'WSL', command: 'wsl.exe', icon: '\u{1F427}' }) } catch {}
       return shells
     }
-    const shells = process.platform === 'darwin' ? ['zsh', 'bash', 'sh'] : ['bash', 'sh']
-    try { runCmd('which', ['zsh']); if (!shells.includes('zsh')) shells.push('zsh') } catch {}
-    try { runCmd('which', ['fish']); shells.push('fish') } catch {}
+    if (process.platform === 'darwin') shells.push({ name: 'Zsh', command: 'zsh', icon: '\u{1F334}' })
+    shells.push({ name: 'Bash', command: 'bash', icon: '\u{1F40D}' })
+    shells.push({ name: 'Sh', command: 'sh', icon: '\u{1F40D}' })
+    if (process.platform !== 'darwin' && has('zsh')) shells.push({ name: 'Zsh', command: 'zsh', icon: '\u{1F334}' })
+    if (has('fish')) shells.push({ name: 'Fish', command: 'fish', icon: '\u{1F41F}' })
     return shells
   })
 

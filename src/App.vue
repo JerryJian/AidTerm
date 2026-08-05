@@ -370,7 +370,11 @@ async function initBuiltInLocalProfiles() {
   if (!sessionStore.loaded) await sessionStore.load()
   if (sessionStore.hasBuiltInLocalProfiles()) return
   try {
-    const shells = await invoke<Array<{ name: string; command: string; icon: string }>>('detect_shells')
+    const result = await invoke<Array<{ name: string; command: string; icon: string } | string>>('detect_shells')
+    const shells = (result ?? []).map((shell) => {
+      if (typeof shell === 'string') return { name: shell, command: shell, icon: '' }
+      return { name: shell.name, command: shell.command, icon: shell.icon }
+    })
     sessionStore.initBuiltInProfiles(shells)
   } catch {
     // ignore

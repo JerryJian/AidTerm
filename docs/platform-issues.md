@@ -17,7 +17,6 @@
 | 6 | **打包后 CLI 参数错位** | `src-electron/main.ts:943` `process.argv.slice(2)` | 打包版 argv 第一个元素是应用可执行文件路径，`slice(2)` 会把首参吞掉、其余参数整体前移。应 `app.isPackaged ? process.argv.slice(1) : process.argv.slice(2)`（macOS 还要过滤 `-psn_0_xxx`）。 |
 | 7 | **Local 隧道依赖远程 `nc`** | `src-electron/main.ts:724` | Local 端口转发在远程服务器执行 `nc host port`。Linux 精简发行版/容器未装 netcat、macOS 新版 `nc` 被移除（或只在 Xcode 中）→ Local 隧道失效且无降级。 |
 | 8 | **密钥生成/导入依赖外部 `ssh-keygen`** | `src-tauri/src/keychain/mod.rs:52-61` | Windows 10+ 自带 OpenSSH client；Linux 最小安装（无 `openssh-client` 包）、旧 macOS 无 `ssh-keygen` → 密钥生成/导入直接报错。建议改用 `russh::keys` 自实现。 |
-| 9 | **detect_shells 返回形状不一致** | `src/App.vue:360-369` vs `src-electron/main.ts:944` | Tauri 返回对象数组（`{name,command,icon}`），Electron 返回 `string[]` → Electron 模式下内置本地会话 profile 字段全 undefined。前端需兼容两种形状。 |
 
 ---
 
@@ -52,6 +51,7 @@
 
 - **背景图加载**：`src/App.vue` + `src/api/{index,tauri,electron}.ts` + `src-electron/main.ts`（`file_to_data_url`）+ `src-tauri/tauri.conf.json`（`assetProtocol`）——弃用裸 `file:///`，Tauri 用 `convertFileSrc`、Electron 用 data URL。
 - **终端透出背景**：`src/components/terminal/TerminalWrapper.vue`——背景图开启时终端容器与 xterm 主题背景改为透明。
+- **detect_shells 返回形状统一**：`src-electron/main.ts`（`detect_shells` 改为与 Tauri 一致的 `{name,command,icon}` 对象数组）+ `src/App.vue`（`initBuiltInLocalProfiles` 归一化两种形状）——Electron 模式下内置本地会话 profile 字段不再 undefined。
 
 ## 修复建议优先级
 
