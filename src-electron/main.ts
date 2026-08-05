@@ -48,6 +48,7 @@ const ptySessions = new Map<string, PtySession>()
 const sshSessions = new Map<string, SshSession>()
 const serialSessions = new Map<string, SerialSession>()
 const sftpConnections = new Map<string, SftpClient>()
+const sftpTransfers = new Map<string, { abort: () => void }>()
 const tunnelMap = new Map<string, TunnelState>()
 const proxyConfigs: ProxyConfig[] = []
 const aiHistories = new Map<string, AiMessage[]>()
@@ -664,46 +665,112 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('sftp_download', async (_, args: SftpTransferArgs) => {
-    const { connId, remote, local } = args
+    const { connId, transferId, remote, local } = args
     const client = sftpConnections.get(connId)
     if (!client) throw new Error('SFTP connection not found')
 
     const stat = await client.stat(remote)
     const totalSize = stat.size || 0
-    let transferred = 0
+    let cancelled = false
 
-    await client.fastGet(remote, local, {
-      step: (totalTransferred: number) => {
-        transferred = totalTransferred
-        emitToRenderer('sftp-progress', {
-          remote, local, type: 'download',
-          bytes_transferred: transferred, total_size: totalSize,
-        })
+    const rdr = client.createReadStream(remote)
+    const wtr = fs.createWriteStream(local)
+    const handle = {
+      abort: () => {
+        cancelled = true
+        rdr.destroy()
+        wtr.destroy()
       },
-    })
+    }
+    sftpTransfers.set(transferId, handle)
+
+    try {
+      let transferred = 0
+      await new Promise<void>((resolve, reject) => {
+        const settle = () => {
+          if (cancelled) reject(new Error('Cancelled'))
+        }
+        rdr.on('error', (err: Error) => reject(err))
+        wtr.on('error', (err: Error) => reject(err))
+        rdr.on('close', settle)
+        wtr.on('close', settle)
+        rdr.on('data', (chunk: Buffer) => {
+          if (cancelled) {
+            rdr.destroy()
+            return
+          }
+          transferred += chunk.length
+          emitToRenderer('sftp-progress', {
+            remote, local, type: 'download',
+            bytes_transferred: transferred, total_size: totalSize,
+          })
+          if (!wtr.write(chunk)) rdr.pause()
+        })
+        wtr.on('drain', () => rdr.resume())
+        rdr.on('end', () => wtr.end(() => resolve()))
+      })
+      if (cancelled) throw new Error('Cancelled')
+    } finally {
+      sftpTransfers.delete(transferId)
+    }
   })
 
   ipcMain.handle('sftp_upload', async (_, args: SftpTransferArgs) => {
-    const { connId, remote, local } = args
+    const { connId, transferId, remote, local } = args
     const client = sftpConnections.get(connId)
     if (!client) throw new Error('SFTP connection not found')
 
-    const stat = fs.statSync(local)
-    const totalSize = stat.size
-    let transferred = 0
+    const totalSize = fs.statSync(local).size
+    let cancelled = false
 
-    await client.fastPut(local, remote, {
-      step: (totalTransferred: number) => {
-        transferred = totalTransferred
-        emitToRenderer('sftp-progress', {
-          remote, local, type: 'upload',
-          bytes_transferred: transferred, total_size: totalSize,
-        })
+    const rdr = fs.createReadStream(local)
+    const wtr = client.createWriteStream(remote)
+    const handle = {
+      abort: () => {
+        cancelled = true
+        rdr.destroy()
+        wtr.destroy()
       },
-    })
+    }
+    sftpTransfers.set(transferId, handle)
+
+    try {
+      let transferred = 0
+      await new Promise<void>((resolve, reject) => {
+        const settle = () => {
+          if (cancelled) reject(new Error('Cancelled'))
+        }
+        rdr.on('error', (err: Error) => reject(err))
+        wtr.on('error', (err: Error) => reject(err))
+        rdr.on('close', settle)
+        wtr.on('close', settle)
+        rdr.on('data', (chunk: Buffer) => {
+          if (cancelled) {
+            rdr.destroy()
+            return
+          }
+          transferred += chunk.length
+          emitToRenderer('sftp-progress', {
+            remote, local, type: 'upload',
+            bytes_transferred: transferred, total_size: totalSize,
+          })
+          if (!wtr.write(chunk)) rdr.pause()
+        })
+        wtr.on('drain', () => rdr.resume())
+        rdr.on('end', () => wtr.end(() => resolve()))
+      })
+      if (cancelled) throw new Error('Cancelled')
+    } finally {
+      sftpTransfers.delete(transferId)
+    }
   })
 
-  ipcMain.handle('sftp_cancel_transfer', async () => {})
+  ipcMain.handle('sftp_cancel_transfer', async (_, args: SftpTransferArgs) => {
+    const { transferId } = args
+    const handle = sftpTransfers.get(transferId)
+    if (!handle) throw new Error('Transfer not found or already completed')
+    handle.abort()
+  })
   ipcMain.handle('sftp_mkdir', async (_, args: SftpMkdirArgs) => {
     const { connId, path: dirPath } = args
     const client = sftpConnections.get(connId)

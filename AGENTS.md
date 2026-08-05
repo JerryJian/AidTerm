@@ -3,6 +3,8 @@
 ## 项目概述
 使用 **Tauri 2.x** + **Vue 3 (Composition API + TypeScript)** + **Rust** 后端构建跨平台终端模拟器，另带 **Electron 双后端**（`src-electron/`，基于 node-pty / ssh2 / serialport，前端 `src/api/index.ts` 自动检测并统一调用）。
 
+> **双后端差异**：Electron 端端口转发仅 Local、代理为裸 TCP 直连（无 HTTP CONNECT / SOCKS5 握手）、Zmodem 与 Deep Link 为占位、`write_text_file` 缺失（终端文本导出会失败）、本地 shell 忽略 `workingDir`；Tauri 端以上均完整（Remote/Dynamic 转发、HTTP/SOCKS5/JumpHost、Deep Link、zmodem 检测）。
+
 当前版本：0.2.0。下方复选框与 Phase 表反映**代码实际状态**（2026-08 核对）。
 
 ---
@@ -16,12 +18,12 @@
 - [x] **本地 Shell** — Windows (`cmd`, `powershell`)、Linux/macOS (`bash`, `zsh`)，自动探测
 - [x] **SFTP** — 远程文件浏览、上传、下载、删除、重命名
 - [ ] **SCP** — 快速文件传输
-- [ ] **Zmodem** — 后端接收检测 + 保存已实现（`zmodem.rs`），前端交互/发送待做
+- [ ] **Zmodem** — 后端接收检测已接线（SSH 流中发 `zmodem-start/end`），保存/接收循环为死代码待接线，前端交互/发送待做
 
 ### 2. 终端核心
 - [x] **Terminal Emulation** — xterm.js，xterm-256color
 - [x] **多 Tab 管理** — 新建、关闭、重命名、右键菜单（拖拽排序待做）
-- [x] **分屏 (Split)** — 水平/垂直分屏，splitpanes 任意调整大小
+- [x] **分屏 (Split)** — 水平/垂直分屏（自定义 flex 树，固定 50/50，拖拽调大小待做）
 - [x] **搜索** — xterm-addon-search 正向/反向搜索，高亮匹配
 - [x] **选中即复制 / 右键粘贴** — 右键菜单 + 配置
 - [x] **无限回滚** — 大缓存滚动（1000–1000000 行可配置）
@@ -36,10 +38,10 @@
 ### 4. UI / UX
 - [x] **多语言 (i18n)** — 中文/英文（vue-i18n）
 - [ ] **快捷键自定义** — 仅内置 F11 全屏 / F5 / Ctrl+Shift+I，暂不可配置
-- [x] **锁屏** — 本地密码（crypto 加解密）锁屏界面
+- [x] **锁屏** — 本地密码锁屏界面（明文存 localStorage，crypto 加密待做）
 - [x] **全屏模式** — F11 / 设置开关
 - [x] **透明度调节** — 设置面板滑块（亚克力/毛玻璃待做）
-- [ ] **通知** — 依赖已装（plugin-notification）但未接入
+- [ ] **通知** — 未接入（Tauri 未装 plugin-notification，Electron 无实现）
 
 ### 5. 安全与密钥
 - [x] **密钥管理** — 生成 RSA/ED25519 密钥对，导入/删除（KeyManagerPanel）
@@ -72,8 +74,8 @@
 ### 9. 特色体验
 - [ ] **全局快捷键（Guake 模式）** — i18n 有占位，功能未实现
 - [x] **终端背景图** — 设置面板可选背景图片
-- [x] **Deep Link** — tauri-plugin-deep-link（Tauri 模式）
-- [x] **命令行传参** — `get_cli_args`（Tauri）/ argv（Electron）
+- [x] **Deep Link** — tauri-plugin-deep-link（仅 Tauri；Electron 未实现）
+- [x] **命令行传参** — Electron argv ✅；Tauri `get_cli_args` 已实现但前端未接线（前端调 `cli_args`）
 - [ ] **Trzsz 文件传输** — tmux 兼容的 Zmodem 替代方案
 - [ ] **MCP Widget** — 供 AI 助手和外部工具集成的组件
 
@@ -100,7 +102,7 @@
 | 1.2 | 前后端 IPC 通道 | `invoke` + `event` 双向流 ✅ |
 | 1.3 | 本地 Shell 启动 | Rust portable-pty / Electron node-pty ✅ |
 | 1.4 | Tab 容器 | 多 Tab 管理 + 右键菜单 ✅（拖拽排序待做） |
-| 1.5 | 分屏 (Split) | 水平/垂直，splitpanes 可调大小 ✅ |
+| 1.5 | 分屏 (Split) | 水平/垂直，自定义 flex 树 ✅（拖拽调大小待做） |
 | 1.6 | 终端搜索 | xterm-addon-search ✅ |
 | 1.7 | 无限回滚 | scrollback 可配置（1000–1000000 行）✅ |
 | 1.8 | 主题与配色 | 暗/亮 + 透明度 + 背景图 ✅（自定义配色/字体待做） |
@@ -127,7 +129,7 @@
 |---|------|------|
 | 4.1 | SFTP 面板 | russh-sftp + SftpPanel ✅ |
 | 4.2 | 拖拽上传/下载 | `tauri://drag-drop` 拖入上传 ✅ |
-| 4.3 | Zmodem 集成 | 后端接收检测 + 保存部分实现，前端待做 |
+| 4.3 | Zmodem 集成 | 后端接收检测已接线，保存/接收循环为死代码待接线，前端待做 |
 
 ### Phase 5: 高级功能
 | # | 任务 | 说明 |
@@ -144,12 +146,12 @@
 |---|------|------|
 | 6.1 | i18n 多语言 | 中文 + 英文 ✅ |
 | 6.2 | 全局快捷键（Guake 模式） | 待做（含终端内快捷键自定义） |
-| 6.3 | 锁屏 | LockScreen + crypto 密码 ✅ |
+| 6.3 | 锁屏 | LockScreen（密码明文存 localStorage，加密待做）✅ |
 | 6.4 | 窗口透明度 + 背景图 | 设置面板滑块 + 背景图选择 ✅ |
 | 6.5 | 全屏模式 | F11 / 设置 ✅ |
 | 6.6 | 系统托盘 | 待做 |
-| 6.7 | Deep Link 协议 | tauri-plugin-deep-link ✅ |
-| 6.8 | 命令行传参 | get_cli_args / electron argv ✅ |
+| 6.7 | Deep Link 协议 | tauri-plugin-deep-link ✅（仅 Tauri；Electron 未实现） |
+| 6.8 | 命令行传参 | Electron argv ✅；Tauri `get_cli_args` 已实现但前端未接线 |
 
 ### Phase 7: AI 智能助手
 | # | 任务 | 说明 |
@@ -187,8 +189,8 @@
 |---|------|------|
 | 11.1 | 单元测试 | Rust `#[cfg(test)]` + Vue `vitest` 待做 |
 | 11.2 | E2E 测试 | Tauri `webdriver` / Playwright 待做 |
-| 11.3 | CI/CD | `.github/workflows/release.yml` ✅ |
-| 11.4 | 安装包 | Tauri build（NSIS/DMG/AppImage）经 release.yml 产出 ✅ |
+| 11.3 | CI/CD | `.github/workflows/release.yml` ✅（GitHub Actions 矩阵：win-x64 / linux x64+arm64 / mac arm64，Tauri + Electron 双后端三平台构建） |
+| 11.4 | 安装包 | 经 release.yml 产出：Tauri（win exe/msi、linux deb/AppImage、mac dmg）+ Electron（win exe、linux deb/AppImage、mac dmg）✅ |
 
 ---
 
@@ -266,7 +268,7 @@ AidTerm/
 ## 待办优先级建议（按当前缺口）
 
 1. 会话导出/导入（3.2）+ 最近使用列表（3.3）
-2. 通知接入（4.x 插件已装，未使用）
+2. 通知接入（需先装 tauri-plugin-notification）
 3. Tab 拖拽排序（1.4）、自定义主题配色/字体（1.8）
 4. Guake 模式 / 全局快捷键（6.2）、系统托盘（6.6）
 5. SSH 自动重连（2.5）、指纹验证弹窗（8.4）
