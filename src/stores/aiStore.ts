@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed, toRaw } from 'vue'
 import { invoke } from '@/api'
 
+const IS_WINDOWS = /windows/i.test(navigator.userAgent) || /^win/i.test(navigator.platform)
+
 export interface AiConfig {
   provider: string
   api_key: string
@@ -172,6 +174,19 @@ export const useAiStore = defineStore('ai', () => {
       'export ', 'alias ', 'source ', '. ',
     ]
 
+    if (IS_WINDOWS) {
+      commandPrefixes.push(
+        'dir ', 'type ', 'copy ', 'xcopy ', 'robocopy ', 'move ', 'ren ',
+        'del ', 'erase ', 'rd ', 'rmdir ', 'tree ', 'where ',
+        'findstr ', 'sort ', 'tasklist ', 'taskkill ', 'format ', 'cls ',
+        'ver ', 'systeminfo ', 'reg ', 'sc ', 'net ', 'ipconfig ',
+        'chcp ', 'set ', 'color ', 'title ', 'prompt ', 'path ',
+        'assoc ', 'ftype ', 'cipher ', 'attrib ', 'takeown ', 'icacls ',
+        'cacls ', 'diskpart ', 'wmic ', 'tracert ', 'route ', 'nslookup ',
+        'cmd ', 'powershell ', 'pwsh ',
+      )
+    }
+
     if (commandPrefixes.some(p => trimmed.startsWith(p))) {
       return false
     }
@@ -187,6 +202,17 @@ export const useAiStore = defineStore('ai', () => {
       'ping', 'traceroute', 'nslookup', 'dig', 'nmap',
       'vim', 'nano', 'emacs', 'code', 'code-insiders',
     ])
+
+    if (IS_WINDOWS) {
+      ;[
+        'dir', 'type', 'copy', 'move', 'del', 'erase', 'rd', 'rmdir',
+        'cls', 'tree', 'ver', 'where', 'find', 'findstr', 'sort',
+        'tasklist', 'taskkill', 'ipconfig', 'systeminfo', 'chcp',
+        'color', 'title', 'prompt', 'path', 'set', 'attrib', 'cipher',
+        'reg', 'sc', 'net', 'tracert', 'route', 'takeown', 'icacls',
+        'cacls', 'diskpart', 'wmic', 'cmd', 'powershell', 'pwsh',
+      ].forEach(c => commonCommands.add(c))
+    }
 
     if (commonCommands.has(trimmed) || commonCommands.has(trimmed.split(/\s+/)[0])) {
       return false

@@ -11,6 +11,8 @@ const PAGE_SIZE = 10000
 const MAX_PAGES_PER_OUTPUT = 200
 const MAX_OUTPUTS = 10
 
+const IS_WINDOWS = /windows/i.test(navigator.userAgent) || /^win/i.test(navigator.platform)
+
 interface CommandRecord {
   command: string
   result: string
@@ -210,8 +212,20 @@ const DANGEROUS_CMD_PATTERNS = [
   /\bmount\b/, /\bumount\b/,
 ]
 
+const WINDOWS_DANGEROUS_CMD_PATTERNS = [
+  /\bdel\b/, /\berase\b/, /\brd\b/, /\bdeltree\b/, /\bformat\b/,
+  /\btaskkill\b/, /\bdiskpart\b/, /\bbcdedit\b/, /\bcipher\s+\/w/,
+  /\bcacls\b/, /\bicacls\b/, /\btakeown\b/, /\battrib\b/, /\bfsutil\b/,
+  /\breg\s+delete\b/, /\bsc\s+(delete|stop)\b/,
+  /\bnet\s+(user|localgroup|share|stop|start|use)\b/,
+  /\bwmic\b.*(delete|terminate|format|remove)/i,
+]
+
 function isDangerousByHeuristic(cmd: string): boolean {
   const trimmed = cmd.trim()
+  if (IS_WINDOWS && WINDOWS_DANGEROUS_CMD_PATTERNS.some(p => p.test(trimmed))) {
+    return true
+  }
   return DANGEROUS_CMD_PATTERNS.some(p => p.test(trimmed))
 }
 

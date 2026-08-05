@@ -5,14 +5,6 @@
 
 ---
 
-## 中优先级
-
-| # | 问题 | 位置 | 说明 |
-|---|------|------|------|
-| 17 | **AI 危险命令启发式仅 Unix** | `src/hooks/useAiConversation.ts:195-211`；`src/stores/aiStore.ts:164-173` | `rm/mv/chmod/apt/brew/systemctl` 等有，Windows 的 `del/rd/taskkill/format/ipconfig` 无。Linux/macOS 上无碍；Windows 上 `del /s /q` 会被判定安全而自动执行。 |
-
----
-
 ## 低优先级
 
 | # | 问题 | 位置 | 说明 |
@@ -44,6 +36,7 @@
 - **known_hosts 三处缺陷（#14）**：`src-tauri/src/known_hosts/mod.rs` + `src-electron/main.ts`——① 指纹切片 `&key[key.len()-8..]` 改 `key.len().saturating_sub(8)`，短 key 不再 debug 下溢 panic；② `add()` 写文件前 `create_dir_all` `~/.ssh`，新装/未用 ssh 的机器不再报错；③ `remove()` 改为按行过滤文件（仅删除匹配的 host 条目），注释、空行、hash host（`|1|...|`）、`@cert-authority`/`@revoked` 及原有顺序全部保留；host/key_type 比较改为 `eq_ignore_ascii_case`，可删掉 `GitHub.com` 这类大小写不同的条目；`reload()`/`loadKnownHosts()` 跳过 `@` 开头标记行，不再把 `@cert-authority` 当 host 条目展示。Electron 侧同步了「跳过 `@` 行」与「大小写不敏感删除」。
 - **detect_shells 不做存在性/可执行位检查（#15）**：`src-tauri/src/commands/mod.rs` + `src-electron/main.ts`——① `exe_in_path` Unix 分支增加 `mode & 0o111` 可执行位检查（普通文件 + 任一执行位），非执行文件不再被当成可用 shell；② Linux/macOS 分支的 `zsh`/`bash`/`sh`/`fish` 全部改为先过 `exe_in_path` 再推送（仅 mac 上 zsh 优先、其他平台 zsh 在 bash/sh 之后，顺序不变），精简 Linux/macOS 无对应 shell 时不再列出；③ Electron `has()` 弃用外部 `which`/`where` 命令，改为直接遍历 `PATH` + `fs.accessSync(full, fs.constants.X_OK)`（Unix 校验可执行位，Windows 因 `X_OK=0` 等效存在性检查），同时去掉对 `which` 的外部依赖。
 - **强制 `LANG=en_US.UTF-8`（#16）**：`src-tauri/src/session/local.rs` + `src-electron/main.ts` `spawn_terminal`——① 兜底值从 `en_US.UTF-8` 改为 `C.UTF-8`（glibc ≥ 2.35 / Debian / Ubuntu / Alpine musl 均自带，无需 `locale-gen`；精简 Linux 不再因未生成 `en_US.UTF-8` 而告警或退化为 C）；② 触发条件从「仅 LANG/LC_ALL 缺失」扩展为「LANG/LC_ALL/LC_CTYPE 全部缺失」，用户显式设了任一 locale 变量即尊重用户选择，不再把 shell 强制切成英文（macOS GUI 启动若用户已在环境里设过 `zh_CN.UTF-8` 等，不再被覆盖）；③ Electron 侧原为无条件 `LANG: 'en_US.UTF-8'` 覆盖 `process.env`，现改为缺失时才补 `C.UTF-8`，用户已有的 `LANG`/`LC_ALL`/`LC_CTYPE` 不再被清掉。
+- **AI 危险命令启发式仅 Unix（#17）**：`src/hooks/useAiConversation.ts` + `src/stores/aiStore.ts`——① `useAiConversation` 新增 `WINDOWS_DANGEROUS_CMD_PATTERNS`（`del`/`erase`/`rd`/`deltree`/`format`/`taskkill`/`diskpart`/`bcdedit`/`cipher /w`/`cacls`/`icacls`/`takeown`/`attrib`/`fsutil`/`reg delete`/`sc delete|stop`/`net user|localgroup|share|stop|start|use`/`wmic`），`isDangerousByHeuristic` 在 Windows 上先查该表——AI 建议的 `del /s /q`、`format c:` 不再被当作安全命令自动执行，必须用户确认；② `aiStore` 的 `isNaturalLanguage`（auto 模式）在 Windows 上补充 40+ 命令前缀（`dir/type/copy/xcopy/robocopy/move/ren/del/erase/rd/tree/where/findstr/tasklist/taskkill/format/ver/systeminfo/reg/sc/net/ipconfig/chcp/set/attrib/...` 及 `cmd`/`powershell`/`pwsh`）与命令集合——直接输入这些命令不会误触发 AI 自动回复；③ 两处均用 `IS_WINDOWS = /windows/i.test(navigator.userAgent) || /^win/i.test(navigator.platform)` 门控，Unix 行为不变。
 
 ## 复测指南（#5–#8、#10–#14）
 
@@ -60,8 +53,8 @@
 - **#14 known_hosts 三处缺陷**：复现条件——① `~/.ssh/known_hosts` 里放一行 key 短于 8 字符的伪条目后打开「密钥管理→主机」，修复前 Rust debug 构建直接 panic（`key[len()-8..]` 越界），修复后正常列出；② 全新 Linux 机器（无 `~/.ssh`）在「主机」面板添加主机，修复前 `Failed to write known_hosts`（目录不存在），修复后自动创建 `~/.ssh`；③ 在 known_hosts 文件里放 hash host（`|1|...` 行）、`@cert-authority`、`#` 注释，用「主机」面板删除某个普通条目，修复前重写后注释/hash host/`@cert-authority`/顺序全部丢失，修复后仅目标条目被删其余原样保留；host 写 `GitHub.com` 时以 `github.com` 删除也能命中（大小写不敏感）。
 - **#15 detect_shells 存在性/可执行位**：复现条件——① Linux 上移除某个 shell（如 `sudo apt remove bash` 或把 `fish` 装到非 PATH 目录），刷新本地会话 shell 列表，修复前列表仍出现该 shell（点了才报错），修复后不出现；② 制造一个不可执行的伪 shell：`touch /tmp/fake-sh && chmod 644 /tmp/fake-sh` 并 `export PATH=/tmp:$PATH`，修复前 `exe_in_path("fake-sh")` 因文件存在即返回 true（Tauri 侧旧逻辑），修复后 644 无执行位不列入；③ Electron 侧在无 `which`/`where` 命令的最小 Linux 上打开「新建本地会话」，修复前 `has()` 抛错导致检测失败，修复后改为遍历 `PATH` + `X_OK` 直接判断。验证：任意平台打开「会话→新建→本地」下拉，只出现真实存在且可执行的 shell；macOS 上默认列出 zsh（`/bin/zsh` 在 `PATH`）。
 - **#16 LANG 强制切换**：复现条件——① macOS 上 `launchctl setenv LANG zh_CN.UTF-8`（或任一用户 locale）后启动 App，新建本地终端，修复前（Electron 侧无条件覆盖）PTY 里 `echo $LANG` 输出 `en_US.UTF-8`，修复后输出用户设置的 `zh_CN.UTF-8`；② 未设任何 locale 的 Linux 机器上新建本地终端，`echo $LANG` 修复前 `en_US.UTF-8`（若未 `locale-gen` 会有 `setlocale: No such file` 告警并退化为 C），修复后为 `C.UTF-8` 且无告警、多字节字符正常；③ 设置面板→新建本地会话→命令填 `bash`，进入后 `locale` 命令显示 UTF-8（LANG/LC_ALL/LC_CTYPE 全缺时）。验证：中文/日文等多字节输入输出在本地终端不再乱码，且用户显式 locale 不被覆盖。
+- **#17 AI 危险命令启发式**：复现条件——Windows 上开启 AI auto 模式，① 让 AI 生成 `del /s /q temp`、`rd /s /q C:\foo`、`format d:` 或 `taskkill /f /im xxx.exe` 等命令（`auto_execute` 开启），修复前这些命令被判定安全直接执行，修复后弹「危险命令确认」层，确认后才执行；② 在终端直接输入 `dir`、`ipconfig`、`del foo.txt`、`net user`，修复前 auto 模式可能把纯命令当自然语言触发 AI，修复后不触发直接执行；③ 反向回归：Windows 上输入 `帮我把文件夹列出` 等中文仍应触发 AI。验证：`del /s /q` 一类命令必须出现确认层；Unix 上行为与修复前一致（不新增误报）。
 
 ## 修复建议优先级
 
-1. AI 危险命令启发式补 Windows（#17）。
-2. IPv6 解析（#18）等低优先级项。
+1. IPv6 解析（#18）等低优先级项。
