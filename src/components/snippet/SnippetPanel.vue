@@ -74,14 +74,14 @@ async function sendSnippet(cmd: string) {
     return
   }
 
-  await invoke('write_terminal', { sessionId, data: cmd + '\n' })
+  await invoke('write_terminal', { sessionId, data: cmd + '\r' })
 }
 
 function submitVariables() {
   const cmd = replaceVariables(pendingCommand.value, varMap.value)
   const sessionId = termStore.activeTab?.session?.id
   if (sessionId) {
-    invoke('write_terminal', { sessionId, data: cmd + '\n' })
+    invoke('write_terminal', { sessionId, data: cmd + '\r' })
   }
   varDialogVisible.value = false
 }

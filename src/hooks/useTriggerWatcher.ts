@@ -19,7 +19,7 @@ export function useTriggerWatcher() {
       if (matched) {
         await invoke('write_terminal', {
           sessionId: activeSessionId,
-          data: matched.response.endsWith('\n') ? matched.response : matched.response + '\n',
+          data: matched.response.endsWith('\n') ? matched.response : matched.response + '\r',
         })
       }
     })

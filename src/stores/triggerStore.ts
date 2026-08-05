@@ -49,12 +49,13 @@ export function useTriggerStore() {
 
   function findMatch(text: string): Trigger | null {
     const now = Date.now()
+    const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
     for (const t of triggers.value) {
       if (!t.enabled) continue
       if (now - t.last_fired < t.cooldown_ms) continue
       try {
         const re = new RegExp(t.pattern)
-        if (re.test(text)) {
+        if (re.test(normalized)) {
           t.last_fired = now
           return t
         }

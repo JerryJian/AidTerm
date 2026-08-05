@@ -205,7 +205,7 @@ function onBatchInput(e: KeyboardEvent) {
   const data = batchInput.value
   batchInput.value = ''
   for (const sid of ids) {
-    invoke('write_terminal', { sessionId: sid, data: data + '\n' })
+    invoke('write_terminal', { sessionId: sid, data: data + '\r' })
   }
 }
 

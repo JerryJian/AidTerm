@@ -19,8 +19,6 @@
 
 | # | 问题 | 位置 | 说明 |
 |---|------|------|------|
-| 10 | **命令发送换行符不一致** | `src/components/terminal/TabBar.vue:208`、`src/components/snippet/SnippetPanel.vue:77,84`、`src/hooks/useTriggerWatcher.ts:22` 发 `\n`；`src/hooks/useAiConversation.ts:350` 发 `\r` | 批量/快捷命令/触发器用 `\n`，AI 执行用 `\r`。Unix PTY 靠 ICRNL 都行；Windows cmd/多行粘贴/串口设备上总有一侧行为不对。应统一为真实回车语义（`\r` 或按平台 `\r\n`）。 |
-| 11 | **注入消息全平台用 `\r\n`，Unix 触发正则失配** | `src-tauri/src/session/local.rs:121`、`ssh.rs:162,195`、`telnet.rs:29,58`、`serial/mod.rs:83,94,129` | `[Process exited]`、SSH/Telnet/Serial 错误横幅在所有平台注入 `\r\n`，而 Unix shell 原生输出只用 `\n`。前端 trigger 匹配（`src/stores/triggerStore.ts:50-64`）不做换行归一化 → 锚定正则（如 `/\[Process exited\]$/`）在 Unix 上失配。 |
 | 12 | **Tab 标题平台错误** | `src/stores/terminal.ts:12-22,104,107` + `src/App.vue:124` | shell 映射表是 Windows 化的（`cmd.exe`/`.exe` 归一化，无 `/bin/bash` 键）；新建本地 Tab 不传命令 → 所有平台默认标题「命令提示符」；Linux/macOS 上手动输入 `/bin/bash` 标题会显示原始 key `shell./bin/bash`。 |
 | 13 | **密钥命令用 `JSON.stringify` 当 shell 引用** | `src-electron/main.ts:982,983,1008,1011,1048` | `-N ${JSON.stringify(passphrase)}`、`-f`、`ssh-keygen -y -f "${destPriv}"` 等用 shell 字符串拼接。路径/口令含 `$`、反引号、空格、`\` 时，Linux/macOS 上被 sh 展开破坏；Windows 上 `\\` 双反斜杠也错。应改用 `spawn` 数组参数。 |
 | 14 | **known_hosts 三处缺陷** | `src-tauri/src/known_hosts/mod.rs:53-54,78-80,85-99`；`src-electron/main.ts:248` | ① 指纹切片 `key[key.len()-8..]` 在 key<8 时 debug 下溢 panic；② `add()` 不创建 `~/.ssh` 目录（新装/未用过 ssh 的 Linux 机器常见）；③ `remove()` 整文件重写会丢失 hash host（`\|1\|...\|`）、`@cert-authority`、`@revoked`、注释行并改顺序；host 比较大小写敏感，与系统 ssh 共享文件时删不掉 `GitHub.com` 条目。 |
@@ -51,8 +49,10 @@
 - **终端透出背景**：`src/components/terminal/TerminalWrapper.vue`——背景图开启时终端容器与 xterm 主题背景改为透明。
 - **detect_shells 返回形状统一**：`src-electron/main.ts`（`detect_shells` 改为与 Tauri 一致的 `{name,command,icon}` 对象数组）+ `src/App.vue`（`initBuiltInLocalProfiles` 归一化两种形状）——Electron 模式下内置本地会话 profile 字段不再 undefined。
 - **密钥生成/导入不再依赖外部 `ssh-keygen`**：`src-tauri/src/keychain/mod.rs`——用 `russh::keys`（ssh-key）`PrivateKey::random` 原生生成 ED25519 / RSA(4096)，`encrypt` 支持 passphrase 加密私钥，`write_openssh_file` 自动 0600 权限；导入时用 `load_secret_key` 直接解析私钥并提取公钥/指纹，不再调用 `ssh-keygen`。
+- **命令发送换行符统一为真实回车 `\r`（#10）**：`src/components/terminal/TabBar.vue`（批量输入）、`src/components/snippet/SnippetPanel.vue`（快捷命令直接发送 + 变量替换后发送）、`src/hooks/useTriggerWatcher.ts`（触发器响应）——原发 `\n`，现与 `src/hooks/useAiConversation.ts` 一致发 `\r`。PTY 中 Enter 键即产生 `\r`，raw 模式（`vim`/`top`）下 `\n` 会被当作 Ctrl-J 而非执行键，统一后多行粘贴/串口/Windows cmd 行为一致。
+- **触发器匹配换行归一化（#11）**：`src/stores/triggerStore.ts` `findMatch`——匹配前将 `\r\n` 与孤立 `\r` 归一化为 `\n`。后端注入横幅（`[Process exited]`、SSH/Telnet/Serial 错误）全平台用 `\r\n`，而 Unix PTY 原生输出只有 `\n`；归一化后锚定正则（如 `/\[Process exited\]$/`）在 Unix 上不再失配，Windows 也不受影响。
 
-## 复测指南（#5–#8）
+## 复测指南（#5–#8、#10–#11）
 
 以下为各修复的复现条件与验证方法（Linux/macOS 优先）。
 
@@ -60,8 +60,9 @@
 - **#6 打包后 CLI 参数错位**：复现条件——用 `npm run build` 打包后的可执行文件（`npx electron .` 开发态不受影响）在终端带参启动，如 `AidTerm.exe ssh user@host`（macOS 为 `open -a AidTerm --args ...`）。修复前首参被吞、后续参数前移导致连接对象错乱；修复后应解析为 `ssh user@host`，且 macOS 的 `-psn_0_xxx` 被过滤。
 - **#7 Local 隧道依赖远程 `nc`**：复现条件——连接一台未安装 `nc`（`command -v nc` 为空）的 Linux 服务器，添加 Local 端口转发。修复前日志报 `nc: command not found`、隧道失效；修复后改用 `forwardOut`（direct-tcpip）直连目标端口，`nc` 缺失时隧道仍可用。验证：`ssh -T` 场景下本地 `curl 127.0.0.1:<local_port>` 能访问远程目标。
 - **#8 依赖外部 `ssh-keygen`**：复现条件——在未安装 `openssh-client`（Linux 最小安装）或 PATH 中无 `ssh-keygen` 的环境，Tauri 侧「密钥管理→生成 RSA/ED25519」与「导入私钥」。修复前报 `ssh-keygen not found`；修复后不依赖外部命令。验证：生成 RSA 后 `ls -l` 为 0600、`.pub` 内容以 `ssh-rsa AAAA` 开头、指纹显示 `SHA256:...`；设置 passphrase 时私钥文件开头为 `-----BEGIN OPENSSH PRIVATE KEY-----`（加密负载，可用 `openssl` 或 `ssh-keygen -y -f <key>` 输入口令验证加密是否生效）；导入无 `.pub` 的私钥也能自动提取公钥与指纹。注：当前 SSH 连接 `src-tauri/src/session/ssh.rs:219` 仍以 `None` 口令加载密钥，带 passphrase 的密钥暂不能用于登录（需后续接入口令输入，属已知缺口）。
+- **#10 命令发送换行符**：复现条件——Unix 上在 `vim`（raw 模式）或 Windows cmd 中批量发送 / 快捷命令 / 触发器响应。修复前 `vim` 收到 `\n` 触发的是 Ctrl-J（光标下移）而非回车执行，cmd 多行输入错乱；修复后发 `\r` 行为等同真实 Enter。验证：`vim` 中批量发送 `:q` 能正常退出；任意平台批量发送 `echo ok` 后命令立即执行且提示符换行正确。
+- **#11 触发器锚定正则**：复现条件——任何平台新建触发器，pattern 填 `^\[Process exited\]$`，response 填任意内容，然后关闭一个本地终端 Tab（或连接一个无法连通的 SSH/Serial 目标）。修复前 Unix 上匹配不到（注入横幅是 `\r\n` 结尾而 shell 原生输出是 `\n`）；修复后触发器触发（`\r\n` 与孤立 `\r` 已在匹配前归一化为 `\n`）。Windows 上行为不变。
 
 ## 修复建议优先级
 
-1. 换行符统一（#10、#11）。
-2. known_hosts（#14）三处 bug。
+1. known_hosts（#14）三处 bug。
