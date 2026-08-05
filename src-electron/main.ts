@@ -750,16 +750,17 @@ function registerIpcHandlers(): void {
 
       if (tunnel_type === 'Local' && target_host && target_port) {
         server.on('connection', (sock: net.Socket) => {
-          conn.forwardIn(target_host, target_port, (err: Error | undefined) => {
+          // Direct-TCP/IP channel via the remote server — no `nc` needed on the
+          // remote host (the old `conn.exec('nc host port')` failed on systems
+          // without netcat).
+          conn.forwardOut(bind_addr === '0.0.0.0' ? '127.0.0.1' : bind_addr, bind_port || 0, target_host, target_port, (err: Error | undefined, stream: ClientChannel) => {
             if (err) { sock.destroy(); return }
-          })
-          conn.exec(`nc ${target_host} ${target_port}`, (err: Error | undefined, stream: ClientChannel) => {
-            if (err) { sock.destroy(); return }
-            stream.on('data', (d: Buffer) => { sock.write(d) })
-            stream.stderr.on('data', (d: Buffer) => { sock.write(d) })
-            sock.on('data', (d: Buffer) => { stream.write(d) })
-            sock.on('close', () => { stream.close() })
-            stream.on('close', () => { sock.destroy() })
+            sock.on('error', () => stream.close())
+            sock.on('close', () => stream.close())
+            stream.on('error', () => sock.destroy())
+            stream.on('close', () => sock.destroy())
+            sock.pipe(stream)
+            stream.pipe(sock)
           })
         })
       }
