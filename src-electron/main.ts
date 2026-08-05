@@ -111,7 +111,8 @@ function createWindow(): void {
     if (input.key === 'F12' && !input.control && !input.shift && !input.alt && !input.meta) {
       toggleDevTools()
     }
-    if (input.key === 'I' && input.control && input.shift && !input.alt && !input.meta) {
+    const isCmdLike = input.control || (process.platform === 'darwin' && input.meta)
+    if (input.key === 'I' && isCmdLike && input.shift && !input.alt) {
       toggleDevTools()
     }
   })

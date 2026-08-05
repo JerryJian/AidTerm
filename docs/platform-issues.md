@@ -9,7 +9,6 @@
 
 | # | 问题 | 位置 | 说明 |
 |---|------|------|------|
-| 21 | **macOS Cmd+Shift+I 不触发 DevTools** | `src-electron/main.ts:110-115` | 快捷键只认 `input.control`，macOS 用户习惯 `Cmd`（`input.meta`）不生效。 |
 | 22 | **`LANG` 兜底与 AI 命令引用（反向缺口）** | `src-tauri/src/ai/mod.rs:387-405`；`src-electron/main.ts:805-808` | Windows 上 `cmd /C` 输出 GBK 时 `from_utf8_lossy` 乱码（缺 GBK 兜底）；Electron 侧 `sh -c ${JSON.stringify(cmd)}` 不转义 `$`/反引号导致语义偏差。 |
 
 ---
@@ -37,6 +36,7 @@
 - **IPv6 解析缺失（#18）**：`src-tauri/src/netaddr.rs`（新）+ `src/App.vue` + `src/components/session/QuickConnectBar.vue` + `src-tauri/src/{session/ssh,sftp,tunnel/mod,proxy/mod}.rs`——① 新增 `netaddr::sock_addr(host, port)`：host 含 `:`（IPv6）时输出 `[::1]:port`，并先剥掉可能已带的方括号（防双重括号），host 为域名/IPv4 时输出 `host:port`；`netaddr::split_host_port(addr)`：解析 `[::1]:port` / `host:port`，返回不带括号的 host。② `ssh.rs:133`/`sftp.rs:152`/`tunnel` 连接目标/本地监听/远程目标/动态监听、`proxy` 的 HTTP/SOCKS5/Jump 代理地址全部改用 `sock_addr`，纯 IPv6 直连/走代理不再报地址无效；`ssh.rs:316` 用 `split_host_port` 替代 `rsplitn(2,':')`（原 `[::1]:22` 取到带括号的 `[::1]`，SOCKS5 元组形式 `(&str,u16)` 会先 `parse::<IpAddr>()`，带括号解析失败退化成域名）。③ HTTP CONNECT 的 `CONNECT host:port` / `Host:` 头改用 `sock_addr`（IPv6 需 authority-form 方括号）；SOCKS5 目标传裸 IPv6 元组即可被 `IpAddr` 解析。④ 前端 `App.vue`：Deep Link 的 `url.hostname`（URL 对 IPv6 返回带括号形式）剥括号；CLI 参数 `user@host:port` 解析支持 `user@[::1]:22`。⑤ `QuickConnectBar.vue` 新增 `parseTarget()`：支持 `user@host`、`host:port`、`[::1]:22`、`user@[::1]:22`，SSH 默认 22、Telnet 默认 23，去掉旧正则（`[\w.-]+` 不含 `:` 无法匹配 IPv6）。Electron 后端用 ssh2 分离 host/port 无此问题。
 - **Linux 远程 `uname -a` arch 解析（#19）**：`src-electron/main.ts` `get_remote_system_info` + `src-tauri/src/commands/mod.rs`——`uname -a` 在 kernel release 之后的 token 位置不可移植：Linux 末尾是 `... x86_64 GNU/Linux`、macOS 末尾是 `... RELEASE_ARM64_T6000 arm64`，按倒数第二 token（`parts[length-2]` / `nth_back(1)`）取架构在部分发行版上取到 "GNU/Linux" 或 build 标识。改为额外执行可移植的 `uname -m`（Linux `x86_64`/`aarch64`、macOS `arm64`/`x86_64`、BSD 同），失败时回退旧的位置猜测；hostname/kernel 仍取 `uname -a` 的 `parts[1]`/`parts[2]`（这两个位置所有 Unix 一致）。
 - **会话组名硬编码中文（#20）**：`src/stores/sessionStore.ts` + `src/types/index.ts` + `src/components/{session/SessionPanel,terminal/TabBar}.vue`——① `SavedSessionGroup` 增加可选 `built_in` 标记；`initBuiltInProfiles` 创建分组时用 `te('menu.local_shell') ? t('menu.local_shell') : 'Local Shell'`（zh-CN「本地终端」/ en-US「Local Shell」），并标记 `built_in: true`；② 新增 `groupName(group)` 显示函数：`built_in` 分组渲染时始终返回当前语言的 `menu.local_shell`（切语言即时生效），普通分组返回存储名；SessionPanel 与 TabBar 两处渲染改用该函数；③ `load()` 迁移旧数据：已持久化的「本地终端」分组自动补 `built_in` 标记；④ 用户重命名内置分组时 `renameGroup` 清除 `built_in`，此后显示用户自定义名，不再被翻译覆盖。
+- **macOS Cmd+Shift+I 不触发 DevTools（#21）**：`src-electron/main.ts` `before-input-event`——原 `Ctrl+Shift+I` 判断只认 `input.control`（Windows/Linux 正确），macOS 上用户按 `Cmd+Shift+I`（`input.meta`，`control=false`）不生效。改为 `isCmdLike = input.control || (process.platform === 'darwin' && input.meta)`，macOS 上 `Cmd+Shift+I` 与 `Ctrl+Shift+I` 均可切换 DevTools，其他平台行为不变（`F12` 不受影响）。
 
 ## 复测指南（#5–#8、#10–#14）
 
@@ -57,6 +57,7 @@
 - **#18 IPv6 解析**：复现条件——① 快速连接栏输入 `user@[fe80::1]:2222` 或 `ssh user@[2001:db8::1]`（SSH 默认 22）能正确连接；`telnet [::1]:2323` 同理；② Deep Link `ssh://[::1]:2222/` 打开后对话框 host 为 `::1`（不带括号）；③ CLI `AidTerm --ssh user@[::1]:2222` 解析正确；④ Linux/macOS 上对 `::1`（本机 IPv6）建 SSH 会话、SFTP 面板、Local/Remote/Dynamic 隧道（目标填 `[::1]` 或 `::1`）、HTTP/SOCKS5/Jump 代理（代理地址或目标为 IPv6）均能连通；⑤ SOCKS5 动态隧道客户端拨 IPv6（ATYP=0x04）目标正常。验证：修复前 IPv6 目标一律 `Address family not supported` 或解析失败，修复后可连通；域名/IPv4 行为不变。
 - **#19 远程 arch 解析**：复现条件——在 Linux 服务器（如 `uname -a` 输出 `Linux host 5.15.0-91-generic #92-Ubuntu SMP ... x86_64 GNU/Linux`）或 macOS（末尾 `arm64`）上打开「会话详情/系统信息」查看架构。修复前 Linux 上取倒数第二 token（可能为 "GNU/Linux" 或错误值）、macOS 上取到 "RELEASE_ARM64_T6000" 类 build 标识；修复后显示 `uname -m` 的真实值（`x86_64`/`aarch64`/`arm64`）。验证：Tauri 与 Electron 双后端均显示正确架构，hostname/kernel 仍正确。
 - **#20 会话组名硬编码中文**：复现条件——① 任意语言环境下首次启动（或清空会话存储后）自动创建本地会话分组，英文界面应显示 "Local Shell"、中文界面显示「本地终端」（修复前英文界面也显示「本地终端」）；② 已保存旧版本数据的用户升级后，「本地终端」分组仍显示中文，但切到英文界面后显示 "Local Shell"（`load()` 迁移 + 渲染时翻译）；③ 用户手动把该分组改名（如 "My Shells"）后，改名立即生效且切语言不再覆盖；④ 切语言后无需重启即可看到分组名跟随变化。验证：SessionPanel 与 TabBar 的已保存分组标题两处均正确本地化。
+- **#21 macOS DevTools 快捷键**：复现条件——macOS 上聚焦终端窗口按 `Cmd+Shift+I`，修复前无反应（只认 `Ctrl`），修复后打开/关闭 DevTools；Windows/Linux 上 `Ctrl+Shift+I` 与 `F12` 行为不变。验证：三平台均能开关 DevTools，且不影响终端内 `Ctrl+C`/粘贴等按键。
 
 ## 修复建议优先级
 
