@@ -19,6 +19,14 @@ const shellKeyMap: Record<string, string> = {
   'zsh': 'zsh',
   'sh': 'sh',
   'fish': 'fish',
+  '/bin/bash': 'bash',
+  '/usr/bin/bash': 'bash',
+  '/bin/zsh': 'zsh',
+  '/usr/bin/zsh': 'zsh',
+  '/bin/sh': 'sh',
+  '/usr/bin/sh': 'sh',
+  '/usr/bin/fish': 'fish',
+  '/usr/bin/pwsh': 'pwsh',
 }
 
 export const useTerminalStore = defineStore('terminal', () => {
@@ -28,7 +36,7 @@ export const useTerminalStore = defineStore('terminal', () => {
   const selectedPaneByTab = ref<Record<string, string>>({})
   const batchMode = ref(false)
   const batchTabIds = ref<Set<string>>(new Set())
-  const { t } = useI18n()
+  const { t, te } = useI18n()
 
   const activeTab = computed(() => {
     if (!activeTabId.value) return null
@@ -101,10 +109,11 @@ export const useTerminalStore = defineStore('terminal', () => {
     } else if (type === 'serial') {
       title = serialInfo ? `Serial ${serialInfo.portName}` : 'Serial'
     } else if (localCommand) {
-      const key = shellKeyMap[localCommand] || localCommand.replace(/\.exe$/, '')
-      title = t(`shell.${key}`)
+      const base = localCommand.replace(/\\/g, '/').split('/').pop() || localCommand
+      const key = shellKeyMap[localCommand] || base.replace(/\.exe$/, '')
+      title = te(`shell.${key}`) ? t(`shell.${key}`) : base
     } else {
-      title = t('shell.cmd')
+      title = t('menu.local_shell')
     }
     const tab: TerminalTab = {
       id,

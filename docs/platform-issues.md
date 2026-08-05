@@ -19,7 +19,6 @@
 
 | # | 问题 | 位置 | 说明 |
 |---|------|------|------|
-| 12 | **Tab 标题平台错误** | `src/stores/terminal.ts:12-22,104,107` + `src/App.vue:124` | shell 映射表是 Windows 化的（`cmd.exe`/`.exe` 归一化，无 `/bin/bash` 键）；新建本地 Tab 不传命令 → 所有平台默认标题「命令提示符」；Linux/macOS 上手动输入 `/bin/bash` 标题会显示原始 key `shell./bin/bash`。 |
 | 13 | **密钥命令用 `JSON.stringify` 当 shell 引用** | `src-electron/main.ts:982,983,1008,1011,1048` | `-N ${JSON.stringify(passphrase)}`、`-f`、`ssh-keygen -y -f "${destPriv}"` 等用 shell 字符串拼接。路径/口令含 `$`、反引号、空格、`\` 时，Linux/macOS 上被 sh 展开破坏；Windows 上 `\\` 双反斜杠也错。应改用 `spawn` 数组参数。 |
 | 14 | **known_hosts 三处缺陷** | `src-tauri/src/known_hosts/mod.rs:53-54,78-80,85-99`；`src-electron/main.ts:248` | ① 指纹切片 `key[key.len()-8..]` 在 key<8 时 debug 下溢 panic；② `add()` 不创建 `~/.ssh` 目录（新装/未用过 ssh 的 Linux 机器常见）；③ `remove()` 整文件重写会丢失 hash host（`\|1\|...\|`）、`@cert-authority`、`@revoked`、注释行并改顺序；host 比较大小写敏感，与系统 ssh 共享文件时删不掉 `GitHub.com` 条目。 |
 | 15 | **detect_shells Linux/macOS 分支不做存在性检查** | `src-tauri/src/commands/mod.rs:664-669,624-633` | Windows 分支对 `pwsh.exe`/`wsl.exe` 做了 `exe_in_path` 检查；Linux/macOS 分支对 `bash`/`sh` 无条件推送，且 `exe_in_path` 在 Unix 上只判断存在、不检查可执行位（`mode & 0o111`）。 |
@@ -51,8 +50,9 @@
 - **密钥生成/导入不再依赖外部 `ssh-keygen`**：`src-tauri/src/keychain/mod.rs`——用 `russh::keys`（ssh-key）`PrivateKey::random` 原生生成 ED25519 / RSA(4096)，`encrypt` 支持 passphrase 加密私钥，`write_openssh_file` 自动 0600 权限；导入时用 `load_secret_key` 直接解析私钥并提取公钥/指纹，不再调用 `ssh-keygen`。
 - **命令发送换行符统一为真实回车 `\r`（#10）**：`src/components/terminal/TabBar.vue`（批量输入）、`src/components/snippet/SnippetPanel.vue`（快捷命令直接发送 + 变量替换后发送）、`src/hooks/useTriggerWatcher.ts`（触发器响应）——原发 `\n`，现与 `src/hooks/useAiConversation.ts` 一致发 `\r`。PTY 中 Enter 键即产生 `\r`，raw 模式（`vim`/`top`）下 `\n` 会被当作 Ctrl-J 而非执行键，统一后多行粘贴/串口/Windows cmd 行为一致。
 - **触发器匹配换行归一化（#11）**：`src/stores/triggerStore.ts` `findMatch`——匹配前将 `\r\n` 与孤立 `\r` 归一化为 `\n`。后端注入横幅（`[Process exited]`、SSH/Telnet/Serial 错误）全平台用 `\r\n`，而 Unix PTY 原生输出只有 `\n`；归一化后锚定正则（如 `/\[Process exited\]$/`）在 Unix 上不再失配，Windows 也不受影响。
+- **Tab 标题平台错误（#12）**：`src/stores/terminal.ts`——① `shellKeyMap` 补充 Unix 绝对路径键（`/bin/bash`、`/usr/bin/bash`、`/bin/zsh`、`/usr/bin/zsh`、`/bin/sh`、`/usr/bin/sh`、`/usr/bin/fish`、`/usr/bin/pwsh`）；② 命令未命中映射表时取 basename（含 `.exe` 归一化）再查表，未知 shell 用 `te` 检测回退显示 basename，不再出现原始 key `shell./bin/bash`；③ 新建本地 Tab 不传命令时默认标题从 `shell.cmd`（「命令提示符」，仅 Windows 正确）改为平台中立 `menu.local_shell`（「本地终端」/「Local Shell」）。
 
-## 复测指南（#5–#8、#10–#11）
+## 复测指南（#5–#8、#10–#12）
 
 以下为各修复的复现条件与验证方法（Linux/macOS 优先）。
 
@@ -62,6 +62,7 @@
 - **#8 依赖外部 `ssh-keygen`**：复现条件——在未安装 `openssh-client`（Linux 最小安装）或 PATH 中无 `ssh-keygen` 的环境，Tauri 侧「密钥管理→生成 RSA/ED25519」与「导入私钥」。修复前报 `ssh-keygen not found`；修复后不依赖外部命令。验证：生成 RSA 后 `ls -l` 为 0600、`.pub` 内容以 `ssh-rsa AAAA` 开头、指纹显示 `SHA256:...`；设置 passphrase 时私钥文件开头为 `-----BEGIN OPENSSH PRIVATE KEY-----`（加密负载，可用 `openssl` 或 `ssh-keygen -y -f <key>` 输入口令验证加密是否生效）；导入无 `.pub` 的私钥也能自动提取公钥与指纹。注：当前 SSH 连接 `src-tauri/src/session/ssh.rs:219` 仍以 `None` 口令加载密钥，带 passphrase 的密钥暂不能用于登录（需后续接入口令输入，属已知缺口）。
 - **#10 命令发送换行符**：复现条件——Unix 上在 `vim`（raw 模式）或 Windows cmd 中批量发送 / 快捷命令 / 触发器响应。修复前 `vim` 收到 `\n` 触发的是 Ctrl-J（光标下移）而非回车执行，cmd 多行输入错乱；修复后发 `\r` 行为等同真实 Enter。验证：`vim` 中批量发送 `:q` 能正常退出；任意平台批量发送 `echo ok` 后命令立即执行且提示符换行正确。
 - **#11 触发器锚定正则**：复现条件——任何平台新建触发器，pattern 填 `^\[Process exited\]$`，response 填任意内容，然后关闭一个本地终端 Tab（或连接一个无法连通的 SSH/Serial 目标）。修复前 Unix 上匹配不到（注入横幅是 `\r\n` 结尾而 shell 原生输出是 `\n`）；修复后触发器触发（`\r\n` 与孤立 `\r` 已在匹配前归一化为 `\n`）。Windows 上行为不变。
+- **#12 Tab 标题平台错误**：复现条件——① Linux/macOS 上点击「新建本地终端」或首次启动自动建 Tab（不传命令），修复前标题为「命令提示符」，修复后为「本地终端」/「Local Shell」；② 会话管理中新建本地会话、命令填 `/bin/bash`（或任意绝对路径 shell）后打开，修复前标题显示原始 key `shell./bin/bash`，修复后显示「Bash」；③ 命令填不常见路径（如 `/usr/local/bin/tcsh`）时显示 basename `tcsh` 而非原始 key。
 
 ## 修复建议优先级
 
