@@ -991,17 +991,24 @@ function registerIpcHandlers(): void {
   })
   ipcMain.handle('detect_shells', (): Array<{ name: string; command: string; icon: string }> => {
     const shells: Array<{ name: string; command: string; icon: string }> = []
-    const has = (exe: string) => { try { runCmd('which', [exe]); return true } catch { return false } }
+    const has = (exe: string) => {
+      const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean)
+      for (const dir of dirs) {
+        const full = path.join(dir, exe)
+        try { fs.accessSync(full, fs.constants.X_OK); return true } catch { /* keep searching */ }
+      }
+      return false
+    }
     if (process.platform === 'win32') {
       shells.push({ name: '命令提示符', command: 'cmd.exe', icon: '\u{1F4DF}' })
       if (fs.existsSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')) shells.push({ name: 'Windows PowerShell', command: 'powershell.exe', icon: '\u{1F4DF}' })
-      try { runCmd('where', ['pwsh.exe']); shells.push({ name: 'PowerShell', command: 'pwsh.exe', icon: '\u{1F4DF}' }) } catch {}
-      try { runCmd('where', ['wsl.exe']); shells.push({ name: 'WSL', command: 'wsl.exe', icon: '\u{1F427}' }) } catch {}
+      if (has('pwsh.exe')) shells.push({ name: 'PowerShell', command: 'pwsh.exe', icon: '\u{1F4DF}' })
+      if (has('wsl.exe')) shells.push({ name: 'WSL', command: 'wsl.exe', icon: '\u{1F427}' })
       return shells
     }
-    if (process.platform === 'darwin') shells.push({ name: 'Zsh', command: 'zsh', icon: '\u{1F334}' })
-    shells.push({ name: 'Bash', command: 'bash', icon: '\u{1F40D}' })
-    shells.push({ name: 'Sh', command: 'sh', icon: '\u{1F40D}' })
+    if (process.platform === 'darwin' && has('zsh')) shells.push({ name: 'Zsh', command: 'zsh', icon: '\u{1F334}' })
+    if (has('bash')) shells.push({ name: 'Bash', command: 'bash', icon: '\u{1F40D}' })
+    if (has('sh')) shells.push({ name: 'Sh', command: 'sh', icon: '\u{1F40D}' })
     if (process.platform !== 'darwin' && has('zsh')) shells.push({ name: 'Zsh', command: 'zsh', icon: '\u{1F334}' })
     if (has('fish')) shells.push({ name: 'Fish', command: 'fish', icon: '\u{1F41F}' })
     return shells

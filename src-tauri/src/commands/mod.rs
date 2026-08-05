@@ -655,7 +655,21 @@ fn exe_in_path(name: &str) -> bool {
         .map(|path| {
             std::env::split_paths(&path).any(|dir| {
                 let full = dir.join(name);
-                full.exists()
+                if !full.is_file() {
+                    return false;
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::MetadataExt;
+                    match std::fs::metadata(&full) {
+                        Ok(m) => m.mode() & 0o111 != 0,
+                        Err(_) => false,
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    true
+                }
             })
         })
         .unwrap_or(false)
@@ -688,14 +702,24 @@ pub fn detect_shells() -> Vec<ShellProfile> {
         }
     } else {
         if cfg!(target_os = "macos") {
-            shells.push(ShellProfile { name: "Zsh".into(), command: "zsh".into(), icon: "\u{1F334}".into() });
+            if exe_in_path("zsh") {
+                shells.push(ShellProfile { name: "Zsh".into(), command: "zsh".into(), icon: "\u{1F334}".into() });
+            }
         }
-        shells.push(ShellProfile { name: "Bash".into(), command: "bash".into(), icon: "\u{1F40D}".into() });
-        shells.push(ShellProfile { name: "Sh".into(), command: "sh".into(), icon: "\u{1F40D}".into() });
+        if exe_in_path("bash") {
+            shells.push(ShellProfile { name: "Bash".into(), command: "bash".into(), icon: "\u{1F40D}".into() });
+        }
+        if exe_in_path("sh") {
+            shells.push(ShellProfile { name: "Sh".into(), command: "sh".into(), icon: "\u{1F40D}".into() });
+        }
         if cfg!(not(target_os = "macos")) {
-            if exe_in_path("zsh") { shells.push(ShellProfile { name: "Zsh".into(), command: "zsh".into(), icon: "\u{1F334}".into() }); }
+            if exe_in_path("zsh") {
+                shells.push(ShellProfile { name: "Zsh".into(), command: "zsh".into(), icon: "\u{1F334}".into() });
+            }
         }
-        if exe_in_path("fish") { shells.push(ShellProfile { name: "Fish".into(), command: "fish".into(), icon: "\u{1F41F}".into() }); }
+        if exe_in_path("fish") {
+            shells.push(ShellProfile { name: "Fish".into(), command: "fish".into(), icon: "\u{1F41F}".into() });
+        }
     }
 
     shells
