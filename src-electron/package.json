@@ -2,6 +2,7 @@
   "name": "aidterm-electron",
   "version": "0.2.0",
   "private": true,
+  "desktopName": "AidTerm.desktop",
   "author": {
     "name": "AidTerm",
     "email": "aidterm@users.noreply.github.com"

@@ -24,7 +24,7 @@ module.exports = () => {
     files: [
       'dist/**/*',
       'node_modules/**/*',
-      '!node_modules/**/{src,deps,scripts,node-addon-api,build/deps,build/Release/obj}/**',
+      '!node_modules/**/{deps,scripts,node-addon-api,build/deps,build/Release/obj}/**',
       `!node_modules/**/prebuilds/{${platformExclude.join(',')}}/**`,
       `!node_modules/**/third_party/**/{${isWin ? 'win10-arm64' : isLinux ? 'win10-x64,win10-arm64' : 'win10-x64,win10-arm64'}}/**`,
       `!node_modules/**/bin/{${platformExclude.join(',')}}*}/**`,
@@ -33,8 +33,6 @@ module.exports = () => {
       '!node_modules/**/.eslint*',
       '!node_modules/**/*.{test,spec}.js',
       '!node_modules/**/install.js',
-      ...(!isWin ? ['!node_modules/@serialport/bindings-cpp/dist/{darwin,linux*,unix*}.js'] : []),
-      ...(isWin ? ['!node_modules/@serialport/bindings-cpp/dist/{darwin,linux*,unix*}.js'] : []),
     ],
     asarUnpack: [
       'node_modules/node-pty/lib/**',
@@ -54,6 +52,7 @@ module.exports = () => {
     linux: {
       target: ['AppImage', 'deb'],
       artifactName: 'AidTerm_electron_${version}_${arch}.${ext}',
+      syncDesktopName: true,
       category: 'TerminalEmulator',
       maintainer: 'AidTerm <aidterm@users.noreply.github.com>'
     },
