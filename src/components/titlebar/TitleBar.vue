@@ -15,6 +15,7 @@ const win = getCurrentWindow()
 const isMaximized = ref(false)
 const isWindows = ref(false)
 const isMacOS = ref(false)
+const isLinux = ref(false)
 let lastClickTime = 0
 
 const ctxMenu = ref<{ x: number; y: number } | null>(null)
@@ -25,6 +26,7 @@ onMounted(async () => {
     const platform = await invoke<string>('get_platform')
     isWindows.value = platform === 'windows'
     isMacOS.value = platform === 'macos'
+    isLinux.value = platform === 'linux'
   } catch { /* ignore */ }
 })
 
@@ -107,14 +109,8 @@ async function onInspect() {
     </div>
 
     <div class="titlebar-left">
-      <!-- Windows: logo + title -->
-      <template v-if="isWindows">
-        <svg class="titlebar-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="4 17 10 11 4 5" />
-          <line x1="12" y1="19" x2="20" y2="19" />
-        </svg>
-      </template>
-      <template v-if="isMacOS">
+      <!-- Windows/Linux: logo + title -->
+      <template v-if="isWindows || isLinux">
         <svg class="titlebar-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="4 17 10 11 4 5" />
           <line x1="12" y1="19" x2="20" y2="19" />
@@ -140,8 +136,8 @@ async function onInspect() {
           <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM11 7h2v2h-2V7zm0 4h2v6h-2v-6z"/>
         </svg>
       </button>
-      <!-- Windows: show minimize/maximize/close buttons on the right -->
-      <template v-if="isWindows">
+      <!-- Windows/Linux: show minimize/maximize/close buttons on the right -->
+      <template v-if="isWindows || isLinux">
         <div class="titlebar-sep" />
         <button class="tb-btn minimize" @click="onMinimize" :title="t('titlebar.minimize')">
           <svg viewBox="0 0 12 12" width="12" height="12">
@@ -169,7 +165,7 @@ async function onInspect() {
   <div v-if="ctxMenu" class="ctx-backdrop" @click="closeCtxMenu" @contextmenu.prevent="closeCtxMenu" />
   <Teleport to="body">
     <div v-if="ctxMenu" class="ctx-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
-      <template v-if="isWindows">
+      <template v-if="isWindows || isLinux">
         <button class="ctx-item" :disabled="!isMaximized" @click="onRestore()">{{ t('titlebar.restore') }}</button>
         <button class="ctx-item" @click="onMinimize(); ctxMenu = null">{{ t('titlebar.minimize') }}</button>
         <button class="ctx-item" @click="onMaximize(); ctxMenu = null">{{ isMaximized ? t('titlebar.restore') : t('titlebar.maximize') }}</button>
