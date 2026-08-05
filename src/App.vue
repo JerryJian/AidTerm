@@ -114,16 +114,14 @@ watch(
   { immediate: true },
 )
 
-const appStyle = computed(() => {
+const bgStyle = computed(() => {
   const style: Record<string, string> = {}
-  if (settings.transparency < 1) {
-    style.opacity = String(settings.transparency)
-  }
   if (bgUrl.value) {
     style.backgroundImage = `url('${bgUrl.value}')`
     style.backgroundSize = 'cover'
     style.backgroundPosition = 'center'
     style.backgroundRepeat = 'no-repeat'
+    style.opacity = String(settings.backgroundOpacity)
   }
   return style
 })
@@ -451,7 +449,8 @@ onUnmounted(() => {
 <template>
   <LockScreen v-if="locked" @unlocked="unlockApp" />
 
-  <div class="app" :class="{ 'left-dragging': leftDragging }" :style="appStyle" @contextmenu.prevent>
+  <div class="app" :class="{ 'left-dragging': leftDragging }" @contextmenu.prevent>
+    <div v-if="bgUrl" class="app-bg" :style="bgStyle" />
     <TitleBar @lock="lockApp" />
     <TabBar
       @lock-click="lockApp"
@@ -663,10 +662,19 @@ body,
 
 <style scoped>
 .app {
+  position: relative;
+  z-index: 0;
   display: flex;
   flex-direction: column;
   height: 100vh;
   width: 100vw;
+}
+
+.app-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
 }
 
 .content-area {

@@ -84,8 +84,8 @@ async function onLanguageChange(e: Event) {
   setLanguage(locale.value = lang as any)
 }
 
-function onTransparencyChange(e: Event) {
-  settings.transparency = parseFloat((e.target as HTMLInputElement).value)
+function onBackgroundOpacityChange(e: Event) {
+  settings.backgroundOpacity = parseFloat((e.target as HTMLInputElement).value)
 }
 
 async function selectBackgroundImage() {
@@ -148,17 +148,6 @@ async function toggleFullscreen() {
             </select>
           </div>
           <div class="setting-row">
-            <label>{{ t('settings.transparency') }}: {{ Math.round(settings.transparency * 100) }}%</label>
-            <input
-              type="range"
-              min="0.3"
-              max="1"
-              step="0.05"
-              :value="settings.transparency"
-              @input="onTransparencyChange"
-            />
-          </div>
-          <div class="setting-row">
             <label>{{ t('settings.scrollback') }}</label>
             <select :value="settings.scrollback" @change="(e: any) => settings.scrollback = parseInt(e.target.value, 10)">
               <option :value="1000">1000</option>
@@ -176,6 +165,17 @@ async function toggleFullscreen() {
               <button class="action-btn" @click="selectBackgroundImage">{{ t('settings.select_image') }}</button>
               <button v-if="settings.backgroundImage" class="action-btn danger" @click="clearBackgroundImage">{{ t('settings.clear_image') }}</button>
             </div>
+          </div>
+          <div v-if="settings.backgroundImage" class="setting-row">
+            <label>{{ t('settings.background_opacity') }}: {{ Math.round(settings.backgroundOpacity * 100) }}%</label>
+            <input
+              type="range"
+              min="0.1"
+              max="1"
+              step="0.05"
+              :value="settings.backgroundOpacity"
+              @input="onBackgroundOpacityChange"
+            />
           </div>
         </div>
         </template>
