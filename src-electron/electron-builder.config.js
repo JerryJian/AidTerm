@@ -17,6 +17,7 @@ module.exports = () => {
   return {
     appId: 'com.aidterm.app',
     productName: 'AidTerm',
+    executableName: 'aidterm',
     directories: {
       output: './out'
     },
@@ -52,6 +53,7 @@ module.exports = () => {
     ],
     linux: {
       target: ['AppImage', 'deb'],
+      artifactName: 'AidTerm_electron_${version}_${arch}.${ext}',
       category: 'TerminalEmulator',
       maintainer: 'AidTerm <aidterm@users.noreply.github.com>'
     },
