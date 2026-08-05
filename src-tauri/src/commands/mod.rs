@@ -442,7 +442,11 @@ pub async fn get_remote_system_info(
     let os = parts.first().unwrap_or(&"remote").to_string();
     let hostname = parts.get(1).unwrap_or(&"remote").to_string();
     let kernel = parts.get(2).unwrap_or(&"remote").to_string();
-    let arch = parts.iter().nth_back(1).unwrap_or(&"remote").to_string();
+    let arch = manager.exec(&session_id, "uname -m").await
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| parts.iter().nth_back(1).unwrap_or(&"remote").to_string());
 
     let t1 = std::time::Instant::now();
     let os_release = manager.exec(&session_id, "cat /etc/os-release").await;

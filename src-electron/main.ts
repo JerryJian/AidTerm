@@ -977,9 +977,12 @@ function registerIpcHandlers(): void {
     const shellOut = await execCmd('basename $SHELL 2>/dev/null || echo unknown')
     const shell = shellOut.trim() && shellOut.trim() !== 'unknown' ? shellOut.trim() : 'remote'
 
+    const unameM = await execCmd('uname -m')
+    const arch = unameM.trim() || parts[parts.length - 2] || 'remote'
+
     return {
       os: osLabel,
-      arch: parts[parts.length - 2] || 'remote',
+      arch,
       hostname: parts[1] || 'remote',
       kernel: parts[2] || 'remote',
       shell,
