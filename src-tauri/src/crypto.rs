@@ -4,6 +4,22 @@ use ring::rand::{SecureRandom, SystemRandom};
 use std::fs;
 use std::path::PathBuf;
 
+#[cfg(unix)]
+fn write_key_file(path: &PathBuf, data: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true).mode(0o600);
+    let mut f = opts.open(path)?;
+    f.write_all(data)?;
+    f.sync_all()
+}
+
+#[cfg(not(unix))]
+fn write_key_file(path: &PathBuf, data: &[u8]) -> std::io::Result<()> {
+    fs::write(path, data)
+}
+
 fn key_path(app_data_dir: &PathBuf) -> PathBuf {
     app_data_dir.join(".store_key")
 }
@@ -24,7 +40,7 @@ fn load_or_create_key(app_data_dir: &PathBuf) -> Result<[u8; 32], String> {
         .map_err(|e| format!("Failed to generate key: {}", e))?;
     fs::create_dir_all(app_data_dir)
         .map_err(|e| format!("Failed to create app data dir: {}", e))?;
-    fs::write(&path, key).map_err(|e| format!("Failed to write key file: {}", e))?;
+    write_key_file(&path, &key).map_err(|e| format!("Failed to write key file: {}", e))?;
     Ok(key)
 }
 

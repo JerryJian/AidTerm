@@ -117,8 +117,24 @@ function createWindow(): void {
   })
 }
 
+function killPty(term: { pid: number; kill: (signal?: string) => void }): void {
+  try {
+    if (process.platform === 'win32') {
+      // Windows: ConPTY kills the whole process tree.
+      term.kill()
+      return
+    }
+    // Unix: the shell is the session/process-group leader (via setsid), so HUP the
+    // entire group to give the shell a chance to clean up vim/top/background jobs,
+    // then force-kill the group after a short grace period as a fallback.
+    const pid = term.pid
+    try { process.kill(-pid, 'SIGHUP') } catch {}
+    setTimeout(() => { try { process.kill(-pid, 'SIGKILL') } catch {} }, 500)
+  } catch {}
+}
+
 function cleanupAllSessions(): void {
-  for (const [, pty] of ptySessions) { try { pty.kill() } catch {} }
+  for (const [, pty] of ptySessions) { killPty(pty) }
   ptySessions.clear()
   for (const [, ssh] of sshSessions) { try { ssh.conn.end() } catch {} }
   sshSessions.clear()
@@ -408,7 +424,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('kill_terminal', (_, args: KillTerminalArgs) => {
     const { sessionId } = args
     const term = ptySessions.get(sessionId)
-    if (term) { try { term.kill() } catch {}; ptySessions.delete(sessionId); return }
+    if (term) { killPty(term); ptySessions.delete(sessionId); return }
     const ssh = sshSessions.get(sessionId)
     if (ssh) { try { ssh.conn.end() } catch {}; sshSessions.delete(sessionId); return }
     const sp = serialSessions.get(sessionId)
@@ -1061,6 +1077,7 @@ function registerIpcHandlers(): void {
     const id = crypto.randomUUID()
     const destPriv = path.join(keysDir, `${name}_imported`)
     fs.copyFileSync(privateKeyPath, destPriv)
+    try { fs.chmodSync(destPriv, 0o600) } catch {}
 
     let pubContent = ''
     try {
