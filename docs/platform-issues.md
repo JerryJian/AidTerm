@@ -5,14 +5,6 @@
 
 ---
 
-## 低优先级
-
-| # | 问题 | 位置 | 说明 |
-|---|------|------|------|
-| 22 | **`LANG` 兜底与 AI 命令引用（反向缺口）** | `src-tauri/src/ai/mod.rs:387-405`；`src-electron/main.ts:805-808` | Windows 上 `cmd /C` 输出 GBK 时 `from_utf8_lossy` 乱码（缺 GBK 兜底）；Electron 侧 `sh -c ${JSON.stringify(cmd)}` 不转义 `$`/反引号导致语义偏差。 |
-
----
-
 ## 已修复（本轮）
 
 - **导入私钥 0644（#5）**：`src-electron/main.ts`（`key_import` 拷贝后 `chmodSync(destPriv, 0o600)`）+ `src-tauri/src/crypto.rs`（`.store_key` 用 `OpenOptionsExt::mode(0o600)`）——Linux/macOS 落盘不再 world-readable，git/ssh-agent 不再报 "UNPROTECTED PRIVATE KEY FILE"。
@@ -37,6 +29,7 @@
 - **Linux 远程 `uname -a` arch 解析（#19）**：`src-electron/main.ts` `get_remote_system_info` + `src-tauri/src/commands/mod.rs`——`uname -a` 在 kernel release 之后的 token 位置不可移植：Linux 末尾是 `... x86_64 GNU/Linux`、macOS 末尾是 `... RELEASE_ARM64_T6000 arm64`，按倒数第二 token（`parts[length-2]` / `nth_back(1)`）取架构在部分发行版上取到 "GNU/Linux" 或 build 标识。改为额外执行可移植的 `uname -m`（Linux `x86_64`/`aarch64`、macOS `arm64`/`x86_64`、BSD 同），失败时回退旧的位置猜测；hostname/kernel 仍取 `uname -a` 的 `parts[1]`/`parts[2]`（这两个位置所有 Unix 一致）。
 - **会话组名硬编码中文（#20）**：`src/stores/sessionStore.ts` + `src/types/index.ts` + `src/components/{session/SessionPanel,terminal/TabBar}.vue`——① `SavedSessionGroup` 增加可选 `built_in` 标记；`initBuiltInProfiles` 创建分组时用 `te('menu.local_shell') ? t('menu.local_shell') : 'Local Shell'`（zh-CN「本地终端」/ en-US「Local Shell」），并标记 `built_in: true`；② 新增 `groupName(group)` 显示函数：`built_in` 分组渲染时始终返回当前语言的 `menu.local_shell`（切语言即时生效），普通分组返回存储名；SessionPanel 与 TabBar 两处渲染改用该函数；③ `load()` 迁移旧数据：已持久化的「本地终端」分组自动补 `built_in` 标记；④ 用户重命名内置分组时 `renameGroup` 清除 `built_in`，此后显示用户自定义名，不再被翻译覆盖。
 - **macOS Cmd+Shift+I 不触发 DevTools（#21）**：`src-electron/main.ts` `before-input-event`——原 `Ctrl+Shift+I` 判断只认 `input.control`（Windows/Linux 正确），macOS 上用户按 `Cmd+Shift+I`（`input.meta`，`control=false`）不生效。改为 `isCmdLike = input.control || (process.platform === 'darwin' && input.meta)`，macOS 上 `Cmd+Shift+I` 与 `Ctrl+Shift+I` 均可切换 DevTools，其他平台行为不变（`F12` 不受影响）。
+- **AI 命令 GBK 解码 + `sh -c` 引用（#22）**：`src-tauri/src/ai/mod.rs` + `src-electron/main.ts`——① Rust `execute_command` 新增 `decode_cmd_output`：Windows 上先试 UTF-8 严格解码，失败依次回退 `encoding_rs::GBK` → `WINDOWS_1252` → lossy（`cmd /C` 输出 GBK 时不再乱码；Unix 分支保持 lossy）；② Electron `ai_execute` 弃用 `execSync("sh -c ${JSON.stringify(cmd)}")` 字符串拼接（外层 shell 会对双引号内的 `$`/反引号先展开一次导致二次展开/命令替换语义偏差），改为 `spawnSync('sh', ['-c', command], { shell: false, windowsHide: true })` / `spawnSync('cmd', ['/C', command], ...)`——命令字符串原样传给 `sh -c`/`cmd /C`，`$`、反引号只被目标 shell 求值一次，且不再有外层 shell 注入面；超时/找不到命令通过 `res.error` 返回；输出同样走 UTF-8→GBK 回退解码（`TextDecoder('gbk')`）。
 
 ## 复测指南（#5–#8、#10–#14）
 
@@ -58,7 +51,8 @@
 - **#19 远程 arch 解析**：复现条件——在 Linux 服务器（如 `uname -a` 输出 `Linux host 5.15.0-91-generic #92-Ubuntu SMP ... x86_64 GNU/Linux`）或 macOS（末尾 `arm64`）上打开「会话详情/系统信息」查看架构。修复前 Linux 上取倒数第二 token（可能为 "GNU/Linux" 或错误值）、macOS 上取到 "RELEASE_ARM64_T6000" 类 build 标识；修复后显示 `uname -m` 的真实值（`x86_64`/`aarch64`/`arm64`）。验证：Tauri 与 Electron 双后端均显示正确架构，hostname/kernel 仍正确。
 - **#20 会话组名硬编码中文**：复现条件——① 任意语言环境下首次启动（或清空会话存储后）自动创建本地会话分组，英文界面应显示 "Local Shell"、中文界面显示「本地终端」（修复前英文界面也显示「本地终端」）；② 已保存旧版本数据的用户升级后，「本地终端」分组仍显示中文，但切到英文界面后显示 "Local Shell"（`load()` 迁移 + 渲染时翻译）；③ 用户手动把该分组改名（如 "My Shells"）后，改名立即生效且切语言不再覆盖；④ 切语言后无需重启即可看到分组名跟随变化。验证：SessionPanel 与 TabBar 的已保存分组标题两处均正确本地化。
 - **#21 macOS DevTools 快捷键**：复现条件——macOS 上聚焦终端窗口按 `Cmd+Shift+I`，修复前无反应（只认 `Ctrl`），修复后打开/关闭 DevTools；Windows/Linux 上 `Ctrl+Shift+I` 与 `F12` 行为不变。验证：三平台均能开关 DevTools，且不影响终端内 `Ctrl+C`/粘贴等按键。
+- **#22 AI 命令 GBK + 引用**：复现条件——① Windows 上开 AI 面板让 `execute_command` 工具执行会输出中文 GBK 的命令（如 `chcp 65001` 之前的 `echo 中文` 或 `dir` 中文目录），修复前输出乱码（`from_utf8_lossy`），修复后正常显示（UTF-8 优先、GBK 兜底）；② Unix 上让 AI 执行含 `$`/反引号的命令（如 `echo $HOME`、`echo \`hostname\``、`VAR=1 echo $VAR`），修复前（Electron 侧 `JSON.stringify` 外包在 `execSync` 的外层 shell 里）`$`/反引号被外层 shell 先展开一次导致语义偏差（如 `echo $HOME` 返回两次展开结果或空值），修复后 `spawnSync` 数组参数原样传递、仅目标 `sh` 求值一次；③ AI 执行不存在的命令 / 超时命令，返回信息包含错误原因而非抛异常。验证：Tauri 与 Electron 双后端行为一致；含特殊字符命令结果与直接在终端执行一致。
 
 ## 修复建议优先级
 
-1. macOS Cmd+Shift+I（#21）、AI 命令 GBK/引用（#22）。
+本轮 #4–#22 已全部修复。剩余为 AGENTS.md 待办中的功能缺口（非本清单范围）：SSH 私钥 passphrase 登录、会话导入导出、Tab 拖拽、通知接入、快捷键自定义、自动重连、指纹验证弹窗、SCP/Zmodem 前端/Trzsz、AI 书签、MCP、云同步、ssh-agent/X11 转发、单测/E2E 等。

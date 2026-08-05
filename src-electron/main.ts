@@ -176,6 +176,18 @@ function decryptPassword(enc: string): string {
   return decrypted
 }
 
+function decodeCmdOutput(buf: Buffer): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf)
+  } catch {
+    try {
+      return new TextDecoder('gbk').decode(buf)
+    } catch {
+      return buf.toString('utf8')
+    }
+  }
+}
+
 function loadSessionStore(): SessionStoreData {
   const p = sessionStorePath()
   if (!fs.existsSync(p)) return { sessions: [], groups: [] }
@@ -847,21 +859,20 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('ai_execute', async (_, args: AiExecuteArgs) => {
     const { command } = args
-    const { execSync } = require('child_process') as typeof import('child_process')
-    try {
-      const cmd = process.platform === 'win32'
-        ? `cmd /C ${command}`
-        : `sh -c ${JSON.stringify(command)}`
-      const output: string = execSync(cmd, { encoding: 'utf8', timeout: 60000 })
-      return output
-    } catch (err: unknown) {
-      const e = err as { stdout?: string; stderr?: string; status?: number; message?: string }
-      let result = ''
-      if (e.stdout) result += e.stdout
-      if (e.stderr) result += (result ? '\n' : '') + e.stderr
-      if (e.status != null) result += `\n[Exit code: ${e.status}]`
-      return result || e.message || 'Unknown error'
-    }
+    const { spawnSync } = require('child_process') as typeof import('child_process')
+    const isWin = process.platform === 'win32'
+    const res = spawnSync(isWin ? 'cmd' : 'sh', isWin ? ['/C', command] : ['-c', command], {
+      timeout: 60000,
+      windowsHide: true,
+      shell: false,
+      maxBuffer: 16 * 1024 * 1024,
+    })
+    let result = ''
+    if (res.stdout && res.stdout.length > 0) result += decodeCmdOutput(res.stdout as Buffer)
+    if (res.stderr && res.stderr.length > 0) result += (result ? '\n' : '') + decodeCmdOutput(res.stderr as Buffer)
+    if (res.status != null && res.status !== 0) result += `\n[Exit code: ${res.status}]`
+    if (!result && res.error) result = res.error.message || 'Unknown error'
+    return result
   })
 
   ipcMain.handle('ai_continue', async (_, args: AiContinueArgs) => {

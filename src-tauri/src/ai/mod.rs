@@ -382,6 +382,27 @@ pub async fn chat_completion(
     }
 }
 
+#[cfg(target_os = "windows")]
+fn decode_cmd_output(buf: &[u8]) -> String {
+    if let Ok(s) = std::str::from_utf8(buf) {
+        return s.to_string();
+    }
+    let (cow, _, had_errors) = encoding_rs::GBK.decode(buf);
+    if !had_errors {
+        return cow.to_string();
+    }
+    let (cow, _, had_errors) = encoding_rs::WINDOWS_1252.decode(buf);
+    if !had_errors {
+        return cow.to_string();
+    }
+    String::from_utf8_lossy(buf).to_string()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn decode_cmd_output(buf: &[u8]) -> String {
+    String::from_utf8_lossy(buf).to_string()
+}
+
 /// Execute a shell command and return its output
 pub async fn execute_command(command: &str) -> Result<String, String> {
     let output = if cfg!(target_os = "windows") {
@@ -407,14 +428,14 @@ pub async fn execute_command(command: &str) -> Result<String, String> {
     let mut result = String::new();
 
     if !output.stdout.is_empty() {
-        result.push_str(&String::from_utf8_lossy(&output.stdout));
+        result.push_str(&decode_cmd_output(&output.stdout));
     }
 
     if !output.stderr.is_empty() {
         if !result.is_empty() {
             result.push('\n');
         }
-        result.push_str(&String::from_utf8_lossy(&output.stderr));
+        result.push_str(&decode_cmd_output(&output.stderr));
     }
 
     if !output.status.success() {
