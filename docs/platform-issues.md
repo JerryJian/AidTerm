@@ -12,7 +12,6 @@
 | 5 | **导入私钥 0644 世界可读** | `src-electron/main.ts:1043`（`key_import` 拷贝后无 chmod）；`src-tauri/src/crypto.rs:27`（`.store_key`） | Linux/macOS 上按默认 umask 落盘，通常 0644 world-readable。私钥被其他本地用户可读，且后续交给 git/ssh-agent 会触发 "UNPROTECTED PRIVATE KEY FILE" 拒绝。应 `fs.chmod(priv, 0o600)` / `OpenOptionsExt::mode(0o600)`。 |
 | 6 | **打包后 CLI 参数错位** | `src-electron/main.ts:943` `process.argv.slice(2)` | 打包版 argv 第一个元素是应用可执行文件路径，`slice(2)` 会把首参吞掉、其余参数整体前移。应 `app.isPackaged ? process.argv.slice(1) : process.argv.slice(2)`（macOS 还要过滤 `-psn_0_xxx`）。 |
 | 7 | **Local 隧道依赖远程 `nc`** | `src-electron/main.ts:724` | Local 端口转发在远程服务器执行 `nc host port`。Linux 精简发行版/容器未装 netcat、macOS 新版 `nc` 被移除（或只在 Xcode 中）→ Local 隧道失效且无降级。 |
-| 8 | **密钥生成/导入依赖外部 `ssh-keygen`** | `src-tauri/src/keychain/mod.rs:52-61` | Windows 10+ 自带 OpenSSH client；Linux 最小安装（无 `openssh-client` 包）、旧 macOS 无 `ssh-keygen` → 密钥生成/导入直接报错。建议改用 `russh::keys` 自实现。 |
 
 ---
 
@@ -51,10 +50,18 @@
 - **背景图加载**：`src/App.vue` + `src/api/{index,tauri,electron}.ts` + `src-electron/main.ts`（`file_to_data_url`）+ `src-tauri/tauri.conf.json`（`assetProtocol`）——弃用裸 `file:///`，Tauri 用 `convertFileSrc`、Electron 用 data URL。
 - **终端透出背景**：`src/components/terminal/TerminalWrapper.vue`——背景图开启时终端容器与 xterm 主题背景改为透明。
 - **detect_shells 返回形状统一**：`src-electron/main.ts`（`detect_shells` 改为与 Tauri 一致的 `{name,command,icon}` 对象数组）+ `src/App.vue`（`initBuiltInLocalProfiles` 归一化两种形状）——Electron 模式下内置本地会话 profile 字段不再 undefined。
+- **密钥生成/导入不再依赖外部 `ssh-keygen`**：`src-tauri/src/keychain/mod.rs`——用 `russh::keys`（ssh-key）`PrivateKey::random` 原生生成 ED25519 / RSA(4096)，`encrypt` 支持 passphrase 加密私钥，`write_openssh_file` 自动 0600 权限；导入时用 `load_secret_key` 直接解析私钥并提取公钥/指纹，不再调用 `ssh-keygen`。
+
+## 复测指南（#5–#8）
+
+以下为各修复的复现条件与验证方法（Linux/macOS 优先）。
+
+- **#5 导入私钥 0644**：复现条件——在 umask 为 `022` 的 Linux/macOS 上，Tauri 侧「设置→密钥管理→生成」私钥后 `ls -l` 查看 `appData/keys/*id_rsa`（修复前 0644，修复后 0600）；Electron 侧「导入私钥」到任意位置后同样应为 0600。验证：`ssh-keygen -y -f <key> -P ""` 不再报 "UNPROTECTED PRIVATE KEY FILE"，且可用该密钥完成一次 SSH 登录。
+- **#6 打包后 CLI 参数错位**：复现条件——用 `npm run build` 打包后的可执行文件（`npx electron .` 开发态不受影响）在终端带参启动，如 `AidTerm.exe ssh user@host`（macOS 为 `open -a AidTerm --args ...`）。修复前首参被吞、后续参数前移导致连接对象错乱；修复后应解析为 `ssh user@host`，且 macOS 的 `-psn_0_xxx` 被过滤。
+- **#7 Local 隧道依赖远程 `nc`**：复现条件——连接一台未安装 `nc`（`command -v nc` 为空）的 Linux 服务器，添加 Local 端口转发。修复前日志报 `nc: command not found`、隧道失效；修复后改用 `forwardOut`（direct-tcpip）直连目标端口，`nc` 缺失时隧道仍可用。验证：`ssh -T` 场景下本地 `curl 127.0.0.1:<local_port>` 能访问远程目标。
+- **#8 依赖外部 `ssh-keygen`**：复现条件——在未安装 `openssh-client`（Linux 最小安装）或 PATH 中无 `ssh-keygen` 的环境，Tauri 侧「密钥管理→生成 RSA/ED25519」与「导入私钥」。修复前报 `ssh-keygen not found`；修复后不依赖外部命令。验证：生成 RSA 后 `ls -l` 为 0600、`.pub` 内容以 `ssh-rsa AAAA` 开头、指纹显示 `SHA256:...`；设置 passphrase 时私钥文件开头为 `-----BEGIN OPENSSH PRIVATE KEY-----`（加密负载，可用 `openssl` 或 `ssh-keygen -y -f <key>` 输入口令验证加密是否生效）；导入无 `.pub` 的私钥也能自动提取公钥与指纹。注：当前 SSH 连接 `src-tauri/src/session/ssh.rs:219` 仍以 `None` 口令加载密钥，带 passphrase 的密钥暂不能用于登录（需后续接入口令输入，属已知缺口）。
 
 ## 修复建议优先级
 
-1. 私钥权限（#5）：`chmod 0600`。
-2. `ssh-keygen` 依赖（#8）：改用 `russh::keys`。
-3. 换行符统一（#10、#11）。
-4. known_hosts（#14）三处 bug。
+1. 换行符统一（#10、#11）。
+2. known_hosts（#14）三处 bug。
