@@ -228,6 +228,7 @@ export interface KnownHostsRemoveArgs {
 // ── Session & State Types ──
 
 export interface PtySession {
+  pid: number
   write(data: string): void
   resize(cols: number, rows: number): void
   kill(): void

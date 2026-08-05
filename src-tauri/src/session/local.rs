@@ -7,6 +7,8 @@ pub struct LocalSession {
     pub writer: Box<dyn Write + Send>,
     pub master: Box<dyn MasterPty + Send>,
     pub killer: Box<dyn ChildKiller + Send>,
+    #[cfg_attr(not(unix), allow(dead_code))]
+    pub pid: Option<u32>,
 }
 
 #[cfg(windows)]
@@ -107,6 +109,7 @@ impl LocalSession {
         // reader thread alone can never detect a disconnect. Detecting the
         // child process exit here works on all platforms.
         let killer = child.clone_killer();
+        let child_pid = child.process_id();
         let watch_sid = id.clone();
         let watch_app = app_handle.clone();
         std::thread::spawn(move || {
@@ -125,7 +128,7 @@ impl LocalSession {
             }));
         });
 
-        Ok(Self { writer: Box::new(writer), master, killer })
+        Ok(Self { writer: Box::new(writer), master, killer, pid: child_pid })
     }
 
     pub fn write(&mut self, data: &str) -> Result<(), String> {
@@ -141,6 +144,31 @@ impl LocalSession {
     }
 
     pub fn kill(mut self) {
+        #[cfg(unix)]
+        {
+            if let Some(pid) = self.pid {
+                unsafe {
+                    // Signal the foreground process group (e.g. vim/top) directly,
+                    // then the shell's own group so it can clean up its remaining jobs.
+                    let fg = self.master.process_group_leader();
+                    if let Some(fg) = fg.filter(|&fg| fg != pid as libc::pid_t) {
+                        libc::kill(-fg, libc::SIGHUP);
+                    }
+                    libc::kill(-(pid as libc::pid_t), libc::SIGHUP);
+                }
+                // Give the shell a short grace period to terminate its children,
+                // then force-kill the group as a fallback for unresponsive shells.
+                std::thread::sleep(Duration::from_millis(300));
+                unsafe {
+                    let fg = self.master.process_group_leader();
+                    if let Some(fg) = fg.filter(|&fg| fg != pid as libc::pid_t) {
+                        libc::kill(-fg, libc::SIGKILL);
+                    }
+                    libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
+                }
+                return;
+            }
+        }
         let _ = self.killer.kill();
     }
 }
