@@ -37,6 +37,58 @@ fn decode_windows_output(buf: &[u8]) -> String {
     String::from_utf8_lossy(buf).to_string()
 }
 
+/// Streaming UTF-8 decoder that carries incomplete trailing sequences across
+/// reads, so a multi-byte character split by a read boundary is reassembled
+/// instead of being mis-decoded (e.g. UTF-8 box-drawing characters falling
+/// back to GBK and turning into mojibake for large outputs like `curl wttr.in`).
+/// Bytes that are genuinely not UTF-8 still go through the legacy fallback.
+struct StreamingDecoder {
+    pending: Vec<u8>,
+}
+
+impl StreamingDecoder {
+    fn new() -> Self {
+        Self { pending: Vec::new() }
+    }
+
+    fn feed(&mut self, bytes: &[u8]) -> String {
+        self.pending.extend_from_slice(bytes);
+        let mut out = String::new();
+        loop {
+            match std::str::from_utf8(&self.pending) {
+                Ok(s) => {
+                    out.push_str(s);
+                    self.pending.clear();
+                    break;
+                }
+                Err(e) => match e.error_len() {
+                    // Incomplete trailing sequence: wait for the next read to
+                    // finish it rather than decoding a partial character.
+                    None => break,
+                    // Genuinely invalid byte(s): this is not a UTF-8 stream
+                    // (e.g. a legacy GBK tool), so fall back to the legacy
+                    // code-page decoding for the whole pending buffer.
+                    Some(_) => {
+                        out.push_str(&decode_windows_output(&self.pending));
+                        self.pending.clear();
+                        break;
+                    }
+                },
+            }
+        }
+        out
+    }
+
+    fn flush(&mut self) -> String {
+        if self.pending.is_empty() {
+            return String::new();
+        }
+        let out = String::from_utf8_lossy(&self.pending).to_string();
+        self.pending.clear();
+        out
+    }
+}
+
 impl LocalSession {
     pub fn spawn(
         id: String,
@@ -91,16 +143,25 @@ impl LocalSession {
         let app_h = app_handle.clone();
         std::thread::spawn(move || {
             let mut buf = [0u8; 4096];
+            let mut decoder = StreamingDecoder::new();
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => break,
                     Ok(n) => {
-                        let data = decode_windows_output(&buf[..n]);
-                        let _ = app_h.emit("terminal-output", serde_json::json!({
-                            "session_id": sid, "data": data,
-                        }));
+                        let data = decoder.feed(&buf[..n]);
+                        if !data.is_empty() {
+                            let _ = app_h.emit("terminal-output", serde_json::json!({
+                                "session_id": sid, "data": data,
+                            }));
+                        }
                     }
                 }
+            }
+            let data = decoder.flush();
+            if !data.is_empty() {
+                let _ = app_h.emit("terminal-output", serde_json::json!({
+                    "session_id": sid, "data": data,
+                }));
             }
         });
 
