@@ -317,6 +317,25 @@ jobs:
             fs.writeFileSync('release-body.md', body);
             core.setOutput('body-file', 'release-body.md');
 
+      - name: Delete stale draft release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = context.ref.replace('refs/tags/', '');
+            const { data: releases } = await octokit.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const stale = releases.find(r => r.tag_name === tag && r.draft);
+            if (stale) {
+              await octokit.rest.repos.deleteRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: stale.id,
+              });
+              core.notice(`Deleted stale draft release ${stale.id} for tag ${tag}`);
+            }
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
