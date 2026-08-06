@@ -116,16 +116,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-22.04
+          - runner: ubuntu-20.04
             target: linux-x64
           - runner: ubuntu-22.04-arm
             target: linux-arm64
+            container: node:20-bullseye
           - runner: macos-15
             target: macos-arm64
           - runner: windows-2022
             target: windows-x64
 
     runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
     steps:
       - uses: actions/checkout@v7
 
@@ -153,14 +155,17 @@ jobs:
         if: runner.os == 'Linux'
         working-directory: src-electron
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
+          if command -v sudo >/dev/null 2>&1; then SUDO=sudo; else SUDO=''; fi
+          $SUDO apt-get update -qq
+          $SUDO apt-get install -y --no-install-recommends \
             build-essential \
             python3 \
             libx11-dev \
             libxtst-dev \
             libpng-dev \
-            libffi-dev
+            libffi-dev \
+            libudev-dev
+          npx electron-builder install-app-deps
 
       - name: Build Electron app (Linux)
         if: runner.os == 'Linux'

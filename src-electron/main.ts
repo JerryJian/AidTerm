@@ -34,10 +34,10 @@ let SftpClientClass: typeof SftpClient | null = null
 let SerialPortClass: typeof import('serialport').SerialPort | null = null
 
 function loadNativeModules(): void {
-  try { ptyModule = require('node-pty') } catch { console.warn('[electron] node-pty not available') }
-  try { ssh2Module = require('ssh2') } catch { console.warn('[electron] ssh2 not available') }
-  try { SftpClientClass = require('ssh2-sftp-client') } catch { console.warn('[electron] ssh2-sftp-client not available') }
-  try { SerialPortClass = require('serialport').SerialPort } catch { console.warn('[electron] serialport not available') }
+  try { ptyModule = require('node-pty') } catch (e) { console.warn('[electron] node-pty not available:', e) }
+  try { ssh2Module = require('ssh2') } catch (e) { console.warn('[electron] ssh2 not available:', e) }
+  try { SftpClientClass = require('ssh2-sftp-client') } catch (e) { console.warn('[electron] ssh2-sftp-client not available:', e) }
+  try { SerialPortClass = require('serialport').SerialPort } catch (e) { console.warn('[electron] serialport not available:', e) }
 }
 
 let mainWindow: BrowserWindow | null = null
