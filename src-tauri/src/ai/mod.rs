@@ -1,14 +1,20 @@
 use std::sync::Mutex;
+use std::collections::HashMap;
+use tokio_util::sync::CancellationToken;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
 pub struct AiState {
-    pub active_chats: Mutex<std::collections::HashMap<String, Vec<ChatMessage>>>,
+    pub active_chats: Mutex<HashMap<String, Vec<ChatMessage>>>,
+    cancels: Mutex<HashMap<String, CancellationToken>>,
 }
 
 impl AiState {
     pub fn new() -> Self {
-        Self { active_chats: Mutex::new(std::collections::HashMap::new()) }
+        Self {
+            active_chats: Mutex::new(HashMap::new()),
+            cancels: Mutex::new(HashMap::new()),
+        }
     }
 
     pub fn save_history(&self, session_id: &str, messages: Vec<ChatMessage>) {
@@ -25,8 +31,34 @@ impl AiState {
     }
 
     pub fn clear_history(&self, session_id: &str) {
+        self.cancel_chat(session_id);
         if let Ok(mut chats) = self.active_chats.lock() {
             chats.remove(session_id);
+        }
+    }
+
+    /// Register a fresh cancellation token for an in-flight request. Returns
+    /// the token; when it is cancelled, the owning command aborts the request
+    /// (dropping the HTTP future cancels the underlying connection).
+    pub fn register_cancel(&self, session_id: &str) -> CancellationToken {
+        let token = CancellationToken::new();
+        if let Ok(mut cancels) = self.cancels.lock() {
+            cancels.insert(session_id.to_string(), token.clone());
+        }
+        token
+    }
+
+    pub fn cancel_chat(&self, session_id: &str) {
+        if let Ok(mut cancels) = self.cancels.lock() {
+            if let Some(token) = cancels.remove(session_id) {
+                token.cancel();
+            }
+        }
+    }
+
+    pub fn unregister_cancel(&self, session_id: &str) {
+        if let Ok(mut cancels) = self.cancels.lock() {
+            cancels.remove(session_id);
         }
     }
 }

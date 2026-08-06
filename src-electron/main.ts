@@ -52,6 +52,7 @@ const sftpTransfers = new Map<string, { abort: () => void }>()
 const tunnelMap = new Map<string, TunnelState>()
 const proxyConfigs: ProxyConfig[] = []
 const aiHistories = new Map<string, AiMessage[]>()
+const aiAborters = new Map<string, AbortController>()
 const keyIndex = new Map<string, KeyInfo>()
 let keysDir = ''
 let keyIndexPath = ''
@@ -937,15 +938,28 @@ function registerIpcHandlers(): void {
 
     aiHistories.set(sessionId, messages)
 
-    const response = await callAiChat(messages, config)
+    const controller = new AbortController()
+    aiAborters.get(sessionId)?.abort()
+    aiAborters.set(sessionId, controller)
+    try {
+      const response = await callAiChat(messages, config, controller.signal)
 
-    if (response.tool_calls && response.tool_calls.length > 0) {
-      const history = aiHistories.get(sessionId) || []
-      history.push({ role: 'assistant', content: response.text || '', tool_calls: response.tool_calls })
-      aiHistories.set(sessionId, history)
+      if (response.tool_calls && response.tool_calls.length > 0) {
+        const history = aiHistories.get(sessionId) || []
+        history.push({ role: 'assistant', content: response.text || '', tool_calls: response.tool_calls })
+        aiHistories.set(sessionId, history)
+      }
+
+      return response
+    } finally {
+      if (aiAborters.get(sessionId) === controller) aiAborters.delete(sessionId)
     }
+  })
 
-    return response
+  ipcMain.handle('ai_cancel', (_, args: AiClearHistoryArgs) => {
+    const { sessionId } = args
+    aiAborters.get(sessionId)?.abort()
+    aiAborters.delete(sessionId)
   })
 
   ipcMain.handle('ai_execute', async (_, args: AiExecuteArgs) => {
@@ -973,19 +987,28 @@ function registerIpcHandlers(): void {
     history.push({ role: 'tool', content: toolResult, tool_call_id: toolCallId })
     aiHistories.set(sessionId, history)
 
-    const response = await callAiChat(history, config)
+    const controller = new AbortController()
+    aiAborters.get(sessionId)?.abort()
+    aiAborters.set(sessionId, controller)
+    try {
+      const response = await callAiChat(history, config, controller.signal)
 
-    if (response.tool_calls && response.tool_calls.length > 0) {
-      const h2 = aiHistories.get(sessionId) || []
-      h2.push({ role: 'assistant', content: response.text || '', tool_calls: response.tool_calls })
-      aiHistories.set(sessionId, h2)
+      if (response.tool_calls && response.tool_calls.length > 0) {
+        const h2 = aiHistories.get(sessionId) || []
+        h2.push({ role: 'assistant', content: response.text || '', tool_calls: response.tool_calls })
+        aiHistories.set(sessionId, h2)
+      }
+
+      return response
+    } finally {
+      if (aiAborters.get(sessionId) === controller) aiAborters.delete(sessionId)
     }
-
-    return response
   })
 
   ipcMain.handle('ai_clear_history', (_, args: AiClearHistoryArgs) => {
     const { sessionId } = args
+    aiAborters.get(sessionId)?.abort()
+    aiAborters.delete(sessionId)
     aiHistories.delete(sessionId)
   })
 
@@ -1262,7 +1285,7 @@ function registerIpcHandlers(): void {
 //  AI helper — OpenAI SDK chat completion
 // ══════════════════════════════════════════════════════════════
 
-async function callAiChat(messages: AiMessage[], config: AiConfig): Promise<AiResponse> {
+async function callAiChat(messages: AiMessage[], config: AiConfig, signal?: AbortSignal): Promise<AiResponse> {
   const { provider, api_key, model, base_url } = config
 
   let baseURL = base_url.replace(/\/+$/, '')
@@ -1322,7 +1345,7 @@ async function callAiChat(messages: AiMessage[], config: AiConfig): Promise<AiRe
     ],
     tool_choice: 'auto',
     parallel_tool_calls: false,
-  })
+  }, { signal })
 
   const choice = response.choices?.[0]
   if (!choice) throw new Error('No choices in AI response')

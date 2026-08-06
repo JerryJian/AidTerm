@@ -565,7 +565,22 @@ pub async fn ai_chat(
     // Save conversation history
     ai_state.save_history(&session_id, messages.clone());
 
-    let response = ai::chat_completion(messages, &config).await?;
+    // Race the completion against cancellation. When the cancel branch wins,
+    // the in-flight future is dropped, aborting the underlying HTTP request.
+    let token = ai_state.register_cancel(&session_id);
+    let fut = ai::chat_completion(messages, &config);
+    tokio::pin!(fut);
+    let response = tokio::select! {
+        r = &mut fut => {
+            ai_state.unregister_cancel(&session_id);
+            r
+        }
+        _ = token.cancelled() => {
+            ai_state.unregister_cancel(&session_id);
+            Err("AI 请求已取消".to_string())
+        }
+    };
+    let response = response?;
 
     // If there are tool calls, append the assistant message with tool_calls to history
     if !response.tool_calls.is_empty() {
@@ -580,6 +595,11 @@ pub async fn ai_chat(
     }
 
     Ok(response)
+}
+
+#[tauri::command]
+pub fn ai_cancel(ai_state: State<'_, ai::AiState>, session_id: String) {
+    ai_state.cancel_chat(&session_id);
 }
 
 #[tauri::command]
@@ -607,7 +627,20 @@ pub async fn ai_continue(
 
     ai_state.save_history(&session_id, history.clone());
 
-    let response = ai::chat_completion(history, &config).await?;
+    let token = ai_state.register_cancel(&session_id);
+    let fut = ai::chat_completion(history, &config);
+    tokio::pin!(fut);
+    let response = tokio::select! {
+        r = &mut fut => {
+            ai_state.unregister_cancel(&session_id);
+            r
+        }
+        _ = token.cancelled() => {
+            ai_state.unregister_cancel(&session_id);
+            Err("AI 请求已取消".to_string())
+        }
+    };
+    let response = response?;
 
     // If more tool calls, save the assistant message
     if !response.tool_calls.is_empty() {

@@ -23,6 +23,7 @@ russh = { version = "0.62", default-features = false, features = ["ring", "rsa",
 russh-sftp = "2.3.0"
 anyhow = "1"
 tokio = { version = "1", features = ["rt", "macros", "sync", "time", "io-util", "net", "fs"] }
+tokio-util = "0.7"
 futures = "0.3"
 tauri-plugin-dialog = "2.7.1"
 tauri-plugin-clipboard-manager = "2"

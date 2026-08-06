@@ -280,6 +280,10 @@ export const useAiStore = defineStore('ai', () => {
     pendingToolCall.value = null
   }
 
+  function cancelChat(sessionId?: string) {
+    invoke('ai_cancel', { sessionId: sessionId || activeSessionId.value || 'default' })
+  }
+
   return {
     config,
     enabled,
@@ -300,5 +304,6 @@ export const useAiStore = defineStore('ai', () => {
     executeCommand,
     continueWithResult,
     clearHistory,
+    cancelChat,
   }
 })

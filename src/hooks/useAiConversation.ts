@@ -249,6 +249,7 @@ export function useAiConversation(
   const pendingAiMsg = ref('')
   const busy = ref(false)
   const cancelled = ref(false)
+  let conversationGen = 0
   const autoExecute = computed(() => ai.config.auto_execute ?? false)
   const messages = ref<AiMessage[]>([])
   const commandHistory = ref<CommandRecord[]>([])
@@ -437,6 +438,7 @@ export function useAiConversation(
   }
 
   async function startConversation(userInput: string) {
+    conversationGen++
     cancelled.value = false
     busy.value = true
 
@@ -532,12 +534,14 @@ export function useAiConversation(
   }
 
   async function continueConversation() {
+    const gen = conversationGen
     try {
       const response = await ai.chat([...messages.value], aiSessionId)
-      if (cancelled.value) return
+      if (gen !== conversationGen || cancelled.value) return
       removeLastThinking()
       await handleAiResponse(response)
     } catch (e: unknown) {
+      if (gen !== conversationGen) return
       removeLastThinking()
       addConversationMessage({ role: 'error', content: `错误: ${e}` })
       endConversation()
@@ -545,9 +549,10 @@ export function useAiConversation(
   }
 
   async function continueWithToolResult(toolId: string, result: string) {
+    const gen = conversationGen
     messages.value.push({ role: 'tool', content: result, tool_call_id: toolId })
     const response = await ai.continueWithResult(toolId, result, aiSessionId)
-    if (cancelled.value) return
+    if (gen !== conversationGen || cancelled.value) return
     removeLastThinking()
     await handleAiResponse(response)
   }
@@ -623,6 +628,7 @@ export function useAiConversation(
   }
 
   async function onConfirmCommand() {
+    const gen = conversationGen
     showConfirm.value = false
     const cmd = pendingCommand.value
     const toolId = pendingToolId.value
@@ -633,7 +639,7 @@ export function useAiConversation(
       addConversationMessage({ role: 'thinking', content: '执行中...' })
 
       const result = await waitForPrompt(cmd)
-      if (cancelled.value) return
+      if (gen !== conversationGen || cancelled.value) return
       removeLastThinking()
       updateLastCommandAutoExecStatus(toolId, 'completed')
 
@@ -655,6 +661,7 @@ export function useAiConversation(
 
       await continueWithToolResult(toolId, resultForAI)
     } catch (e: unknown) {
+      if (gen !== conversationGen) return
       updateLastCommandAutoExecStatus(toolId, 'completed')
       removeLastThinking()
       addConversationMessage({ role: 'error', content: `执行错误: ${e}` })
@@ -664,6 +671,7 @@ export function useAiConversation(
 
   function onCancelCommand() {
     showConfirm.value = false
+    conversationGen++
     cancelled.value = true
     pendingCommand.value = ''
     pendingToolId.value = ''
@@ -685,6 +693,7 @@ export function useAiConversation(
   }
 
   function cancelConversation() {
+    conversationGen++
     cancelled.value = true
     showConfirm.value = false
     pendingCommand.value = ''
@@ -692,6 +701,7 @@ export function useAiConversation(
     if (resolveWait) resolveWait('')
     removeLastThinking()
     endConversation()
+    ai.cancelChat(aiSessionId)
     addConversationMessage({ role: 'error', content: '已取消本次问答' })
   }
 
@@ -709,6 +719,9 @@ export function useAiConversation(
   }
 
   function resetConversation() {
+    conversationGen++
+    cancelled.value = true
+    ai.cancelChat(aiSessionId)
     ai.clearHistory(aiSessionId)
     outputPages.clear()
     endConversation()

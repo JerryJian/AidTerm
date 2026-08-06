@@ -87,6 +87,7 @@ pub fn run() {
             commands::known_hosts_add,
             commands::known_hosts_remove,
             commands::ai_chat,
+            commands::ai_cancel,
             commands::ai_execute,
             commands::ai_continue,
             commands::ai_clear_history,

@@ -85,6 +85,7 @@ dependencies = [
  "tokio",
  "tokio-serial",
  "tokio-socks",
+ "tokio-util",
  "uuid",
 ]
 
