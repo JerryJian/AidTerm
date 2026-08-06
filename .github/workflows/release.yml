@@ -118,6 +118,7 @@ jobs:
         include:
           - runner: ubuntu-20.04
             target: linux-x64
+            container: node:20-bullseye
           - runner: ubuntu-22.04-arm
             target: linux-arm64
             container: node:20-bullseye
