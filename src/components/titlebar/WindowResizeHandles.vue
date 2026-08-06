@@ -1,17 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { invoke, getCurrentWindow, isElectron } from '@/api'
+import { computed, onUnmounted } from 'vue'
+import { getCurrentWindow, isElectron } from '@/api'
 import type { ResizeDirection, WindowBounds } from '@/api/types'
 
 const win = getCurrentWindow()
-const platform = ref('')
 
-// Tauri windows are frameless on every platform (tauri.conf.json decorations:false),
-// so they need resize handles everywhere. Electron keeps a native frame on
-// Windows/macOS, so handles are only needed on Linux (frameless + transparent).
-const showHandles = computed(() =>
-  isElectron ? platform.value === 'linux' : true,
-)
+// Tauri windows are frameless on every platform (tauri.conf.json decorations:false)
+// and resize via the compositor-native startResizeDragging, so handles are always
+// needed there. Electron keeps native resize everywhere (Windows/macOS native
+// frame, Linux Wayland extended resize boundaries), so it needs no handles.
+const showHandles = computed(() => !isElectron)
 
 // Tauri exposes the compositor-native `startResizeDragging` (smooth, works on
 // frameless windows); Electron has no such API, so it keeps the manual
@@ -30,12 +28,6 @@ const zones: { direction: ResizeDirection; className: string }[] = [
 ]
 
 let active: { dir: ResizeDirection; sx: number; sy: number; b: WindowBounds } | null = null
-
-onMounted(async () => {
-  try {
-    platform.value = await invoke<string>('get_platform')
-  } catch { /* ignore */ }
-})
 
 onUnmounted(() => {
   cleanup()
