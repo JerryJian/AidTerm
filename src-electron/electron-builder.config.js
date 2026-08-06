@@ -37,7 +37,8 @@ module.exports = () => {
     },
     win: {
       target: ['nsis'],
-      icon: 'icons/icon.ico'
+      icon: 'icons/icon.ico',
+      artifactName: 'AidTerm_electron_${version}_${arch}_setup.${ext}'
     }
   }
 }

@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build-tauri:
@@ -80,6 +81,27 @@ jobs:
         with:
           args: --target ${{ matrix.target }}
 
+      - name: Rename artifacts to release convention
+        shell: bash
+        run: |
+          cd "src-tauri/target/${{ matrix.target }}/release/bundle"
+          case "${{ matrix.target }}" in
+            x86_64-unknown-linux-gnu)
+              for f in deb/*_amd64.deb; do mv "$f" "${f/_amd64/_x64}"; done
+              for f in appimage/*_x86_64.AppImage; do mv "$f" "${f/_x86_64/_x64}"; done
+              ;;
+            aarch64-unknown-linux-gnu)
+              for f in appimage/*_aarch64.AppImage; do mv "$f" "${f/_aarch64/_arm64}"; done
+              ;;
+            aarch64-apple-darwin)
+              rm -f macos/*.app.tar.gz* macos/*.sig
+              for f in macos/*_aarch64.dmg; do mv "$f" "${f/_aarch64/_arm64}"; done
+              ;;
+            x86_64-pc-windows-msvc)
+              for f in nsis/*-setup.exe; do mv "$f" "${f/-setup/_setup}"; done
+              ;;
+          esac
+
       - name: Upload artifacts (Linux)
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v5
@@ -97,7 +119,6 @@ jobs:
           name: tauri-${{ matrix.target }}
           path: |
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.app.tar.gz
           if-no-files-found: error
 
       - name: Upload artifacts (Windows)
@@ -245,39 +266,67 @@ jobs:
       - name: List release assets
         run: find artifacts -type f | sort
 
+      - name: Build release body with build logs
+        id: body
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const jobs = await octokit.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            const logLines = jobs.data.jobs.map(j =>
+              `- [\`${j.name}\`](${j.html_url}) — ${j.conclusion}`
+            );
+            const body = [
+              '## Release',
+              '',
+              `- Tag: \`${context.ref}\``,
+              `- Commit: \`${context.sha}\``,
+              `- Workflow run: [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              '',
+              '## Build logs',
+              '',
+              ...logLines,
+              '',
+              '## Downloads',
+              '',
+              '### Tauri (Recommended)',
+              '',
+              '| Platform | File |',
+              '|----------|------|',
+              '| Windows (x64) | `AidTerm_*_x64_setup.exe` + `AidTerm_*_x64_en-US.msi` |',
+              '| Linux (x64) | `AidTerm_*_x64.deb` + `AidTerm_*_x64.AppImage` |',
+              '| Linux (ARM64) | `AidTerm_*_arm64.deb` + `AidTerm_*_arm64.AppImage` |',
+              '| macOS (Apple Silicon) | `AidTerm_*_arm64.dmg` |',
+              '',
+              '### Electron',
+              '',
+              '| Platform | File |',
+              '|----------|------|',
+              '| Windows (x64) | `AidTerm_electron_*_x64_setup.exe` |',
+              '| Linux (x64) | `AidTerm_electron_*_x64.deb` + `AidTerm_electron_*_x64.AppImage` |',
+              '| Linux (ARM64) | `AidTerm_electron_*_arm64.deb` + `AidTerm_electron_*_arm64.AppImage` |',
+              '| macOS (Apple Silicon) | `AidTerm_electron_*_arm64.dmg` |',
+              '',
+            ].join('\n');
+            fs.writeFileSync('release-body.md', body);
+            core.setOutput('body-file', 'release-body.md');
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           name: "AidTerm ${{ github.ref_name }}"
-          body: |
-            See [CHANGELOG](https://github.com/${{ github.repository }}/releases) for details.
-
-            ## Downloads
-
-            ### Tauri (Recommended)
-
-            | Platform | File |
-            |----------|------|
-            | Windows (x64) | `AidTerm_*_x64-setup.exe` |
-            | Linux (x64) | `AidTerm_*_amd64.deb` |
-            | Linux (ARM64) | `AidTerm_*_arm64.deb` |
-            | macOS (Apple Silicon) | `AidTerm_*_aarch64.dmg` |
-
-            ### Electron
-
-            | Platform | File |
-            |----------|------|
-            | Windows (x64) | `AidTerm_*_electron_x64.exe` |
-            | Linux (x64) | `AidTerm_*_electron_amd64.deb` |
-            | Linux (ARM64) | `AidTerm_*_electron_arm64.deb` |
-            | macOS (Apple Silicon) | `AidTerm_*_electron_aarch64.dmg` |
+          body_path: ${{ steps.body.outputs.body-file }}
           files: |
             artifacts/tauri/**/*.exe
             artifacts/tauri/**/*.deb
             artifacts/tauri/**/*.dmg
             artifacts/tauri/**/*.AppImage
-            artifacts/tauri/**/*.app.tar.gz
+            artifacts/tauri/**/*.msi
             artifacts/electron/**/*.exe
             artifacts/electron/**/*.deb
             artifacts/electron/**/*.dmg
