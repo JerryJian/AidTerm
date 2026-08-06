@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, clipboard } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, clipboard, screen } from 'electron'
 import * as path from 'path'
 import * as os from 'os'
 import * as fs from 'fs'
@@ -73,13 +73,24 @@ function createWindow(): void {
     ? path.join(__dirname, 'icons/icon.ico')
     : path.join(__dirname, 'icons/icon.png')
 
+  // VS Code approach on Windows/macOS: keep the native frame so resize edges, Aero
+  // snap and maximize/restore stay native; the titlebar is hidden and rendered by
+  // our own HTML, made draggable via CSS `-webkit-app-region: drag`.
+  // Linux: WSLg's XWayland forces a light-theme decoration border on every
+  // frameless window (microsoft/wslg#530, cannot be removed) and provides no
+  // resize edges; Chromium's native Wayland client also fails to render under
+  // WSLg (drmGetDevices2 → blank window, even with swiftshader). The only working
+  // combination is a transparent window (no forced border) with manual
+  // resize/maximize done via window:getBounds/setBounds.
+  const nativeFrameOpts = isLinux
+    ? { frame: false, transparent: true, backgroundColor: '#00000000' }
+    : { titleBarStyle: 'hidden' as const, backgroundColor: '#1e1e1e' }
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     title: 'AidTerm',
-    frame: false,
-    transparent: true,
-    backgroundColor: '#00000000',
+    ...nativeFrameOpts,
     icon: (isWindows || isLinux) ? iconPath : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -88,6 +99,12 @@ function createWindow(): void {
     },
     show: false,
   })
+
+  // macOS: keep the native frame/resize but hide native traffic lights since we
+  // render our own in TitleBar.vue.
+  if (process.platform === 'darwin') {
+    mainWindow.setWindowButtonVisibility(false)
+  }
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:3000')
@@ -321,20 +338,49 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
+// ── Linux manual maximize (WSLg frameless windows have no working native maximize) ──
+let linuxMaximized = false
+let linuxNormalBounds: Electron.Rectangle | null = null
+
+function linuxSetMaximized(maximized: boolean): void {
+  const w = mainWindow
+  if (!w) return
+  if (maximized) {
+    linuxNormalBounds = w.getBounds()
+    linuxMaximized = true
+    w.setBounds(screen.getPrimaryDisplay().workArea)
+  } else {
+    if (linuxNormalBounds) w.setBounds(linuxNormalBounds)
+    linuxMaximized = false
+  }
+}
+
 // ── IPC Handlers ──
 
 function registerIpcHandlers(): void {
   // ═══ Window ═══
   ipcMain.handle('window:isFullscreen', () => mainWindow?.isFullScreen() ?? false)
   ipcMain.handle('window:setFullscreen', (_, args: WindowSetFullscreenArgs) => mainWindow?.setFullScreen(args.fullscreen))
-  ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
+  ipcMain.handle('window:isMaximized', () => {
+    if (process.platform === 'linux') return linuxMaximized
+    return mainWindow?.isMaximized() ?? false
+  })
   ipcMain.handle('window:minimize', () => mainWindow?.minimize())
-  ipcMain.handle('window:maximize', () => mainWindow?.maximize())
-  ipcMain.handle('window:unmaximize', () => mainWindow?.unmaximize())
+  ipcMain.handle('window:maximize', () => {
+    if (process.platform === 'linux') { linuxSetMaximized(true); return }
+    mainWindow?.maximize()
+  })
+  ipcMain.handle('window:unmaximize', () => {
+    if (process.platform === 'linux') { linuxSetMaximized(false); return }
+    mainWindow?.unmaximize()
+  })
   ipcMain.handle('window:toggleMaximize', () => {
+    if (process.platform === 'linux') { linuxSetMaximized(!linuxMaximized); return }
     if (mainWindow?.isMaximized()) mainWindow.unmaximize()
     else mainWindow?.maximize()
   })
+  ipcMain.handle('window:getBounds', () => mainWindow?.getBounds() ?? null)
+  ipcMain.handle('window:setBounds', (_, bounds: Electron.Rectangle) => mainWindow?.setBounds(bounds))
   ipcMain.handle('window:startDragging', () => {})
   ipcMain.handle('window:show', () => mainWindow?.show())
   ipcMain.handle('window:hide', () => mainWindow?.hide())

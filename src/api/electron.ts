@@ -2,7 +2,7 @@
  * Electron implementation — bridges to the preload-exposed electronAPI.
  */
 
-import type { UnlistenFn, ListenEvent, WindowHandle, ResizeDirection } from './types'
+import type { UnlistenFn, ListenEvent, WindowHandle, WindowBounds, ResizeDirection } from './types'
 
 export type { UnlistenFn }
 
@@ -23,6 +23,8 @@ interface ElectronAPI {
     toggleMaximize(): Promise<void>
     startDragging(): Promise<void>
     startResizeDragging(direction: ResizeDirection): Promise<void>
+    getBounds(): Promise<WindowBounds>
+    setBounds(bounds: WindowBounds): Promise<void>
     show(): Promise<void>
     hide(): Promise<void>
     close(): Promise<void>
@@ -82,6 +84,8 @@ export function getCurrentWindow(): WindowHandle {
     toggleMaximize: () => api.window.toggleMaximize(),
     startDragging: () => api.window.startDragging(),
     startResizeDragging: () => Promise.resolve(),
+    getBounds: () => api.window.getBounds(),
+    setBounds: (b) => api.window.setBounds(b),
     show: () => api.window.show(),
     hide: () => api.window.hide(),
     close: () => api.window.close(),

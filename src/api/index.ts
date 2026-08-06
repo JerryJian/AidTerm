@@ -5,7 +5,7 @@
 
 export type { UnlistenFn } from './types'
 
-const isElectron = !!(window as any).electronAPI
+export const isElectron = !!(window as any).electronAPI
 
 type ApiModule = typeof import('./tauri') | typeof import('./electron')
 
@@ -99,6 +99,14 @@ export function getCurrentWindow() {
     async startResizeDragging(direction: import('./types').ResizeDirection) {
       const mod = await getMod()
       return mod.getCurrentWindow().startResizeDragging(direction)
+    },
+    async getBounds() {
+      const mod = await getMod()
+      return mod.getCurrentWindow().getBounds()
+    },
+    async setBounds(bounds: import('./types').WindowBounds) {
+      const mod = await getMod()
+      return mod.getCurrentWindow().setBounds(bounds)
     },
     async show() {
       const mod = await getMod()

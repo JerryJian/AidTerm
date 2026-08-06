@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     unmaximize: () => ipcRenderer.invoke('window:unmaximize'),
     toggleMaximize: () => ipcRenderer.invoke('window:toggleMaximize'),
     startDragging: () => ipcRenderer.invoke('window:startDragging'),
+    getBounds: () => ipcRenderer.invoke('window:getBounds'),
+    setBounds: (bounds: Electron.Rectangle) => ipcRenderer.invoke('window:setBounds', bounds),
     show: () => ipcRenderer.invoke('window:show'),
     hide: () => ipcRenderer.invoke('window:hide'),
     close: () => ipcRenderer.invoke('window:close'),
