@@ -80,15 +80,23 @@ jobs:
         with:
           args: --target ${{ matrix.target }}
 
-      - name: Upload artifacts (Unix)
-        if: runner.os != 'Windows'
+      - name: Upload artifacts (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v5
+        with:
+          name: tauri-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
+          if-no-files-found: error
+
+      - name: Upload artifacts (macOS)
+        if: runner.os == 'macOS'
         uses: actions/upload-artifact@v5
         with:
           name: tauri-${{ matrix.target }}
           path: |
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
-            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.app.tar.gz
           if-no-files-found: error
 
