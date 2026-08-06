@@ -87,18 +87,18 @@ jobs:
           cd "src-tauri/target/${{ matrix.target }}/release/bundle"
           case "${{ matrix.target }}" in
             x86_64-unknown-linux-gnu)
-              for f in deb/*_amd64.deb; do mv "$f" "${f/_amd64/_x64}"; done
-              for f in appimage/*_x86_64.AppImage; do mv "$f" "${f/_x86_64/_x64}"; done
+              for f in deb/*.deb; do case "$f" in *_amd64.deb) mv "$f" "${f/_amd64/_x64}";; esac; done
+              for f in appimage/*.AppImage; do case "$f" in *_amd64.AppImage) mv "$f" "${f/_amd64/_x64}";; *_x86_64.AppImage) mv "$f" "${f/_x86_64/_x64}";; esac; done
               ;;
             aarch64-unknown-linux-gnu)
-              for f in appimage/*_aarch64.AppImage; do mv "$f" "${f/_aarch64/_arm64}"; done
+              for f in appimage/*.AppImage; do case "$f" in *_aarch64.AppImage) mv "$f" "${f/_aarch64/_arm64}";; esac; done
               ;;
             aarch64-apple-darwin)
               rm -f macos/*.app.tar.gz* macos/*.sig
-              for f in macos/*_aarch64.dmg; do mv "$f" "${f/_aarch64/_arm64}"; done
+              for f in dmg/*.dmg; do case "$f" in *_aarch64.dmg) mv "$f" "${f/_aarch64/_arm64}";; esac; done
               ;;
             x86_64-pc-windows-msvc)
-              for f in nsis/*-setup.exe; do mv "$f" "${f/-setup/_setup}"; done
+              for f in nsis/*.exe; do case "$f" in *-setup.exe) mv "$f" "${f/-setup/_setup}";; esac; done
               ;;
           esac
 
