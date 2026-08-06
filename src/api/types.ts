@@ -6,13 +6,6 @@ export interface ListenEvent<T = any> {
   payload: T
 }
 
-export interface WindowBounds {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
 export interface WindowHandle {
   isFullscreen(): Promise<boolean>
   setFullscreen(fullscreen: boolean): Promise<void>
@@ -24,8 +17,6 @@ export interface WindowHandle {
   toggleMaximize(): Promise<void>
   startDragging(): Promise<void>
   startResizeDragging(direction: ResizeDirection): Promise<void>
-  getBounds(): Promise<WindowBounds>
-  setBounds(bounds: WindowBounds): Promise<void>
   show(): Promise<void>
   hide(): Promise<void>
   close(): Promise<void>

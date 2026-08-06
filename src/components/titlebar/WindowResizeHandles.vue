@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onUnmounted } from 'vue'
+import { computed } from 'vue'
 import { getCurrentWindow, isElectron } from '@/api'
-import type { ResizeDirection, WindowBounds } from '@/api/types'
+import type { ResizeDirection } from '@/api/types'
 
 const win = getCurrentWindow()
 
@@ -10,11 +10,6 @@ const win = getCurrentWindow()
 // needed there. Electron keeps native resize everywhere (Windows/macOS native
 // frame, Linux Wayland extended resize boundaries), so it needs no handles.
 const showHandles = computed(() => !isElectron)
-
-// Tauri exposes the compositor-native `startResizeDragging` (smooth, works on
-// frameless windows); Electron has no such API, so it keeps the manual
-// getBounds/setBounds pointer tracking. Each is chosen per backend.
-const nativeResize = !isElectron
 
 const zones: { direction: ResizeDirection; className: string }[] = [
   { direction: 'North', className: 'rh-north' },
@@ -27,54 +22,11 @@ const zones: { direction: ResizeDirection; className: string }[] = [
   { direction: 'SouthWest', className: 'rh-southwest' },
 ]
 
-let active: { dir: ResizeDirection; sx: number; sy: number; b: WindowBounds } | null = null
-
-onUnmounted(() => {
-  cleanup()
-})
-
-function cleanup() {
-  if (!active) return
-  active = null
-  window.removeEventListener('pointermove', onMove)
-  window.removeEventListener('pointerup', onUp)
-}
-
 function onResizeStart(direction: ResizeDirection, e: PointerEvent) {
   if (e.button !== 0) return
   e.preventDefault()
   e.stopPropagation()
-
-  if (nativeResize) {
-    win.startResizeDragging(direction)
-    return
-  }
-
-  win.getBounds().then((b) => {
-    active = { dir: direction, sx: e.clientX, sy: e.clientY, b }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  })
-}
-
-function onMove(e: PointerEvent) {
-  if (!active) return
-  const { dir, sx, sy, b } = active
-  const dx = e.clientX - sx
-  const dy = e.clientY - sy
-  let { x, y, width, height } = b
-
-  if (dir.includes('East')) width = b.width + dx
-  if (dir.includes('West')) { x = b.x + dx; width = b.width - dx }
-  if (dir.includes('South')) height = b.height + dy
-  if (dir.includes('North')) { y = b.y + dy; height = b.height - dy }
-
-  if (width < 100 || height < 60) return
-  win.setBounds({ x, y, width, height })
-}
-
-function onUp() {
-  cleanup()
+  win.startResizeDragging(direction)
 }
 </script>
 

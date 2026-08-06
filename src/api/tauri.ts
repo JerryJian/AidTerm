@@ -5,10 +5,9 @@
 import { invoke as tauriInvoke, convertFileSrc } from '@tauri-apps/api/core'
 import { listen as tauriListen } from '@tauri-apps/api/event'
 import { getCurrentWindow as tauriGetCurrentWindow } from '@tauri-apps/api/window'
-import { PhysicalPosition, PhysicalSize } from '@tauri-apps/api/dpi'
 import { save as tauriSave, open as tauriOpen } from '@tauri-apps/plugin-dialog'
 
-import type { UnlistenFn, ListenEvent, WindowHandle, WindowBounds } from './types'
+import type { UnlistenFn, ListenEvent, WindowHandle } from './types'
 
 export { type UnlistenFn }
 
@@ -33,15 +32,6 @@ export function getCurrentWindow(): WindowHandle {
     toggleMaximize: () => win.toggleMaximize(),
     startDragging: () => win.startDragging(),
     startResizeDragging: (direction) => win.startResizeDragging(direction),
-    getBounds: async () => {
-      const pos = await win.outerPosition()
-      const size = await win.outerSize()
-      return { x: pos.x, y: pos.y, width: size.width, height: size.height }
-    },
-    setBounds: async (b: WindowBounds) => {
-      await win.setPosition(new PhysicalPosition(b.x, b.y))
-      await win.setSize(new PhysicalSize(b.width, b.height))
-    },
     show: () => win.show(),
     hide: () => win.hide(),
     close: () => win.close(),

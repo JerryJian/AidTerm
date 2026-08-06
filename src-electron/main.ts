@@ -76,16 +76,16 @@ function createWindow(): void {
   // Windows/macOS (VS Code approach): keep the native frame so resize edges, Aero
   // snap and maximize/restore stay native; the titlebar is hidden and rendered by
   // our own HTML, made draggable via CSS `-webkit-app-region: drag`.
-  // Linux (VS Code approach): frame:false + titleBarStyle:'hidden' +
-  // titleBarOverlay + opaque theme bg. Since Chromium now defaults to Wayland on
-  // Linux, frameless windows get GTK drop shadows + extended resize boundaries;
-  // hasShadow:false removes the shadow/decorations (the white border) while
-  // native resize edges remain.
+  // Linux (VS Code approach): frame:false + titleBarStyle:'hidden' + opaque
+  // theme bg. Since Chromium now defaults to Wayland on Linux, frameless windows
+  // get GTK drop shadows + extended resize boundaries; hasShadow:false removes
+  // the shadow/decorations (the white border) while native resize edges remain.
+  // No titleBarOverlay on Linux: it would draw native window controls over our
+  // own titlebar buttons (WCO), and our buttons are already fully functional.
   const nativeFrameOpts = isLinux
     ? {
         frame: false,
         titleBarStyle: 'hidden' as const,
-        titleBarOverlay: { height: 32, color: '#1e1e1e', symbolColor: '#ffffff' },
         backgroundColor: '#1e1e1e',
         hasShadow: false,
       }
@@ -357,8 +357,6 @@ function registerIpcHandlers(): void {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize()
     else mainWindow?.maximize()
   })
-  ipcMain.handle('window:getBounds', () => mainWindow?.getBounds() ?? null)
-  ipcMain.handle('window:setBounds', (_, bounds: Electron.Rectangle) => mainWindow?.setBounds(bounds))
   ipcMain.handle('window:startDragging', () => {})
   ipcMain.handle('window:show', () => mainWindow?.show())
   ipcMain.handle('window:hide', () => mainWindow?.hide())

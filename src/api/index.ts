@@ -100,14 +100,6 @@ export function getCurrentWindow() {
       const mod = await getMod()
       return mod.getCurrentWindow().startResizeDragging(direction)
     },
-    async getBounds() {
-      const mod = await getMod()
-      return mod.getCurrentWindow().getBounds()
-    },
-    async setBounds(bounds: import('./types').WindowBounds) {
-      const mod = await getMod()
-      return mod.getCurrentWindow().setBounds(bounds)
-    },
     async show() {
       const mod = await getMod()
       return mod.getCurrentWindow().show()
