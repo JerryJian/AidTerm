@@ -73,7 +73,10 @@ async function onClose() {
 function onPointerDown(e: PointerEvent) {
   if (e.button !== 0) return
   if ((e.target as HTMLElement).closest('.titlebar-actions, .traffic-lights')) return
-  if (!isLinux.value) return
+  // macOS: drag via -webkit-app-region only; double-click zoom is a macOS
+  // native-caption behavior we don't replicate. Windows/Linux: handle
+  // double-click maximize and start compositor-native dragging.
+  if (isMacOS.value) return
 
   e.preventDefault()
 
