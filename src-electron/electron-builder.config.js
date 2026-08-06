@@ -33,7 +33,8 @@ module.exports = () => {
       maintainer: 'AidTerm <aidterm@users.noreply.github.com>'
     },
     mac: {
-      target: ['dmg']
+      target: ['dmg'],
+      artifactName: 'AidTerm_electron_${version}_${arch}.${ext}'
     },
     win: {
       target: ['nsis'],

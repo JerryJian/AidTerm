@@ -19,7 +19,6 @@ on:
 
 permissions:
   contents: write
-  actions: read
 
 jobs:
   build-tauri:
@@ -194,6 +193,13 @@ jobs:
         working-directory: src-electron
         run: npx electron-builder --linux --${{ matrix.target == 'linux-arm64' && 'arm64' || 'x64' }}
 
+      - name: Rename artifacts (Linux)
+        if: runner.os == 'Linux'
+        working-directory: src-electron
+        shell: bash
+        run: |
+          for f in out/*.deb; do case "$f" in *_amd64.deb) mv "$f" "${f/_amd64/_x64}";; esac; done
+
       - name: Build Electron app (macOS)
         if: runner.os == 'macOS'
         working-directory: src-electron
@@ -266,30 +272,26 @@ jobs:
       - name: List release assets
         run: find artifacts -type f | sort
 
-      - name: Build release body with build logs
+      - name: Build release body
         id: body
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const jobs = await octokit.rest.actions.listJobsForWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.runId,
-            });
-            const logLines = jobs.data.jobs.map(j =>
-              `- [\`${j.name}\`](${j.html_url}) — ${j.conclusion}`
-            );
+            const version = context.ref.replace('refs/tags/v', '');
+            let notes;
+            try {
+              notes = fs.readFileSync(`releases/ReleaseNotes-${version}.md`, 'utf8').trim();
+            } catch {
+              notes = `No release notes found for v${version}.`;
+            }
             const body = [
-              '## Release',
+              notes,
               '',
-              `- Tag: \`${context.ref}\``,
+              '---',
+              '',
               `- Commit: \`${context.sha}\``,
               `- Workflow run: [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
-              '',
-              '## Build logs',
-              '',
-              ...logLines,
               '',
               '## Downloads',
               '',
