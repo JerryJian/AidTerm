@@ -78,7 +78,7 @@ onMounted(async () => {
     version.value = await getAppVersion()
     runtime.value = isElectron ? 'electron' : 'tauri'
   } catch {
-    version.value = '0.2.0'
+    version.value = '0.3.0'
   }
   document.addEventListener('keydown', escHandler)
   checkUpdate()

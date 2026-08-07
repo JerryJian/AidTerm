@@ -146,7 +146,7 @@ async function onInspect() {
           <line x1="12" y1="19" x2="20" y2="19" />
         </svg>
       </template>
-      <span class="titlebar-title">AidTerm <span class="titlebar-version">v0.2.0</span></span>
+      <span class="titlebar-title">AidTerm <span class="titlebar-version">v0.3.0</span></span>
     </div>
     <div class="titlebar-center" />
 

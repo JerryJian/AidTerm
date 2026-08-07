@@ -5,7 +5,7 @@
 
 > **双后端差异**：Electron 端端口转发仅 Local、代理为裸 TCP 直连（无 HTTP CONNECT / SOCKS5 握手）、Zmodem 与 Deep Link 为占位、`write_text_file` 缺失（终端文本导出会失败）、本地 shell 忽略 `workingDir`；Tauri 端以上均完整（Remote/Dynamic 转发、HTTP/SOCKS5/JumpHost、Deep Link、zmodem 检测）。
 
-当前版本：0.2.0。下方复选框与 Phase 表反映**代码实际状态**（2026-08 核对）。
+当前版本：0.3.0。下方复选框与 Phase 表反映**代码实际状态**（2026-08 核对）。
 
 ---
 
