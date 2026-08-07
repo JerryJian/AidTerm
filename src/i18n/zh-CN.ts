@@ -482,5 +482,7 @@ export default {
     download_install: '下载并安装',
     downloading: '正在下载',
     install_restart: '安装并重启',
+    view_release: '查看发布详情',
+    view_update: '查看更新详情',
   },
 }

@@ -5,6 +5,7 @@ import { useSessionStore } from './stores/sessionStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useUiStore } from './stores/uiStore'
 import { useThemeStore } from './stores/themeStore'
+import { useUpdateStore } from './stores/updateStore'
 import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SavedSession, TerminalTab } from './types'
 import { invoke, listen, getCurrentWindow, toFileUrl, saveDialog as save } from '@/api'
 import TabBar from './components/terminal/TabBar.vue'
@@ -20,6 +21,7 @@ import SerialDialog from './components/session/SerialDialog.vue'
 import SessionDialog from './components/session/SessionDialog.vue'
 import SettingsDialog from './components/settings/SettingsDialog.vue'
 import AboutDialog from './components/about/AboutDialog.vue'
+import UpdateDialog from './components/about/UpdateDialog.vue'
 import FileEditor from './components/editor/FileEditor.vue'
 import LockScreen from './components/lock/LockScreen.vue'
 import { useTriggerWatcher } from './hooks/useTriggerWatcher'
@@ -30,6 +32,7 @@ const sessionStore = useSessionStore()
 const settings = useSettingsStore()
 const ui = useUiStore()
 useThemeStore()
+const update = useUpdateStore()
 
 const sshDialogPrefill = ref<{ host: string; port: number; username: string; password?: string }>()
 const showSessionDialog = ref(false)
@@ -405,6 +408,8 @@ onMounted(async () => {
   await nextTick()
   try { await getCurrentWindow().show() } catch { /* ignore */ }
 
+  update.checkForUpdates({ autoOpen: false, silent: true })
+
   const f11Handler = (e: KeyboardEvent) => {
     if (e.key === 'F11') {
       e.preventDefault()
@@ -537,6 +542,11 @@ onUnmounted(() => {
   <AboutDialog
     v-if="ui.aboutDialog"
     @close="ui.aboutDialog = false"
+  />
+  <UpdateDialog
+    v-if="update.dialogOpen && update.updateInfo"
+    :update-info="update.updateInfo"
+    @close="update.dialogOpen = false"
   />
   <SessionDialog
     v-if="showSessionDialog"

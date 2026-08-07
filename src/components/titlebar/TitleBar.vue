@@ -3,9 +3,11 @@ import { ref, onMounted } from 'vue'
 import { invoke, getCurrentWindow, getAppVersion } from '@/api'
 import { useI18n } from 'vue-i18n'
 import { useUiStore } from '../../stores/uiStore'
+import { useUpdateStore } from '../../stores/updateStore'
 
 const { t } = useI18n()
 const ui = useUiStore()
+const update = useUpdateStore()
 
 const version = ref('')
 
@@ -156,6 +158,14 @@ async function onInspect() {
     <div class="titlebar-center" />
 
     <div class="titlebar-actions">
+      <button v-if="update.updateInfo?.has_update" class="tb-btn update-badge" :title="t('about.update_available', { version: update.updateInfo.latest_version })" @click="update.dialogOpen = true">
+        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 11V3" />
+          <path d="M4.5 6.5 8 3l3.5 3.5" />
+          <line x1="3" y1="13" x2="13" y2="13" />
+        </svg>
+        <span>v{{ update.updateInfo.latest_version }}</span>
+      </button>
       <button class="tb-btn" @click="ui.settingsDialog = true" :title="t('menu.settings')">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
           <path d="M17.5 2.47363L23 11.9999L17.5 21.5262H6.5L1 11.9999L6.5 2.47363H17.5ZM16.3453 4.47363H7.6547L3.3094 11.9999L7.6547 19.5262H16.3453L20.6906 11.9999L16.3453 4.47363ZM8.63398 8.16979L10.366 7.16979L15.366 15.83L13.634 16.83L8.63398 8.16979Z"/>
@@ -340,6 +350,19 @@ async function onInspect() {
 .tb-btn:hover {
   background: var(--bg-surface0);
   color: var(--text);
+}
+
+.tb-btn.update-badge {
+  width: auto;
+  padding: 0 10px;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.tb-btn.update-badge:hover {
+  color: var(--accent);
 }
 
 .tb-btn.close:hover {

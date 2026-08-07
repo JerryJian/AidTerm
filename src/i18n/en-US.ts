@@ -482,5 +482,7 @@ export default {
     download_install: 'Download & Install',
     downloading: 'Downloading',
     install_restart: 'Install & Restart',
+    view_release: 'View Release',
+    view_update: 'View Update',
   },
 }
