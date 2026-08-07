@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "AidTerm",
-  "version": "0.3.0",
   "identifier": "com.jwlsn.aidterm",
   "build": {
     "beforeDevCommand": "npm run dev",

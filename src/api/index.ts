@@ -58,8 +58,12 @@ export async function toFileUrl(filePath: string): Promise<string> {
   return mod.toFileUrl(filePath)
 }
 
+let cachedAppVersion: string | null = null
+
 export async function getAppVersion(): Promise<string> {
-  return invoke<string>('get_app_version')
+  if (cachedAppVersion) return cachedAppVersion
+  cachedAppVersion = await invoke<string>('get_app_version')
+  return cachedAppVersion
 }
 
 export async function getInstallerType(): Promise<string> {

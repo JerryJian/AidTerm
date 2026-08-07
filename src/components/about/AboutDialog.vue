@@ -78,7 +78,7 @@ onMounted(async () => {
     version.value = await getAppVersion()
     runtime.value = isElectron ? 'electron' : 'tauri'
   } catch {
-    version.value = '0.3.0'
+    version.value = ''
   }
   document.addEventListener('keydown', escHandler)
   checkUpdate()
@@ -102,7 +102,7 @@ const escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close')
         <div class="about-hero">
           <img src="/src-tauri/icons/128x128.png" alt="AidTerm" class="about-icon" draggable="false" />
           <div class="about-name">AidTerm</div>
-          <div class="about-version">v{{ version }}</div>
+          <div v-if="version" class="about-version">v{{ version }}</div>
         </div>
 
         <div class="about-desc">{{ t('about.description') }}</div>

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { invoke, getCurrentWindow } from '@/api'
+import { invoke, getCurrentWindow, getAppVersion } from '@/api'
 import { useI18n } from 'vue-i18n'
 import { useUiStore } from '../../stores/uiStore'
 
 const { t } = useI18n()
 const ui = useUiStore()
+
+const version = ref('')
 
 const emit = defineEmits<{
   lock: []
@@ -31,6 +33,9 @@ onMounted(async () => {
     isMacOS.value = platform === 'macos'
     isLinux.value = platform === 'linux'
     if (isLinux.value) trackedMaximized = maximized
+  } catch { /* ignore */ }
+  try {
+    version.value = await getAppVersion()
   } catch { /* ignore */ }
   try {
     await win.onResized(() => syncMaximized())
@@ -146,7 +151,7 @@ async function onInspect() {
           <line x1="12" y1="19" x2="20" y2="19" />
         </svg>
       </template>
-      <span class="titlebar-title">AidTerm <span class="titlebar-version">v0.3.0</span></span>
+      <span class="titlebar-title">AidTerm <span v-if="version" class="titlebar-version">v{{ version }}</span></span>
     </div>
     <div class="titlebar-center" />
 

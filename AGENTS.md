@@ -7,6 +7,8 @@
 
 当前版本：0.3.0。下方复选框与 Phase 表反映**代码实际状态**（2026-08 核对）。
 
+> **版本管理**：版本号手动维护在两个构建入口 —— Tauri `src-tauri/Cargo.toml`（`tauri.conf.json` 不再写 version，回退 Cargo.toml）与 Electron `src-electron/package.json`；`Cargo.lock` 与两个 `package-lock.json` 由 cargo/npm 自动维护。前端 UI（TitleBar/About）版本号一律经 IPC `get_app_version` 获取（api 层已缓存），无硬编码。发布时改上述两处 + 写 `releases/ReleaseNotes-<版本>.md` + 打 `vX.Y.Z` 标签。
+
 ---
 
 ## 功能清单
