@@ -419,6 +419,7 @@ watch(conversationMessages, async () => {
   color: var(--text);
   border: 1px solid var(--bg-surface0);
   border-bottom-left-radius: 2px;
+  width: 100%;
 }
 
 .assistant-bubble :deep(p) {
