@@ -54,6 +54,18 @@ export interface SystemInfo {
   shell: string
 }
 
+export interface UpdateInfo {
+  current_version: string
+  latest_version: string
+  has_update: boolean
+  release_url: string
+  asset_name: string | null
+  asset_url: string | null
+  published_at: string | null
+  body: string | null
+  installer_type: string
+}
+
 export type ToolTab = 'ai' | 'sftp' | 'tunnel'
 
 export interface TerminalTab {

@@ -5,6 +5,8 @@
 
 export type { UnlistenFn } from './types'
 
+import type { UpdateInfo } from '@/types'
+
 export const isElectron = !!(window as any).electronAPI
 
 type ApiModule = typeof import('./tauri') | typeof import('./electron')
@@ -54,6 +56,26 @@ export async function clipboardRead(): Promise<string> {
 export async function toFileUrl(filePath: string): Promise<string> {
   const mod = await getMod()
   return mod.toFileUrl(filePath)
+}
+
+export async function getAppVersion(): Promise<string> {
+  return invoke<string>('get_app_version')
+}
+
+export async function getInstallerType(): Promise<string> {
+  return invoke<string>('get_installer_type')
+}
+
+export async function checkForUpdate(): Promise<UpdateInfo> {
+  return invoke<UpdateInfo>('check_for_update')
+}
+
+export async function downloadUpdate(url: string): Promise<string> {
+  return invoke<string>('download_update', { url })
+}
+
+export async function installUpdate(path: string): Promise<void> {
+  return invoke<void>('install_update', { path })
 }
 
 export function getCurrentWindow() {

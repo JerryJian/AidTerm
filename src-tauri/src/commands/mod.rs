@@ -1,6 +1,8 @@
 use std::sync::mpsc::Sender;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+
+pub mod update;
 use tauri::{Manager, State};
 use crate::ai;
 use crate::keychain;

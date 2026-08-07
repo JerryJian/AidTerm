@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { checkForUpdate, downloadUpdate, installUpdate, getAppVersion, listen, isElectron } from '@/api'
+import type { UpdateInfo } from '@/types'
 
 const { t } = useI18n()
 
@@ -11,24 +13,80 @@ const emit = defineEmits<{
 const version = ref('')
 const runtime = ref<'tauri' | 'electron'>('tauri')
 
+const checking = ref(false)
+const checkError = ref('')
+const updateInfo = ref<UpdateInfo | null>(null)
+const downloading = ref(false)
+const downloadProgress = ref(0)
+const downloadedPath = ref('')
+const installError = ref('')
+
+let stopProgressListener: (() => void) | null = null
+
+async function checkUpdate() {
+  checking.value = true
+  checkError.value = ''
+  try {
+    updateInfo.value = await checkForUpdate()
+  } catch (e: any) {
+    checkError.value = e?.message || String(e)
+    updateInfo.value = null
+  } finally {
+    checking.value = false
+  }
+}
+
+function installerLabel(type: string): string {
+  if (type === 'msi') return 'MSI'
+  if (type === 'nsis') return 'EXE (NSIS)'
+  return type || 'unknown'
+}
+
+async function doDownload() {
+  if (!updateInfo.value?.asset_url) return
+  downloading.value = true
+  downloadProgress.value = 0
+  installError.value = ''
+  if (!stopProgressListener) {
+    stopProgressListener = await listen<{ received: number; total: number }>('update-progress', (ev) => {
+      const { received, total } = ev.payload
+      downloadProgress.value = total > 0 ? Math.round((received / total) * 100) : 0
+    })
+  }
+  try {
+    downloadedPath.value = await downloadUpdate(updateInfo.value.asset_url)
+  } catch (e: any) {
+    installError.value = e?.message || String(e)
+    downloadedPath.value = ''
+  } finally {
+    downloading.value = false
+  }
+}
+
+async function doInstall() {
+  if (!downloadedPath.value) return
+  installError.value = ''
+  try {
+    await installUpdate(downloadedPath.value)
+  } catch (e: any) {
+    installError.value = e?.message || String(e)
+  }
+}
+
 onMounted(async () => {
   try {
-    const { getVersion } = await import('@tauri-apps/api/app')
-    version.value = await getVersion()
-    runtime.value = 'tauri'
+    version.value = await getAppVersion()
+    runtime.value = isElectron ? 'electron' : 'tauri'
   } catch {
-    try {
-      const api = (window as any).electronAPI
-      if (api) {
-        runtime.value = 'electron'
-        version.value = '0.2.0'
-      }
-    } catch { /* ignore */ }
-    if (!version.value) version.value = '0.2.0'
+    version.value = '0.2.0'
   }
   document.addEventListener('keydown', escHandler)
+  checkUpdate()
 })
-onUnmounted(() => document.removeEventListener('keydown', escHandler))
+onUnmounted(() => {
+  document.removeEventListener('keydown', escHandler)
+  stopProgressListener?.()
+})
 
 const escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close') }
 </script>
@@ -48,6 +106,54 @@ const escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close')
         </div>
 
         <div class="about-desc">{{ t('about.description') }}</div>
+
+        <div class="about-update">
+          <div class="update-row">
+            <button class="update-btn" :disabled="checking || downloading" @click="checkUpdate">
+              {{ checking ? t('about.checking') : t('about.check_update') }}
+            </button>
+          </div>
+
+          <div class="update-result">
+            <div v-if="checkError" class="update-status update-error">{{ checkError }}</div>
+
+            <template v-else-if="updateInfo">
+              <div v-if="!updateInfo.has_update" class="update-status update-ok">
+                {{ t('about.up_to_date', { version: updateInfo.current_version }) }}
+              </div>
+
+              <template v-else>
+                <div class="update-status update-new">
+                  {{ t('about.update_available', { version: updateInfo.latest_version }) }}
+                </div>
+                <div v-if="updateInfo.published_at" class="update-meta">
+                  {{ t('about.published') }}: {{ new Date(updateInfo.published_at).toLocaleDateString() }}
+                </div>
+                <div class="update-meta">
+                  {{ t('about.installer') }}: {{ installerLabel(updateInfo.installer_type) }}
+                </div>
+                <div v-if="updateInfo.body" class="update-body">{{ updateInfo.body }}</div>
+
+                <div v-if="downloading" class="update-progress">
+                  <div class="progress-bar">
+                    <div class="progress-fill" :style="{ width: downloadProgress + '%' }" />
+                  </div>
+                  <span class="progress-text">{{ downloadProgress }}%</span>
+                </div>
+
+                <div class="update-row">
+                  <button v-if="!downloadedPath" class="update-btn primary" :disabled="downloading || !updateInfo.asset_url" @click="doDownload">
+                    {{ downloading ? t('about.downloading') + '...' : t('about.download_install') }}
+                  </button>
+                  <button v-else class="update-btn primary" @click="doInstall">
+                    {{ t('about.install_restart') }}
+                  </button>
+                </div>
+                <div v-if="installError" class="update-status update-error">{{ installError }}</div>
+              </template>
+            </template>
+          </div>
+        </div>
 
         <div class="about-links">
           <a class="about-link" href="https://github.com/jwlsn/aidterm" target="_blank" rel="noopener">
@@ -166,6 +272,120 @@ const escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') emit('close')
   text-align: center;
   line-height: 1.5;
   max-width: 320px;
+}
+
+.about-update {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.update-row {
+  display: flex;
+  justify-content: center;
+}
+
+.update-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--bg-surface0);
+  background: var(--bg-surface0);
+  color: var(--text);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.update-btn:hover:not(:disabled) {
+  background: var(--bg-surface1);
+  border-color: var(--bg-surface1);
+}
+.update-btn.primary {
+  background: var(--accent);
+  color: var(--bg-base);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.update-btn.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.update-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.update-result {
+  width: 100%;
+  min-height: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.update-status {
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.5;
+}
+.update-ok {
+  color: var(--success);
+}
+.update-new {
+  color: var(--accent);
+  font-weight: 600;
+}
+.update-error {
+  color: var(--danger);
+  word-break: break-word;
+}
+
+.update-meta {
+  font-size: 11px;
+  color: var(--text-sub0);
+}
+
+.update-body {
+  font-size: 11px;
+  color: var(--text-sub0);
+  background: var(--bg-mantle);
+  border: 1px solid var(--bg-surface0);
+  border-radius: 6px;
+  padding: 8px 10px;
+  max-height: 140px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left;
+  width: 100%;
+}
+
+.update-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-surface0);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.1s;
+}
+.progress-text {
+  font-size: 11px;
+  color: var(--text-sub0);
+  min-width: 34px;
+  text-align: right;
 }
 
 .about-links {

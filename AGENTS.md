@@ -76,6 +76,7 @@
 - [x] **终端背景图** — 设置面板可选背景图片
 - [x] **Deep Link** — tauri-plugin-deep-link（仅 Tauri；Electron 未实现）
 - [x] **命令行传参** — Electron argv ✅；Tauri `get_cli_args` 已实现但前端未接线（前端调 `cli_args`）
+- [x] **检查更新** — 关于对话框：GitHub Releases 检查最新版 → 下载安装包 → 调起安装（Tauri `commands/update.rs` / Electron `check_for_update` 等 IPC；Windows 按注册表 Uninstall 键检测安装包类型并下载对应 MSI/EXE，`msiexec /i ... /qn` 或 `/S` 静默装、macOS `open` dmg、Linux 运行 AppImage）
 - [ ] **Trzsz 文件传输** — tmux 兼容的 Zmodem 替代方案
 - [ ] **MCP Widget** — 供 AI 助手和外部工具集成的组件
 
@@ -191,6 +192,7 @@
 | 11.2 | E2E 测试 | Tauri `webdriver` / Playwright 待做 |
 | 11.3 | CI/CD | `.github/workflows/release.yml` ✅（GitHub Actions 矩阵：win-x64 / linux x64+arm64 / mac arm64，Tauri + Electron 双后端三平台构建） |
 | 11.4 | 安装包 | 经 release.yml 产出：Tauri（win exe/msi、linux deb/AppImage、mac dmg）+ Electron（win exe、linux deb/AppImage、mac dmg）✅ |
+| 11.5 | 检查更新 | GitHub Releases 检查 + 下载安装包调起安装（`commands/update.rs` / Electron IPC；Windows 按注册表 `WindowsInstaller` 值检测 MSI/NSIS 下载对应包，`msiexec /i ... /qn` 或 `/S`、macOS `open` dmg、Linux AppImage）✅ |
 
 ---
 

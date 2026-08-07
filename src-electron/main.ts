@@ -344,6 +344,84 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
+// ── Update helpers ──
+
+const UPDATE_REPO = 'JerryJian/AidTerm'
+const UPDATE_LATEST_API = `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`
+
+function compareVersions(a: string, b: string): number {
+  const pa = a.replace(/^v/, '').split(/[^\d]+/).map(n => parseInt(n, 10) || 0)
+  const pb = b.replace(/^v/, '').split(/[^\d]+/).map(n => parseInt(n, 10) || 0)
+  const len = Math.max(pa.length, pb.length)
+  for (let i = 0; i < len; i++) {
+    const x = pa[i] || 0
+    const y = pb[i] || 0
+    if (x !== y) return x - y
+  }
+  return 0
+}
+
+function pickElectronAsset(assets: Array<{ name: string; browser_download_url: string }>): { assetName: string | null; assetUrl: string | null } {
+  const os = process.platform // win32 | darwin | linux
+  const arch = process.arch // x64 | arm64
+  const suffix = os === 'win32' ? '.exe' : os === 'darwin' ? '.dmg' : '.AppImage'
+  const archKeys = arch === 'x64' ? ['x64'] : arch === 'arm64' ? ['arm64'] : [arch]
+  const matches = (name: string): boolean => {
+    const n = name.toLowerCase()
+    if (!n.includes('electron')) return false
+    if (!n.endsWith(suffix.toLowerCase())) return false
+    if (os === 'win32' && !n.includes('setup')) return false
+    return true
+  }
+  for (const key of archKeys) {
+    const found = assets.find(a => matches(a.name) && a.name.toLowerCase().includes(key))
+    if (found) return { assetName: found.name, assetUrl: found.browser_download_url }
+  }
+  const fallback = assets.find(a => matches(a.name))
+  return fallback ? { assetName: fallback.name, assetUrl: fallback.browser_download_url } : { assetName: null, assetUrl: null }
+}
+
+// Electron builds NSIS only; still probe the registry so a future MSI build is handled.
+function getInstallerType(): string {
+  if (process.platform !== 'win32') return 'unknown'
+  const { spawnSync } = require('child_process') as typeof import('child_process')
+  const base = 'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall'
+  const keys = [`HKLM\\${base}\\com.aidterm.app`, `HKCU\\${base}\\com.aidterm.app`]
+  try {
+    for (const key of keys) {
+      const res = spawnSync('reg', ['query', key], { encoding: 'utf8', windowsHide: true })
+      if (res.status === 0 && /WindowsInstaller/i.test(res.stdout || '')) return 'msi'
+    }
+    return 'nsis'
+  } catch {
+    return 'nsis'
+  }
+}
+
+async function downloadToFile(url: string, dest: string): Promise<string> {
+  const resp = await fetch(url, { headers: { 'User-Agent': 'AidTerm' } })
+  if (!resp.ok || !resp.body) throw new Error(`Download failed: HTTP ${resp.status}`)
+  const total = Number(resp.headers.get('content-length')) || 0
+  const reader = resp.body.getReader()
+  const out = fs.createWriteStream(dest)
+  let received = 0
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      received += value.length
+      out.write(Buffer.from(value))
+      if (total > 0) emitToRenderer('update-progress', { received, total })
+    }
+    await new Promise<void>((resolve, reject) => {
+      out.end((err?: Error | null) => (err ? reject(err) : resolve()))
+    })
+  } finally {
+    emitToRenderer('update-progress', { received: total || received, total })
+  }
+  return dest
+}
+
 // ── IPC Handlers ──
 
 function registerIpcHandlers(): void {
@@ -1144,6 +1222,65 @@ function registerIpcHandlers(): void {
     if (process.platform !== 'darwin' && has('zsh')) shells.push({ name: 'Zsh', command: 'zsh', icon: '\u{1F334}' })
     if (has('fish')) shells.push({ name: 'Fish', command: 'fish', icon: '\u{1F41F}' })
     return shells
+  })
+
+  // ══════════════════════════════════════════════════════
+  //  Update (check GitHub releases → download → install)
+  // ══════════════════════════════════════════════════════
+  ipcMain.handle('get_app_version', () => app.getVersion())
+
+  ipcMain.handle('get_installer_type', () => getInstallerType())
+
+  ipcMain.handle('check_for_update', async () => {
+    const current = app.getVersion()
+    const resp = await fetch(UPDATE_LATEST_API, { headers: { 'User-Agent': `AidTerm/${current}` } })
+    if (!resp.ok) throw new Error(`Update check failed: HTTP ${resp.status}`)
+    const release = await resp.json() as {
+      tag_name?: string
+      html_url?: string
+      published_at?: string | null
+      body?: string | null
+      assets?: Array<{ name: string; browser_download_url: string }>
+    }
+    const latest = String(release.tag_name || '').replace(/^v/, '')
+    const hasUpdate = compareVersions(latest, current) > 0
+    const { assetName, assetUrl } = pickElectronAsset(release.assets || [])
+    return {
+      current_version: current,
+      latest_version: latest,
+      has_update: hasUpdate,
+      release_url: release.html_url || `https://github.com/${UPDATE_REPO}/releases/latest`,
+      asset_name: assetName,
+      asset_url: assetUrl,
+      published_at: release.published_at || null,
+      body: release.body || null,
+      installer_type: getInstallerType(),
+    }
+  })
+
+  ipcMain.handle('download_update', async (_, args: { url: string }) => {
+    const fname = args.url.split('/').filter(Boolean).pop() || 'AidTerm-update'
+    const dest = path.join(app.getPath('temp'), fname)
+    return downloadToFile(args.url, dest)
+  })
+
+  ipcMain.handle('install_update', (_, args: { path: string }) => {
+    const { spawn } = require('child_process') as typeof import('child_process')
+    const p = args.path
+    if (process.platform === 'win32') {
+      spawn(p, ['/S'], { detached: true, stdio: 'ignore' }).unref()
+      setTimeout(() => app.exit(0), 1200)
+    } else if (process.platform === 'darwin') {
+      spawn('open', [p], { detached: true, stdio: 'ignore' }).unref()
+    } else {
+      try { fs.chmodSync(p, 0o755) } catch {}
+      if (p.endsWith('.AppImage')) {
+        spawn(p, [], { detached: true, stdio: 'ignore' }).unref()
+        setTimeout(() => app.exit(0), 1200)
+      } else {
+        spawn('xdg-open', [p], { detached: true, stdio: 'ignore' }).unref()
+      }
+    }
   })
 
   // ══════════════════════════════════════════════════════
