@@ -168,7 +168,7 @@ function onAdbConnect(info: AdbConnectionInfo) {
   store.addTab('adb', undefined, undefined, undefined, undefined, undefined, undefined, info)
 }
 
-function onQuickWsl() {
+function onWslDialog() {
   ui.wslDialog = true
 }
 
@@ -510,7 +510,7 @@ onUnmounted(() => {
       @quick-telnet="onQuickTelnet"
       @quick-serial="onQuickSerial"
       @quick-adb="onQuickAdb"
-      @wsl-dialog="onQuickWsl"
+      @wsl-dialog="onWslDialog"
       @connect-session="onConnectSession"
       @split-tab="onSplitTab"
     />
