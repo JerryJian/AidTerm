@@ -22,6 +22,35 @@ pub struct ConnectionHandle {
     pub capabilities: Vec<String>,
 }
 
+/// Parse `wsl.exe -l -q` output. Handles both UTF-16LE-with-BOM output
+/// (older WSL builds) and plain UTF-8, skipping empty lines.
+fn parse_wsl_distros(output: &[u8]) -> Vec<String> {
+    let text = if output.starts_with(&[0xFF, 0xFE]) {
+        let units: Vec<u16> = output[2..]
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        String::from_utf16_lossy(&units)
+    } else {
+        String::from_utf8_lossy(output).into_owned()
+    };
+    text.lines()
+        .map(|l| l.trim().trim_start_matches('\u{feff}').to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
+}
+
+/// List installed WSL distributions (via `wsl.exe -l -q`). Empty on
+/// non-Windows or when WSL has no distros installed.
+#[tauri::command]
+pub fn wsl_list_distros() -> Vec<String> {
+    let output = match std::process::Command::new("wsl.exe").args(["-l", "-q"]).output() {
+        Ok(o) if o.status.success() => o.stdout,
+        _ => return Vec::new(),
+    };
+    parse_wsl_distros(&output)
+}
+
 /// Unified connection creation — dispatch on `config.type`.
 #[tauri::command]
 pub async fn connection_create(
@@ -844,4 +873,63 @@ pub fn detect_shells() -> Vec<ShellProfile> {
 #[tauri::command]
 pub fn write_text_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, &content).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn utf16le_bom(s: &str) -> Vec<u8> {
+        let mut v = vec![0xFF, 0xFE];
+        for u in s.encode_utf16() {
+            v.extend_from_slice(&u.to_le_bytes());
+        }
+        v
+    }
+
+    #[test]
+    fn parses_utf16le_bom_distros() {
+        let out = utf16le_bom("Debian\nUbuntu\n");
+        assert_eq!(parse_wsl_distros(&out), vec!["Debian", "Ubuntu"]);
+    }
+
+    #[test]
+    fn parses_utf8_distros() {
+        let out = b"Ubuntu-22.04\n  Arch\n\n";
+        assert_eq!(parse_wsl_distros(out), vec!["Ubuntu-22.04", "Arch"]);
+    }
+
+    #[test]
+    fn parses_empty_output() {
+        assert!(parse_wsl_distros(b"").is_empty());
+        assert!(parse_wsl_distros(b"\n\n").is_empty());
+    }
+
+    #[test]
+    fn file_connect_config_sftp_deserializes() {
+        let cfg: FileConnectConfig = serde_json::from_str(
+            r#"{"type":"sftp","host":"h","port":22,"username":"u","password":"p","private_key_path":"/k"}"#,
+        )
+        .unwrap();
+        match cfg {
+            FileConnectConfig::Sftp { host, port, username, password, private_key_path } => {
+                assert_eq!(host, "h");
+                assert_eq!(port, 22);
+                assert_eq!(username, "u");
+                assert_eq!(password, "p");
+                assert_eq!(private_key_path.as_deref(), Some("/k"));
+            }
+            _ => panic!("expected sftp config"),
+        }
+    }
+
+    #[test]
+    fn file_connect_config_adb_deserializes() {
+        let cfg: FileConnectConfig =
+            serde_json::from_str(r#"{"type":"adb","serial":"emulator-5554"}"#).unwrap();
+        match cfg {
+            FileConnectConfig::Adb { serial } => assert_eq!(serial, "emulator-5554"),
+            _ => panic!("expected adb config"),
+        }
+    }
 }

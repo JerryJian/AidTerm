@@ -220,3 +220,94 @@ impl SessionManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deserializes_local_config() {
+        let cfg: ConnectionConfig =
+            serde_json::from_str(r#"{"type":"local","shell":null,"working_dir":"/home/u"}"#).unwrap();
+        match cfg {
+            ConnectionConfig::Local { shell, working_dir } => {
+                assert!(shell.is_none());
+                assert_eq!(working_dir.as_deref(), Some("/home/u"));
+            }
+            _ => panic!("expected local config"),
+        }
+    }
+
+    #[test]
+    fn deserializes_wsl_config() {
+        let cfg: ConnectionConfig =
+            serde_json::from_str(r#"{"type":"wsl","distro":"Ubuntu","working_dir":null}"#).unwrap();
+        match cfg {
+            ConnectionConfig::Wsl { distro, working_dir } => {
+                assert_eq!(distro.as_deref(), Some("Ubuntu"));
+                assert!(working_dir.is_none());
+            }
+            _ => panic!("expected wsl config"),
+        }
+    }
+
+    #[test]
+    fn deserializes_ssh_config() {
+        let cfg: ConnectionConfig = serde_json::from_str(
+            r#"{"type":"ssh","host":"h","port":2222,"username":"u","password":"p",
+                "private_key_path":null,"proxy_id":"p1","agent_forwarding":true,"x11_forwarding":false}"#,
+        )
+        .unwrap();
+        match cfg {
+            ConnectionConfig::Ssh {
+                host,
+                port,
+                username,
+                password,
+                private_key_path,
+                proxy_id,
+                agent_forwarding,
+                x11_forwarding,
+            } => {
+                assert_eq!(host, "h");
+                assert_eq!(port, 2222);
+                assert_eq!(username, "u");
+                assert_eq!(password, "p");
+                assert!(private_key_path.is_none());
+                assert_eq!(proxy_id.as_deref(), Some("p1"));
+                assert!(agent_forwarding);
+                assert!(!x11_forwarding);
+            }
+            _ => panic!("expected ssh config"),
+        }
+    }
+
+    #[test]
+    fn deserializes_telnet_serial_adb_config() {
+        let telnet: ConnectionConfig =
+            serde_json::from_str(r#"{"type":"telnet","host":"h","port":23}"#).unwrap();
+        assert!(matches!(telnet, ConnectionConfig::Telnet { host, port } if host == "h" && port == 23));
+
+        let serial: ConnectionConfig = serde_json::from_str(
+            r#"{"type":"serial","port_name":"COM3","baud_rate":115200,"data_bits":8,
+                "stop_bits":1,"parity":"None","flow_control":"None"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            serial,
+            ConnectionConfig::Serial { port_name, baud_rate, .. } if port_name == "COM3" && baud_rate == 115200
+        ));
+
+        let adb: ConnectionConfig =
+            serde_json::from_str(r#"{"type":"adb","serial":"emulator-5554"}"#).unwrap();
+        assert!(matches!(adb, ConnectionConfig::Adb { serial } if serial == "emulator-5554"));
+    }
+
+    #[test]
+    fn capability_as_str_matches_frontend() {
+        assert_eq!(Capability::File.as_str(), "file");
+        assert_eq!(Capability::Tunnel.as_str(), "tunnel");
+        assert_eq!(Capability::Exec.as_str(), "exec");
+        assert_eq!(Capability::Zmodem.as_str(), "zmodem");
+    }
+}

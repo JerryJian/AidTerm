@@ -85,6 +85,15 @@ export default {
     connect: '连接',
     cancel: '取消',
   },
+  wsl_dialog: {
+    title: 'WSL 连接',
+    distro: '发行版',
+    distro_placeholder: '选择发行版（留空使用默认发行版）',
+    working_dir: '工作目录（可选）',
+    refresh: '刷新',
+    connect: '连接',
+    cancel: '取消',
+  },
   adb_dialog: {
     title: 'Android 设备 (ADB)',
     refresh: '刷新',

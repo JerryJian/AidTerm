@@ -51,6 +51,7 @@ pub fn run() {
             commands::connection_write,
             commands::connection_resize,
             commands::connection_kill,
+            commands::wsl_list_distros,
             commands::serial_list_ports,
             commands::adb_list_devices,
             commands::adb_kill_server,

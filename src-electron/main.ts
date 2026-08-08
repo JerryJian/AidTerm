@@ -633,6 +633,21 @@ function registerIpcHandlers(): void {
   //  { id, capabilities }. write/resize/kill dispatch across the underlying
   //  maps exactly like the old write_terminal/resize_terminal/kill_terminal.
   // ══════════════════════════════════════════════════════
+  ipcMain.handle('wsl_list_distros', (): Promise<string[]> => {
+    const { execFile } = require('child_process') as typeof import('child_process')
+    return new Promise((resolve) => {
+      execFile('wsl.exe', ['-l', '-q'], { timeout: 10000, encoding: 'buffer' }, (err: Error | null, stdout: string | Buffer) => {
+        if (err) { resolve([]); return }
+        const buf = stdout as Buffer
+        const text = buf.length >= 2 && buf[0] === 0xFF && buf[1] === 0xFE
+          ? buf.toString('utf16le', 2)
+          : buf.toString('utf8')
+        const distros = text.split(/\r?\n/).map(l => l.trim().replace(/^\uFEFF/, '')).filter(Boolean)
+        resolve(distros)
+      })
+    })
+  })
+
   ipcMain.handle('connection_write', (_, args: WriteTerminalArgs) => {
     const { sessionId, data } = args
     const term = ptySessions.get(sessionId)

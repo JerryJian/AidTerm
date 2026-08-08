@@ -19,6 +19,7 @@ import StatusBar from './components/status/StatusBar.vue'
 import SshDialog from './components/session/SshDialog.vue'
 import SerialDialog from './components/session/SerialDialog.vue'
 import AdbDialog from './components/session/AdbDialog.vue'
+import WslDialog from './components/session/WslDialog.vue'
 import SessionDialog from './components/session/SessionDialog.vue'
 import SettingsDialog from './components/settings/SettingsDialog.vue'
 import AboutDialog from './components/about/AboutDialog.vue'
@@ -168,7 +169,15 @@ function onAdbConnect(info: AdbConnectionInfo) {
 }
 
 function onQuickWsl() {
-  store.addTab('wsl', undefined, undefined, undefined, undefined, undefined, undefined, undefined, { distro: undefined })
+  ui.wslDialog = true
+}
+
+function onWslConnect(info: { distro?: string; workingDir?: string }) {
+  ui.wslDialog = false
+  store.addTab('wsl', undefined, undefined, undefined, undefined, undefined, undefined, undefined, {
+    distro: info.distro,
+    workingDir: info.workingDir,
+  })
 }
 
 function onQuickSerial() {
@@ -247,6 +256,7 @@ function onSplitTab(tabId: string, direction: 'horizontal' | 'vertical') {
     telnetInfo: tab.telnetInfo,
     serialInfo: tab.serialInfo,
     adbInfo: tab.adbInfo,
+    wslInfo: tab.wslInfo,
     aiSessionId: tab.aiSessionId,
   }
 
@@ -500,7 +510,7 @@ onUnmounted(() => {
       @quick-telnet="onQuickTelnet"
       @quick-serial="onQuickSerial"
       @quick-adb="onQuickAdb"
-      @quick-wsl="onQuickWsl"
+      @wsl-dialog="onQuickWsl"
       @connect-session="onConnectSession"
       @split-tab="onSplitTab"
     />
@@ -557,6 +567,11 @@ onUnmounted(() => {
     v-if="ui.adbDialog"
     @connect="onAdbConnect"
     @close="ui.adbDialog = false"
+  />
+  <WslDialog
+    v-if="ui.wslDialog"
+    @connect="onWslConnect"
+    @close="ui.wslDialog = false"
   />
   <SettingsDialog
     v-if="ui.settingsDialog"

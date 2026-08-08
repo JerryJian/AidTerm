@@ -85,6 +85,15 @@ export default {
     connect: 'Connect',
     cancel: 'Cancel',
   },
+  wsl_dialog: {
+    title: 'WSL Connection',
+    distro: 'Distribution',
+    distro_placeholder: 'Select distribution (leave empty for default)',
+    working_dir: 'Working directory (optional)',
+    refresh: 'Refresh',
+    connect: 'Connect',
+    cancel: 'Cancel',
+  },
   adb_dialog: {
     title: 'Android Device (ADB)',
     refresh: 'Refresh',

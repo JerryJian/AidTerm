@@ -145,7 +145,7 @@ fn get_installer_type() -> String {
     "unknown".into()
 }
 
-#[tauri::command]
+#[tauri::command(rename = "get_installer_type")]
 pub fn get_installer_type_command() -> String {
     get_installer_type()
 }

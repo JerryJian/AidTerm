@@ -21,7 +21,7 @@ const emit = defineEmits<{
   quickTelnet: [host: string, port: number]
   quickSerial: []
   quickAdb: []
-  quickWsl: []
+  wslDialog: []
   connectSession: [session: SavedSession]
   splitTab: [tabId: string, direction: 'horizontal' | 'vertical']
 }>()
@@ -177,7 +177,7 @@ function openAdb() {
 
 function openWsl() {
   newTabMenuOpen.value = false
-  emit('quickWsl')
+  emit('wslDialog')
 }
 
 function onNewTabClick() {
