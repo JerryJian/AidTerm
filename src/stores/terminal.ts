@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useSftpStore } from './sftpStore'
+import { useFileStore } from './fileStore'
 import { useSettingsStore } from './settingsStore'
 import { invoke } from '@/api'
 import type { TerminalTab, TerminalSession, SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, AdbConnectionInfo, SystemInfo, ToolTab } from '../types'
@@ -269,9 +269,9 @@ export const useTerminalStore = defineStore('terminal', () => {
   }
 
   function disposeTabResources(tabId: string) {
-    const sftp = useSftpStore()
-    if (sftp.connId(tabId)) {
-      sftp.disconnect(tabId).catch(() => {})
+    const file = useFileStore()
+    if (file.connId(tabId)) {
+      file.disconnect(tabId).catch(() => {})
     }
     // When the last adb tab closes, tear down the isolated 5038 server
     // (unless the user disabled auto-cleanup in settings).

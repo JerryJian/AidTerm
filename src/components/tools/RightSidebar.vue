@@ -8,10 +8,10 @@ import { getAiConversation } from '../../hooks/terminalAiRegistry'
 import AiSidebar from '../ai/AiSidebar.vue'
 import SftpPanel from '../sftp/SftpPanel.vue'
 import TunnelPanel from '../tunnel/TunnelPanel.vue'
-import type { ToolTab } from '../../types'
+import type { FileKind, ToolTab } from '../../types'
 
 const emit = defineEmits<{
-  editFile: [remotePath: string, connId: string]
+  editFile: [remotePath: string, connId: string, kind: FileKind]
 }>()
 
 const { t } = useI18n()
@@ -28,9 +28,12 @@ const toolTabs = computed<{ id: ToolTab; icon: string; title: string }[]>(() => 
   if (ai.enabled) {
     list.push({ id: 'ai', icon: '\u{1F916}', title: t('tool_panel.ai') })
   }
-  if (store.tabSessionType(activeTab.value) === 'ssh') {
+  const st = store.tabSessionType(activeTab.value)
+  if (st === 'ssh') {
     list.push({ id: 'sftp', icon: '\u{1F4C2}', title: t('tool_panel.sftp') })
     list.push({ id: 'tunnel', icon: '\u{1F50C}', title: t('tool_panel.tunnel') })
+  } else if (st === 'adb') {
+    list.push({ id: 'sftp', icon: '\u{1F4C2}', title: t('tool_panel.adb_files') })
   }
   return list
 })
@@ -101,7 +104,8 @@ function closeSidebar() {
           v-show="activeTool === 'sftp'"
           :tab-id="activeTab.id"
           :tab="activeTab"
-          @edit-file="(p, c) => emit('editFile', p, c)"
+          :visible="activeTool === 'sftp'"
+          @edit-file="(p, c, k) => emit('editFile', p, c, k)"
         />
         <TunnelPanel
           v-if="activeTab"

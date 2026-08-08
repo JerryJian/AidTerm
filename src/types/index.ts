@@ -82,6 +82,8 @@ export interface UpdateInfo {
 
 export type ToolTab = 'ai' | 'sftp' | 'tunnel'
 
+export type FileKind = 'sftp' | 'adb'
+
 export interface TerminalTab {
   id: string
   title: string

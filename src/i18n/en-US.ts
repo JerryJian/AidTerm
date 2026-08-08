@@ -137,6 +137,7 @@ export default {
   tool_panel: {
     ai: 'AI Assistant',
     sftp: 'SFTP',
+    adb_files: 'Device Files',
     tunnel: 'Tunnel',
     proxy: 'Proxy',
     snippet: 'Snippets',
@@ -235,6 +236,9 @@ export default {
     owner: 'Owner',
     group: 'Group',
     other: 'Other',
+  },
+  adb_file: {
+    not_connected: 'Device not connected. Open an adb session first, then open the file panel.',
   },
   tunnel: {
     title: 'Port Forwarding',

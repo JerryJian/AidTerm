@@ -38,7 +38,7 @@ const update = useUpdateStore()
 const sshDialogPrefill = ref<{ host: string; port: number; username: string; password?: string }>()
 const showSessionDialog = ref(false)
 const editingSession = ref<SavedSession | undefined>()
-const editorFile = ref<{ connId: string; remotePath: string } | null>(null)
+const editorFile = ref<{ connId: string; remotePath: string; kind: 'sftp' | 'adb' } | null>(null)
 const locked = ref(false)
 const isFullscreen = ref(false)
 
@@ -175,8 +175,8 @@ function onQuickAdb() {
   ui.adbDialog = true
 }
 
-function onEditFile(remotePath: string, connId: string) {
-  editorFile.value = { connId, remotePath }
+function onEditFile(remotePath: string, connId: string, kind: 'sftp' | 'adb' = 'sftp') {
+  editorFile.value = { connId, remotePath, kind }
 }
 
 function onConnectSession(session: SavedSession) {
@@ -515,6 +515,7 @@ onUnmounted(() => {
             v-if="editorFile"
             :conn-id="editorFile.connId"
             :remote-path="editorFile.remotePath"
+            :kind="editorFile.kind"
             @close="editorFile = null"
           />
           <TerminalPane

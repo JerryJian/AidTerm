@@ -7,6 +7,8 @@ use std::time::Duration;
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
+use crate::sftp::FileEntry;
+
 /// Fixed, app-wide ADB server port, isolated from the user's default 5037.
 ///
 /// AidTerm NEVER touches the user's adb server. Every adb subprocess call is
@@ -227,4 +229,218 @@ fn parse_devices(output: &str) -> Vec<AdbDevice> {
         devices.push(AdbDevice { serial: serial.to_string(), state, model, product, transport_id });
     }
     devices
+}
+
+// ══════════════════════════════════════════════════════
+//  ADB file operations (Android file browser)
+//
+//  All calls stay pinned to the isolated 5038 server via `-P 5038`.
+//  Paths coming from the device are quoted with `shq` before they go through
+//  the on-device shell; `pull`/`push` take paths as plain argv entries so they
+//  need no quoting.
+// ══════════════════════════════════════════════════════
+
+/// Single-quote a string for the on-device mksh shell.
+fn shq(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+/// Build `adb shell <cmd...>` with the given shell-quoted arguments.
+fn run_adb_shell(app: &AppHandle, serial: &str, quoted_parts: &[&str]) -> Result<(String, String, bool), String> {
+    let mut args = vec!["-s", serial, "shell"];
+    args.extend_from_slice(quoted_parts);
+    run_adb(app, &args)
+}
+
+/// Parse `ls -la` output (toybox / GNU). Handles names with spaces and
+/// symlink targets; `.` / `..` entries are dropped.
+fn parse_ls_entries(output: &str) -> Vec<FileEntry> {
+    let mut entries = Vec::new();
+    for line in output.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with("total ") {
+            continue;
+        }
+        let tokens: Vec<&str> = line.split_whitespace().collect();
+        if tokens.len() < 7 {
+            continue;
+        }
+        let perms = tokens[0];
+        let is_dir = perms.starts_with('d');
+        // Date is `YYYY-MM-DD HH:MM` (toybox, 2 tokens) or `MMM d HH:MM|YYYY`
+        // (GNU, 3 tokens). Name starts right after the date block.
+        let name_start = if tokens[5].contains('-') { 7 } else { 8 };
+        if tokens.len() <= name_start {
+            continue;
+        }
+        let mut name = tokens[name_start..].join(" ");
+        if perms.starts_with('l') {
+            if let Some(pos) = name.find(" -> ") {
+                name.truncate(pos);
+            }
+        }
+        if name == "." || name == ".." {
+            continue;
+        }
+        entries.push(FileEntry {
+            name,
+            is_dir,
+            size: tokens[4].parse().unwrap_or(0),
+            modified: tokens[5..name_start].join(" "),
+            permissions: perms.to_string(),
+        });
+    }
+    entries
+}
+
+/// List a directory on the device.
+pub fn list_dir(app: &AppHandle, serial: &str, path: &str) -> Result<Vec<FileEntry>, String> {
+    let q = shq(path);
+    let (stdout, stderr, ok) = run_adb_shell(app, serial, &["ls", "-la", &q])?;
+    if !ok {
+        return Err(format!("adb ls failed: {}", stderr.trim()));
+    }
+    Ok(parse_ls_entries(&stdout))
+}
+
+/// Pull a remote file/directory to a local path.
+pub fn pull(app: &AppHandle, serial: &str, remote: &str, local: &str) -> Result<(), String> {
+    let (stdout, stderr, ok) = run_adb(app, &["-s", serial, "pull", remote, local])?;
+    if !ok {
+        return Err(format!("adb pull failed: {}{}", stderr.trim(), stdout.trim()));
+    }
+    Ok(())
+}
+
+/// Push a local file/directory to a remote path.
+pub fn push(app: &AppHandle, serial: &str, local: &str, remote: &str) -> Result<(), String> {
+    let (stdout, stderr, ok) = run_adb(app, &["-s", serial, "push", local, remote])?;
+    if !ok {
+        return Err(format!("adb push failed: {}{}", stderr.trim(), stdout.trim()));
+    }
+    Ok(())
+}
+
+/// Create a directory (with parents) on the device.
+pub fn mkdir(app: &AppHandle, serial: &str, path: &str) -> Result<(), String> {
+    let q = shq(path);
+    let (_, stderr, ok) = run_adb_shell(app, serial, &["mkdir", "-p", &q])?;
+    if !ok {
+        return Err(format!("adb mkdir failed: {}", stderr.trim()));
+    }
+    Ok(())
+}
+
+/// Create an empty file on the device.
+pub fn touch(app: &AppHandle, serial: &str, path: &str) -> Result<(), String> {
+    let q = shq(path);
+    let (_, stderr, ok) = run_adb_shell(app, serial, &["touch", &q])?;
+    if !ok {
+        return Err(format!("adb touch failed: {}", stderr.trim()));
+    }
+    Ok(())
+}
+
+/// Remove a file (`rm -f`) or directory tree (`rm -rf`) on the device.
+pub fn remove(app: &AppHandle, serial: &str, path: &str, is_dir: bool) -> Result<(), String> {
+    let q = shq(path);
+    let flag = if is_dir { "-rf" } else { "-f" };
+    let (_, stderr, ok) = run_adb_shell(app, serial, &["rm", flag, &q])?;
+    if !ok {
+        return Err(format!("adb rm failed: {}", stderr.trim()));
+    }
+    Ok(())
+}
+
+/// Rename/move a file or directory on the device.
+pub fn rename_item(app: &AppHandle, serial: &str, old_path: &str, new_path: &str) -> Result<(), String> {
+    let old = shq(old_path);
+    let new = shq(new_path);
+    let (_, stderr, ok) = run_adb_shell(app, serial, &["mv", &old, &new])?;
+    if !ok {
+        return Err(format!("adb mv failed: {}", stderr.trim()));
+    }
+    Ok(())
+}
+
+/// Read a text file from the device.
+pub fn read_file(app: &AppHandle, serial: &str, remote: &str) -> Result<String, String> {
+    let q = shq(remote);
+    let (stdout, stderr, ok) = run_adb_shell(app, serial, &["cat", &q])?;
+    if !ok {
+        return Err(format!("adb cat failed: {}", stderr.trim()));
+    }
+    Ok(stdout)
+}
+
+/// Write a text file to the device by pushing a temp file (binary-safe).
+pub fn write_file(app: &AppHandle, serial: &str, remote: &str, content: &str) -> Result<(), String> {
+    use std::io::Write;
+
+    let path = std::env::temp_dir().join(format!("aidterm_upload_{}.tmp", uuid::Uuid::new_v4()));
+    let write_res = (|| -> Result<(), String> {
+        let mut f = std::fs::File::create(&path).map_err(|e| format!("temp file create failed: {}", e))?;
+        f.write_all(content.as_bytes()).map_err(|e| format!("temp file write failed: {}", e))?;
+        Ok(())
+    })();
+    if let Err(e) = write_res {
+        let _ = std::fs::remove_file(&path);
+        return Err(e);
+    }
+    let res = push(app, serial, &path.to_string_lossy(), remote);
+    let _ = std::fs::remove_file(&path);
+    res
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_ls_toybox_with_spaces() {
+        let out = "\
+total 16
+-rw-rw---- 1 u0_a198 media_rw 6 2026-08-08 13:39 hello world.txt
+-rw-rw---- 1 u0_a198 media_rw 3 2026-08-08 13:39 plain.txt
+";
+        let entries = parse_ls_entries(out);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].name, "hello world.txt");
+        assert_eq!(entries[0].size, 6);
+        assert_eq!(entries[0].is_dir, false);
+        assert_eq!(entries[0].modified, "2026-08-08 13:39");
+        assert_eq!(entries[0].permissions, "-rw-rw----");
+    }
+
+    #[test]
+    fn parse_ls_dirs_and_dots() {
+        let out = "\
+drwxrws--- 2 u0_a198 media_rw 4096 2026-08-08 13:39 .
+drwxrws--- 3 u0_a198 media_rw 4096 2026-08-08 13:39 ..
+drwxrws--- 2 u0_a198 media_rw 4096 2026-08-08 13:39 test
+";
+        let entries = parse_ls_entries(out);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "test");
+        assert_eq!(entries[0].is_dir, true);
+    }
+
+    #[test]
+    fn parse_ls_symlink_target_stripped() {
+        let out = "lrwxr-xr-x 1 root root 21 2009-01-01 00:00 /sdcard -> /storage/self/primary\n";
+        let entries = parse_ls_entries(out);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "/sdcard");
+        assert_eq!(entries[0].is_dir, false);
+        assert_eq!(entries[0].permissions, "lrwxr-xr-x");
+    }
+
+    #[test]
+    fn parse_ls_gnu_three_token_date() {
+        let out = "-rw-r--r-- 1 user group 1024 Aug  8 2026 readme.md\n";
+        let entries = parse_ls_entries(out);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "readme.md");
+        assert_eq!(entries[0].modified, "Aug 8 2026");
+    }
 }

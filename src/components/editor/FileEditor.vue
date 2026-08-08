@@ -1,20 +1,22 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useSftpStore } from '../../stores/sftpStore'
+import { useFileStore } from '../../stores/fileStore'
+import type { FileKind } from '../../types'
 
 const { t } = useI18n()
 
 const props = defineProps<{
   connId: string
   remotePath: string
+  kind?: FileKind
 }>()
 
 const emit = defineEmits<{
   close: []
 }>()
 
-const sftpStore = useSftpStore()
+const fileStore = useFileStore()
 const content = ref('')
 const loading = ref(true)
 const saving = ref(false)
@@ -25,7 +27,7 @@ const fileName = ref('')
 onMounted(async () => {
   fileName.value = props.remotePath.split('/').pop() || props.remotePath
   try {
-    content.value = await sftpStore.readFile(props.connId, props.remotePath)
+    content.value = await fileStore.readFile(props.connId, props.remotePath, props.kind ?? 'sftp')
   } catch (e: any) {
     error.value = String(e)
   } finally {
@@ -38,7 +40,7 @@ async function doSave() {
   saved.value = false
   error.value = ''
   try {
-    await sftpStore.writeFile(props.connId, props.remotePath, content.value)
+    await fileStore.writeFile(props.connId, props.remotePath, content.value, props.kind ?? 'sftp')
     saved.value = true
     setTimeout(() => { saved.value = false }, 2000)
   } catch (e: any) {

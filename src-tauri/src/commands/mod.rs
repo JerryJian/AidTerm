@@ -112,6 +112,119 @@ pub async fn adb_occupied_devices(app: tauri::AppHandle) -> Result<Vec<String>, 
         .map_err(|e| format!("adb occupied devices join error: {}", e))?)
 }
 
+/// List a directory on an adb device (isolated 5038 server).
+#[tauri::command]
+pub async fn adb_list_dir(
+    app: tauri::AppHandle,
+    serial: String,
+    path: String,
+) -> Result<Vec<sftp::FileEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || adb::list_dir(&app, &serial, &path))
+        .await
+        .map_err(|e| format!("adb list dir join error: {}", e))?
+}
+
+/// Pull a file/directory from an adb device.
+#[tauri::command]
+pub async fn adb_pull(
+    app: tauri::AppHandle,
+    serial: String,
+    remote: String,
+    local: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || adb::pull(&app, &serial, &remote, &local))
+        .await
+        .map_err(|e| format!("adb pull join error: {}", e))?
+}
+
+/// Push a local file/directory to an adb device.
+#[tauri::command]
+pub async fn adb_push(
+    app: tauri::AppHandle,
+    serial: String,
+    local: String,
+    remote: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || adb::push(&app, &serial, &local, &remote))
+        .await
+        .map_err(|e| format!("adb push join error: {}", e))?
+}
+
+/// Create a directory (with parents) on an adb device.
+#[tauri::command]
+pub async fn adb_mkdir(
+    app: tauri::AppHandle,
+    serial: String,
+    path: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || adb::mkdir(&app, &serial, &path))
+        .await
+        .map_err(|e| format!("adb mkdir join error: {}", e))?
+}
+
+/// Create an empty file on an adb device.
+#[tauri::command]
+pub async fn adb_touch(
+    app: tauri::AppHandle,
+    serial: String,
+    path: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || adb::touch(&app, &serial, &path))
+        .await
+        .map_err(|e| format!("adb touch join error: {}", e))?
+}
+
+/// Remove a file/directory tree on an adb device.
+#[tauri::command]
+pub async fn adb_remove(
+    app: tauri::AppHandle,
+    serial: String,
+    path: String,
+    is_dir: bool,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || adb::remove(&app, &serial, &path, is_dir))
+        .await
+        .map_err(|e| format!("adb remove join error: {}", e))?
+}
+
+/// Rename/move a file or directory on an adb device.
+#[tauri::command]
+pub async fn adb_rename(
+    app: tauri::AppHandle,
+    serial: String,
+    old_path: String,
+    new_path: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || adb::rename_item(&app, &serial, &old_path, &new_path))
+        .await
+        .map_err(|e| format!("adb rename join error: {}", e))?
+}
+
+/// Read a text file from an adb device.
+#[tauri::command]
+pub async fn adb_read_file(
+    app: tauri::AppHandle,
+    serial: String,
+    remote: String,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || adb::read_file(&app, &serial, &remote))
+        .await
+        .map_err(|e| format!("adb read file join error: {}", e))?
+}
+
+/// Write a text file to an adb device via temp file + push.
+#[tauri::command]
+pub async fn adb_write_file(
+    app: tauri::AppHandle,
+    serial: String,
+    remote: String,
+    content: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || adb::write_file(&app, &serial, &remote, &content))
+        .await
+        .map_err(|e| format!("adb write file join error: {}", e))?
+}
+
 #[tauri::command]
 pub async fn ssh_connect(
     app: tauri::AppHandle,

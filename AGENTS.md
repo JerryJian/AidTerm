@@ -20,6 +20,7 @@
 - [x] **本地 Shell** — Windows (`cmd`, `powershell`)、Linux/macOS (`bash`, `zsh`)，自动探测
 - [x] **SFTP** — 远程文件浏览、上传、下载、删除、重命名
 - [x] **ADB** — Android 设备交互 shell（独立 5038 server，绝不触碰 5037；模拟器由 server 自动发现；5037 占用用裸 adb 协议只读检测，不重启用户 server；adb 二进制可用 `npm run fetch-adb` 内置打包，`AIDTERM_ADB`/PATH 兜底）
+- [x] **ADB 文件浏览** — 复用 SFTP 面板（`fileStore` 按 `kind: 'sftp'|'adb'` 分发，tool_tab 复用 'sftp'），目录列表/上传(`adb push`)/下载(`adb pull`)/新建/删除/重命名/远程编辑(`adb cat` + 临时文件 push) 全部走 `-P 5038 -s <serial>`；设备端路径经 `shq` 单引号转义后进 `adb shell`，ls 解析兼容 toybox/GNU 日期格式并剥离符号链接目标
 - [ ] **SCP** — 快速文件传输
 - [ ] **Zmodem** — 后端接收检测已接线（SSH 流中发 `zmodem-start/end`），保存/接收循环为死代码待接线，前端交互/发送待做
 
@@ -229,17 +230,17 @@ AidTerm/
 │   ├── components/
 │   │   ├── terminal/       # TerminalWrapper, TerminalPane, TabBar
 │   │   ├── session/        # SessionPanel, SessionDialog, SshDialog, SerialDialog
-│   │   ├── sftp/           # SftpPanel（拖拽上传）
+│   │   ├── sftp/           # SftpPanel / FilePanel（SFTP + ADB 文件浏览，复用）
 │   │   ├── tunnel/         # TunnelPanel（端口转发）
 │   │   ├── proxy/          # ProxyPanel
 │   │   ├── trigger/        # TriggerPanel（宏/触发器）
 │   │   ├── snippet/        # SnippetPanel（快捷命令）
 │   │   ├── ai/             # AiSidebar, AiConfirmOverlay
-│   │   ├── editor/         # FileEditor（远程文件编辑）
+│   │   ├── editor/         # FileEditor（远程文件编辑，支持 adb kind）
 │   │   ├── keychain/       # KeyManagerPanel, KnownHostsPanel
 │   │   ├── lock/           # LockScreen
 │   │   └── settings/       # SettingsDialog, SettingsPanel
-│   ├── stores/             # terminal, session, settings, theme, ai, proxy, sftp, snippet, trigger, tunnel, ui
+│   ├── stores/             # terminal, session, settings, theme, ai, proxy, file(kind sftp/adb), snippet, trigger, tunnel, ui
 │   ├── hooks/              # useTerminal, useAiConversation, useTriggerWatcher
 │   ├── i18n/               # en-US, zh-CN
 │   ├── router/

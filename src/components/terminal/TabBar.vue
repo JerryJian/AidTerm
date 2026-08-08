@@ -125,7 +125,8 @@ function tabStatus(tab: TerminalTab): string {
 const rightSidebarAvailable = computed(() => {
   if (!store.activeTabId) return false
   if (aiStore.enabled) return true
-  return store.tabSessionType(store.activeTab) === 'ssh'
+  const st = store.tabSessionType(store.activeTab)
+  return st === 'ssh' || st === 'adb'
 })
 
 function toggleRightSidebar() {

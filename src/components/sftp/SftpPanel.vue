@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, reactive, onMounted, onUnmounted } from 'vue'
-import { useSftpStore } from '../../stores/sftpStore'
+import { useFileStore } from '../../stores/fileStore'
 import { useTerminalStore } from '../../stores/terminal'
 import { openDialog as open, saveDialog as save, listen } from '@/api'
 import { useI18n } from 'vue-i18n'
-import type { FileEntry, TerminalTab, UploadTask, SftpProgress } from '../../types'
+import type { FileEntry, TerminalTab, UploadTask, SftpProgress, FileKind } from '../../types'
 
 const svg = (d: string) => `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
 
@@ -24,21 +24,24 @@ const icons = {
 }
 
 const { t } = useI18n()
-const store = useSftpStore()
+const store = useFileStore()
 const terminalStore = useTerminalStore()
 
 const props = defineProps<{
   tabId: string
   tab: TerminalTab
+  visible?: boolean
 }>()
 
 const emit = defineEmits<{
-  editFile: [remotePath: string, connId: string]
+  editFile: [remotePath: string, connId: string, kind: FileKind]
 }>()
 
 const s = computed(() => store.tabState(props.tabId))
 
 const sessionTab = computed(() => terminalStore.resolveSessionTab(props.tab))
+
+const isAdb = computed(() => sessionTab.value?.session?.type === 'adb')
 
 const host = ref('')
 const port = ref(22)
@@ -98,9 +101,22 @@ let autoConnecting = false
 async function autoConnect() {
   if (autoConnecting || s.value.connected) return
   const leaf = sessionTab.value
-  const info = leaf?.sshInfo
   const ss = leaf?.session
-  if (!ss || ss.type !== 'ssh' || ss.status !== 'connected' || !info) return
+  if (!ss || ss.status !== 'connected') return
+  if (ss.type === 'adb' && leaf.adbInfo?.serial) {
+    autoConnecting = true
+    connecting.value = true
+    try {
+      await store.connectAdb(props.tabId, leaf.adbInfo.serial)
+    } catch (e: any) {
+      s.value.error = String(e)
+    }
+    connecting.value = false
+    autoConnecting = false
+    return
+  }
+  const info = leaf?.sshInfo
+  if (ss.type !== 'ssh' || !info) return
   host.value = info.host
   port.value = info.port
   username.value = info.username
@@ -119,18 +135,24 @@ watch(
   () => {
     const leaf = sessionTab.value
     const s = leaf?.session
-    if (!s || s.type !== 'ssh' || !leaf?.sshInfo) return null
-    return `${s.id}:${s.status}:${leaf.sshInfo.host}:${leaf.sshInfo.port}:${leaf.sshInfo.username}`
+    if (!s) return null
+    if (s.type === 'ssh' && leaf?.sshInfo) {
+      return `${s.id}:${s.status}:ssh:${leaf.sshInfo.host}:${leaf.sshInfo.port}:${leaf.sshInfo.username}`
+    }
+    if (s.type === 'adb' && leaf?.adbInfo) {
+      return `${s.id}:${s.status}:adb:${leaf.adbInfo.serial}`
+    }
+    return null
   },
   async (key) => {
-    if (props.tab.activeToolTab !== 'sftp') return
+    if (props.visible === false) return
     if (key && key.includes(':connected:')) await autoConnect()
   },
   { immediate: true },
 )
 
-watch(() => props.tab.activeToolTab, (tab) => {
-  if (tab === 'sftp') autoConnect()
+watch(() => props.visible, (v) => {
+  if (v) autoConnect()
 })
 
 function onRowCtxMenu(e: MouseEvent, entry: FileEntry) {
@@ -247,7 +269,7 @@ function onEntryDblClick(entry: FileEntry) {
   if (entry.is_dir) {
     navigateTo(path)
   } else {
-    emit('editFile', path, s.value.connId ?? '')
+    emit('editFile', path, s.value.connId ?? '', isAdb.value ? 'adb' : 'sftp')
   }
 }
 
@@ -326,7 +348,7 @@ function cancelConfirmDelete() {
 async function doDelete(entry: FileEntry) {
   deleteConfirm.value = null
   const path = s.value.currentPath.replace(/\/?$/, '/') + entry.name
-  await store.remove(props.tabId, path)
+  await store.remove(props.tabId, path, entry.is_dir)
 }
 
 function startRename(entry: FileEntry) {
@@ -402,13 +424,16 @@ function fileIcon(entry: FileEntry): string {
   <div class="sftp-panel">
     <!-- Connection form -->
     <div v-if="!s.connected" class="connect-form">
-      <input v-model="host" :placeholder="t('common.host')" class="sftp-input" />
-      <input v-model="port" type="number" :placeholder="t('common.port')" class="sftp-input sftp-input-sm" />
-      <input v-model="username" :placeholder="t('common.username')" class="sftp-input" />
-      <input v-model="password" type="password" :placeholder="t('common.password')" class="sftp-input" />
-      <button class="connect-btn" :disabled="connecting" @click="doConnect">
-        {{ connecting ? t('sftp.connecting') : t('sftp.connect') }}
-      </button>
+      <div v-if="isAdb" class="adb-notice">{{ t('adb_file.not_connected') }}</div>
+      <template v-else>
+        <input v-model="host" :placeholder="t('common.host')" class="sftp-input" />
+        <input v-model="port" type="number" :placeholder="t('common.port')" class="sftp-input sftp-input-sm" />
+        <input v-model="username" :placeholder="t('common.username')" class="sftp-input" />
+        <input v-model="password" type="password" :placeholder="t('common.password')" class="sftp-input" />
+        <button class="connect-btn" :disabled="connecting" @click="doConnect">
+          {{ connecting ? t('sftp.connecting') : t('sftp.connect') }}
+        </button>
+      </template>
     </div>
 
     <!-- File browser -->
@@ -521,7 +546,7 @@ function fileIcon(entry: FileEntry): string {
               <label><input type="radio" v-model="createIsDir" :value="true" /> {{ t('sftp.dir') }}</label>
               <label><input type="radio" v-model="createIsDir" :value="false" /> {{ t('sftp.file') }}</label>
             </div>
-            <div class="create-perms">
+            <div class="create-perms" v-if="!isAdb">
               <div class="perm-row perm-header">
                 <span class="perm-label"></span>
                 <span class="perm-col">r</span>
@@ -615,6 +640,13 @@ function fileIcon(entry: FileEntry): string {
   flex-direction: column;
   gap: 6px;
   padding: 12px;
+}
+
+.adb-notice {
+  color: var(--text-sub0);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 4px 2px;
 }
 
 .sftp-input {

@@ -120,6 +120,46 @@ function parseAdbDevices(output: string): AdbDevice[] {
   return devices
 }
 
+// ── ADB file operations (Android file browser) ──
+// Paths are quoted with shq before going through the on-device shell;
+// pull/push take paths as argv entries, so no quoting is needed there.
+
+function shq(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`
+}
+
+function runAdbShell(serial: string, quotedParts: string[]): Promise<string> {
+  return runAdb(['-s', serial, 'shell', ...quotedParts])
+}
+
+function parseLsEntries(output: string): SftpFileEntry[] {
+  const entries: SftpFileEntry[] = []
+  for (const line of output.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('total ')) continue
+    const tokens = trimmed.split(/\s+/)
+    if (tokens.length < 7) continue
+    const perms = tokens[0]
+    const is_dir = perms.startsWith('d')
+    const nameStart = tokens[5].includes('-') ? 7 : 8
+    if (tokens.length <= nameStart) continue
+    let name = tokens.slice(nameStart).join(' ')
+    if (perms.startsWith('l')) {
+      const arrow = name.indexOf(' -> ')
+      if (arrow >= 0) name = name.slice(0, arrow)
+    }
+    if (name === '.' || name === '..') continue
+    entries.push({
+      name,
+      is_dir,
+      size: Number(tokens[4]) || 0,
+      modified: tokens.slice(5, nameStart).join(' '),
+      permissions: perms,
+    })
+  }
+  return entries
+}
+
 // Strictly read-only query of the user's default adb server (5037) over the raw
 // wire protocol. We never shell out to the adb binary here: a client-version
 // mismatch would make `adb` kill and restart the user's server.
@@ -883,6 +923,92 @@ function registerIpcHandlers(): void {
     } catch (e) {
       console.warn('[electron] adb occupied devices failed:', e)
       return []
+    }
+  })
+
+  ipcMain.handle('adb_list_dir', async (_, args: { serial: string; path: string }): Promise<SftpFileEntry[]> => {
+    try {
+      const out = await runAdbShell(args.serial, ['ls', '-la', shq(args.path)])
+      return parseLsEntries(out)
+    } catch (e) {
+      console.warn('[electron] adb list dir failed:', e)
+      throw new Error(e instanceof Error ? e.message : String(e))
+    }
+  })
+
+  ipcMain.handle('adb_pull', async (_, args: { serial: string; remote: string; local: string }): Promise<void> => {
+    try {
+      await runAdb(['-s', args.serial, 'pull', args.remote, args.local])
+    } catch (e) {
+      console.warn('[electron] adb pull failed:', e)
+      throw new Error(e instanceof Error ? e.message : String(e))
+    }
+  })
+
+  ipcMain.handle('adb_push', async (_, args: { serial: string; local: string; remote: string }): Promise<void> => {
+    try {
+      await runAdb(['-s', args.serial, 'push', args.local, args.remote])
+    } catch (e) {
+      console.warn('[electron] adb push failed:', e)
+      throw new Error(e instanceof Error ? e.message : String(e))
+    }
+  })
+
+  ipcMain.handle('adb_mkdir', async (_, args: { serial: string; path: string }): Promise<void> => {
+    try {
+      await runAdbShell(args.serial, ['mkdir', '-p', shq(args.path)])
+    } catch (e) {
+      console.warn('[electron] adb mkdir failed:', e)
+      throw new Error(e instanceof Error ? e.message : String(e))
+    }
+  })
+
+  ipcMain.handle('adb_touch', async (_, args: { serial: string; path: string }): Promise<void> => {
+    try {
+      await runAdbShell(args.serial, ['touch', shq(args.path)])
+    } catch (e) {
+      console.warn('[electron] adb touch failed:', e)
+      throw new Error(e instanceof Error ? e.message : String(e))
+    }
+  })
+
+  ipcMain.handle('adb_remove', async (_, args: { serial: string; path: string; is_dir: boolean }): Promise<void> => {
+    try {
+      await runAdbShell(args.serial, ['rm', args.is_dir ? '-rf' : '-f', shq(args.path)])
+    } catch (e) {
+      console.warn('[electron] adb remove failed:', e)
+      throw new Error(e instanceof Error ? e.message : String(e))
+    }
+  })
+
+  ipcMain.handle('adb_rename', async (_, args: { serial: string; old_path: string; new_path: string }): Promise<void> => {
+    try {
+      await runAdbShell(args.serial, ['mv', shq(args.old_path), shq(args.new_path)])
+    } catch (e) {
+      console.warn('[electron] adb rename failed:', e)
+      throw new Error(e instanceof Error ? e.message : String(e))
+    }
+  })
+
+  ipcMain.handle('adb_read_file', async (_, args: { serial: string; remote: string }): Promise<string> => {
+    try {
+      return await runAdbShell(args.serial, ['cat', shq(args.remote)])
+    } catch (e) {
+      console.warn('[electron] adb read file failed:', e)
+      throw new Error(e instanceof Error ? e.message : String(e))
+    }
+  })
+
+  ipcMain.handle('adb_write_file', async (_, args: { serial: string; remote: string; content: string }): Promise<void> => {
+    const tmp = path.join(os.tmpdir(), `aidterm_upload_${crypto.randomUUID()}.tmp`)
+    try {
+      fs.writeFileSync(tmp, args.content)
+      await runAdb(['-s', args.serial, 'push', tmp, args.remote])
+    } catch (e) {
+      console.warn('[electron] adb write file failed:', e)
+      throw new Error(e instanceof Error ? e.message : String(e))
+    } finally {
+      try { fs.unlinkSync(tmp) } catch { /* ignore */ }
     }
   })
 

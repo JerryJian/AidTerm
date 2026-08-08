@@ -137,6 +137,7 @@ export default {
   tool_panel: {
     ai: 'AI 助手',
     sftp: 'SFTP',
+    adb_files: '设备文件',
     tunnel: '隧道',
     proxy: '代理',
     snippet: '快捷命令',
@@ -235,6 +236,9 @@ export default {
     owner: '所有者',
     group: '组',
     other: '其他',
+  },
+  adb_file: {
+    not_connected: '设备未连接。请先在设备列表连接一个 adb 会话，再打开文件面板。',
   },
   tunnel: {
     title: '端口转发',
