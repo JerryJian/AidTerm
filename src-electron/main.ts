@@ -639,10 +639,12 @@ function registerIpcHandlers(): void {
       execFile('wsl.exe', ['-l', '-q'], { timeout: 10000, encoding: 'buffer' }, (err: Error | null, stdout: string | Buffer) => {
         if (err) { resolve([]); return }
         const buf = stdout as Buffer
-        const text = buf.length >= 2 && buf[0] === 0xFF && buf[1] === 0xFE
-          ? buf.toString('utf16le', 2)
-          : buf.toString('utf8')
-        const distros = text.split(/\r?\n/).map(l => l.trim().replace(/^\uFEFF/, '')).filter(Boolean)
+        const isUtf8Bom = buf.length >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF
+        const isUtf16le = (buf.length >= 2 && buf[0] === 0xFF && buf[1] === 0xFE) || (!isUtf8Bom && buf.includes(0x00))
+        const text = isUtf16le
+          ? buf.toString('utf16le', buf.length >= 2 && buf[0] === 0xFF && buf[1] === 0xFE ? 2 : 0)
+          : buf.toString('utf8').replace(/^\uFEFF/, '')
+        const distros = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
         resolve(distros)
       })
     })

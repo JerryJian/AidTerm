@@ -22,17 +22,22 @@ pub struct ConnectionHandle {
     pub capabilities: Vec<String>,
 }
 
-/// Parse `wsl.exe -l -q` output. Handles both UTF-16LE-with-BOM output
-/// (older WSL builds) and plain UTF-8, skipping empty lines.
+/// Parse `wsl.exe -l -q` output. Handles UTF-16LE (with or without BOM,
+/// depending on the WSL build) and plain UTF-8 (optionally with a UTF-8 BOM),
+/// skipping empty lines.
 fn parse_wsl_distros(output: &[u8]) -> Vec<String> {
-    let text = if output.starts_with(&[0xFF, 0xFE]) {
-        let units: Vec<u16> = output[2..]
+    let is_utf8_bom = output.starts_with(&[0xEF, 0xBB, 0xBF]);
+    let is_utf16le = output.starts_with(&[0xFF, 0xFE]) || (!is_utf8_bom && output.contains(&0x00));
+    let text = if is_utf16le {
+        let start = usize::from(output.starts_with(&[0xFF, 0xFE])) * 2;
+        let units: Vec<u16> = output[start..]
             .chunks_exact(2)
             .map(|c| u16::from_le_bytes([c[0], c[1]]))
             .collect();
         String::from_utf16_lossy(&units)
     } else {
-        String::from_utf8_lossy(output).into_owned()
+        let body = if is_utf8_bom { &output[3..] } else { output };
+        String::from_utf8_lossy(body).into_owned()
     };
     text.lines()
         .map(|l| l.trim().trim_start_matches('\u{feff}').to_string())
@@ -887,6 +892,14 @@ mod tests {
         v
     }
 
+    fn utf16le(s: &str) -> Vec<u8> {
+        let mut v = Vec::new();
+        for u in s.encode_utf16() {
+            v.extend_from_slice(&u.to_le_bytes());
+        }
+        v
+    }
+
     #[test]
     fn parses_utf16le_bom_distros() {
         let out = utf16le_bom("Debian\nUbuntu\n");
@@ -894,9 +907,22 @@ mod tests {
     }
 
     #[test]
+    fn parses_utf16le_without_bom_distros() {
+        let out = utf16le("Debian\nUbuntu\n");
+        assert_eq!(parse_wsl_distros(&out), vec!["Debian", "Ubuntu"]);
+    }
+
+    #[test]
     fn parses_utf8_distros() {
         let out = b"Ubuntu-22.04\n  Arch\n\n";
         assert_eq!(parse_wsl_distros(out), vec!["Ubuntu-22.04", "Arch"]);
+    }
+
+    #[test]
+    fn parses_utf8_bom_distros() {
+        let mut out = vec![0xEF, 0xBB, 0xBF];
+        out.extend_from_slice(b"Ubuntu\n");
+        assert_eq!(parse_wsl_distros(&out), vec!["Ubuntu"]);
     }
 
     #[test]
