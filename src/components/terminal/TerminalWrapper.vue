@@ -13,7 +13,7 @@ import { useThemeStore } from '../../stores/themeStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { getOrCreateAiConversation, registerLeafBinding, unregisterLeafBinding } from '../../hooks/terminalAiRegistry'
 import type { AiTerminalBinding } from '../../hooks/useAiConversation'
-import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SystemInfo, TerminalTab } from '../../types'
+import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, AdbConnectionInfo, SystemInfo, TerminalTab } from '../../types'
 import { useAiStore } from '../../stores/aiStore'
 import { useI18n } from 'vue-i18n'
 
@@ -21,6 +21,7 @@ const props = defineProps<{
   sshInfo?: SshConnectionInfo
   telnetInfo?: TelnetConnectionInfo
   serialInfo?: SerialConnectionInfo
+  adbInfo?: AdbConnectionInfo
   tabId?: string
   tab?: TerminalTab
 }>()
@@ -57,6 +58,7 @@ const currentTab = computed(() => {
 const sshInfo = computed(() => props.sshInfo ?? props.tab?.sshInfo)
 const telnetInfo = computed(() => props.telnetInfo ?? props.tab?.telnetInfo)
 const serialInfo = computed(() => props.serialInfo ?? props.tab?.serialInfo)
+const adbInfo = computed(() => props.adbInfo ?? props.tab?.adbInfo)
 
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
@@ -68,7 +70,7 @@ let resizeObserver: ResizeObserver | null = null
 let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 let lastSize = { w: 0, h: 0 }
 
-const { createSession, sshConnect, telnetConnect, serialConnect, writeInput, resize, onOutput, killSession, sessionId: sessionIdRef, isConnected: isConnectedRef } = useTerminal()
+const { createSession, sshConnect, telnetConnect, serialConnect, adbConnect, writeInput, resize, onOutput, killSession, sessionId: sessionIdRef, isConnected: isConnectedRef } = useTerminal()
 
 const aiBinding: AiTerminalBinding = {
   getTerminal: () => terminal,
@@ -300,7 +302,9 @@ async function startSession() {
         ? await telnetConnect(telnetInfo.value.host, telnetInfo.value.port)
         : serialInfo.value
           ? await serialConnect(serialInfo.value)
-          : await createSession(rows, cols, currentTab.value?.session?.command, currentTab.value?.session?.workingDir)
+          : adbInfo.value
+            ? await adbConnect(adbInfo.value.serial, rows, cols)
+            : await createSession(rows, cols, currentTab.value?.session?.command, currentTab.value?.session?.workingDir)
 
     store.updateSessionId(currentTabId.value ?? '', id)
     disconnected.value = false

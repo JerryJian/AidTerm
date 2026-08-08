@@ -20,6 +20,7 @@ const emit = defineEmits<{
   quickSsh: [host: string, port: number, username: string]
   quickTelnet: [host: string, port: number]
   quickSerial: []
+  quickAdb: []
   connectSession: [session: SavedSession]
   splitTab: [tabId: string, direction: 'horizontal' | 'vertical']
 }>()
@@ -167,6 +168,11 @@ function openSerial() {
   emit('quickSerial')
 }
 
+function openAdb() {
+  newTabMenuOpen.value = false
+  emit('quickAdb')
+}
+
 function onNewTabClick() {
   newTabMenuOpen.value = !newTabMenuOpen.value
 }
@@ -273,6 +279,7 @@ defineExpose({ onKeydown })
           <button class="menu-item" @click="openSsh()"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>{{ $t('menu.ssh') }}</span></button>
           <button class="menu-item" @click="openTelnet()"><span class="mi-icon">{{ '\uD83D\uDD0C' }}</span><span>{{ $t('menu.telnet') }}</span></button>
           <button class="menu-item" @click="openSerial()"><span class="mi-icon">{{ '\uD83D\uDD04' }}</span><span>{{ $t('menu.serial') }}</span></button>
+          <button class="menu-item" @click="openAdb()"><span class="mi-icon">🤖</span><span>{{ $t('menu.adb') }}</span></button>
           <div v-if="hasSavedSessions" class="menu-divider" />
           <div v-if="hasSavedSessions" class="saved-sessions-list">
             <template v-for="gs in groupedSavedSessions" :key="gs.group.id">

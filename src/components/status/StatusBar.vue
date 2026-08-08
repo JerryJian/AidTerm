@@ -47,6 +47,11 @@ const statusText = computed(() => {
       parts.push(`${serial.portName} @ ${serial.baudRate} baud`)
     }
 
+    const adb = tab.adbInfo
+    if (adb) {
+      parts.push(adb.model && adb.model !== adb.serial ? `${adb.serial} (${adb.model})` : adb.serial)
+    }
+
     if (s.status === 'connected' && tab.systemInfo) {
       parts.push(`${tab.systemInfo.hostname} (${tab.systemInfo.os} ${tab.systemInfo.arch})`)
     }
@@ -100,6 +105,13 @@ const statusTooltip = computed(() => {
     lines.push(`Port: ${serial.portName}`)
     lines.push(`Baud: ${serial.baudRate}`)
     lines.push(`Data: ${serial.dataBits}${serial.stopBits}${serial.parity[0]}${serial.flowControl[0]}`)
+  }
+
+  const adb = tab.adbInfo
+  if (adb) {
+    lines.push(`Serial: ${adb.serial}`)
+    if (adb.model && adb.model !== adb.serial) lines.push(`Model: ${adb.model}`)
+    if (adb.product) lines.push(`Product: ${adb.product}`)
   }
 
   if (tab.systemInfo) {

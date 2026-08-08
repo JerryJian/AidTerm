@@ -136,6 +136,19 @@ async function toggleFullscreen() {
             <label>{{ t('settings.fullscreen') }}</label>
             <button class="action-btn" @click="toggleFullscreen">{{ t('settings.fullscreen') }} (F11)</button>
           </div>
+          <div class="setting-row">
+            <label class="toggle-label">
+              <span>{{ t('settings.adb_auto_kill') }}</span>
+              <input
+                type="checkbox"
+                :checked="settings.adbAutoKill"
+                @change="(e: any) => settings.adbAutoKill = e.target.checked"
+                class="toggle-input"
+              />
+              <span class="toggle-switch" />
+            </label>
+          </div>
+          <span class="field-desc">{{ t('settings.adb_auto_kill_desc') }}</span>
         </div>
 
         <div class="section">

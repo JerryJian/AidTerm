@@ -37,10 +37,24 @@ export interface SerialConnectionInfo {
   flowControl: string
 }
 
+export interface AdbDevice {
+  serial: string
+  state: string
+  model: string
+  product: string
+  transport_id: string | null
+}
+
+export interface AdbConnectionInfo {
+  serial: string
+  model?: string
+  product?: string
+}
+
 export interface TerminalSession {
   id: string
   title: string
-  type: 'local' | 'ssh' | 'serial' | 'telnet'
+  type: 'local' | 'ssh' | 'serial' | 'telnet' | 'adb'
   status: 'connecting' | 'connected' | 'disconnected'
   command?: string
   workingDir?: string
@@ -75,6 +89,7 @@ export interface TerminalTab {
   sshInfo?: SshConnectionInfo
   telnetInfo?: TelnetConnectionInfo
   serialInfo?: SerialConnectionInfo
+  adbInfo?: AdbConnectionInfo
   splitDirection?: 'horizontal' | 'vertical'
   children?: TerminalTab[]
   systemInfo?: SystemInfo

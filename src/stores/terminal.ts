@@ -2,12 +2,16 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSftpStore } from './sftpStore'
-import type { TerminalTab, TerminalSession, SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SystemInfo, ToolTab } from '../types'
+import { useSettingsStore } from './settingsStore'
+import { invoke } from '@/api'
+import type { TerminalTab, TerminalSession, SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, AdbConnectionInfo, SystemInfo, ToolTab } from '../types'
 
 let nextId = 1
 function generateId(): string {
   return `tab-${nextId++}`
 }
+
+let adbServerStarted = false
 
 const shellKeyMap: Record<string, string> = {
   'cmd.exe': 'cmd',
@@ -97,7 +101,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     selectedPaneId.value = tab ? leafIdOf(tab) : null
   }
 
-  function addTab(type: TerminalSession['type'] = 'local', sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo, localCommand?: string, serialInfo?: SerialConnectionInfo, workingDir?: string, titleOverride?: string) {
+  function addTab(type: TerminalSession['type'] = 'local', sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo, localCommand?: string, serialInfo?: SerialConnectionInfo, workingDir?: string, titleOverride?: string, adbInfo?: AdbConnectionInfo) {
     const id = generateId()
     let title: string
     if (titleOverride) {
@@ -108,12 +112,17 @@ export const useTerminalStore = defineStore('terminal', () => {
       title = telnetInfo ? `Telnet ${telnetInfo.host}` : 'Telnet'
     } else if (type === 'serial') {
       title = serialInfo ? `Serial ${serialInfo.portName}` : 'Serial'
+    } else if (type === 'adb') {
+      title = adbInfo ? `ADB ${adbInfo.serial}` : 'ADB'
     } else if (localCommand) {
       const base = localCommand.replace(/\\/g, '/').split('/').pop() || localCommand
       const key = shellKeyMap[localCommand] || base.replace(/\.exe$/, '')
       title = te(`shell.${key}`) ? t(`shell.${key}`) : base
     } else {
       title = t('menu.local_shell')
+    }
+    if (type === 'adb') {
+      adbServerStarted = true
     }
     const tab: TerminalTab = {
       id,
@@ -129,6 +138,7 @@ export const useTerminalStore = defineStore('terminal', () => {
       sshInfo,
       telnetInfo,
       serialInfo,
+      adbInfo,
       aiSessionId: `ai-${id}`,
     }
     tabs.value.push(tab)
@@ -247,10 +257,27 @@ export const useTerminalStore = defineStore('terminal', () => {
     return false
   }
 
+  function hasAnyAdbTab(): boolean {
+    const scan = (list: TerminalTab[]): boolean => {
+      for (const tab of list) {
+        if (tab.adbInfo) return true
+        if (tab.children?.length && scan(tab.children)) return true
+      }
+      return false
+    }
+    return scan(tabs.value)
+  }
+
   function disposeTabResources(tabId: string) {
     const sftp = useSftpStore()
     if (sftp.connId(tabId)) {
       sftp.disconnect(tabId).catch(() => {})
+    }
+    // When the last adb tab closes, tear down the isolated 5038 server
+    // (unless the user disabled auto-cleanup in settings).
+    const settings = useSettingsStore()
+    if (adbServerStarted && settings.adbAutoKill && !hasAnyAdbTab()) {
+      invoke('adb_kill_server').catch(() => {})
     }
   }
 

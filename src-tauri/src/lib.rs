@@ -1,4 +1,5 @@
 mod ai;
+mod adb;
 mod commands;
 mod crypto;
 mod keychain;
@@ -51,6 +52,9 @@ pub fn run() {
             commands::telnet_connect,
             commands::serial_connect,
             commands::serial_list_ports,
+            commands::adb_list_devices,
+            commands::adb_connect,
+            commands::adb_kill_server,
             commands::write_terminal,
             commands::resize_terminal,
             commands::kill_terminal,

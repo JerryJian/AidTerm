@@ -13,6 +13,7 @@ import type {
   SftpFileEntry, SftpProgress, SerialPortInfo,
   SpawnTerminalArgs, WriteTerminalArgs, ResizeTerminalArgs, KillTerminalArgs,
   SshConnectArgs, TelnetConnectArgs, SerialConnectArgs,
+  AdbConnectArgs, AdbDevice,
   SftpConnectArgs, SftpDisconnectArgs, SftpListDirArgs, SftpTransferArgs,
   SftpMkdirArgs, SftpRemoveArgs, SftpRenameArgs, SftpCreateArgs,
   SftpReadFileArgs, SftpWriteFileArgs,
@@ -65,6 +66,58 @@ function getAppDataDir(): string {
 
 function emitToRenderer(event: string, payload: Record<string, unknown>): void {
   mainWindow?.webContents.send(event, payload)
+}
+
+// ══════════════════════════════════════════════════════
+//  ADB helpers
+//
+//  AidTerm NEVER touches the user's adb server. Every adb call is forced onto
+//  the isolated `-P 5038` port, so a version mismatch in the bundled adb can
+//  only ever kill AidTerm's own server, never the user's 5037 instance.
+// ══════════════════════════════════════════════════════
+const ADB_PORT = '5038'
+
+function resolveAdbPath(): string {
+  const envOverride = process.env.AIDTERM_ADB
+  if (envOverride && fs.existsSync(envOverride)) return envOverride
+  const exeName = process.platform === 'win32' ? 'adb.exe' : 'adb'
+  const bundled = path.join(process.resourcesPath, 'bin', exeName)
+  if (fs.existsSync(bundled)) return bundled
+  // Fall back to PATH resolution by the OS; execFile will surface ENOENT if missing.
+  return exeName
+}
+
+function runAdb(args: string[]): Promise<string> {
+  const { execFile } = require('child_process') as typeof import('child_process')
+  return new Promise<string>((resolve, reject) => {
+    const adb = resolveAdbPath()
+    execFile(adb, args, { timeout: 15000 }, (err: Error | null, stdout: string | Buffer) => {
+      if (err) reject(new Error(err.message))
+      else resolve(stdout.toString())
+    })
+  })
+}
+
+function parseAdbDevices(output: string): AdbDevice[] {
+  const devices: AdbDevice[] = []
+  for (const line of output.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('List of devices') || trimmed.startsWith('* daemon')) continue
+    const tokens = trimmed.split(/\s+/)
+    const serial = tokens[0]
+    const state = tokens[1] || 'unknown'
+    let model = ''
+    let product = ''
+    let transport_id: string | null = null
+    for (let i = 2; i < tokens.length; i++) {
+      const [key, value] = tokens[i].split(':')
+      if (key === 'model') model = value || ''
+      else if (key === 'product') product = value || ''
+      else if (key === 'transport_id') transport_id = value || null
+    }
+    devices.push({ serial, state, model, product, transport_id })
+  }
+  return devices
 }
 
 function createWindow(): void {
@@ -718,6 +771,56 @@ function registerIpcHandlers(): void {
       const ports = await SerialPortClass.list()
       return ports.map((p: { path: string }): SerialPortInfo => ({ port_name: p.path }))
     } catch { return [] }
+  })
+
+  // ══════════════════════════════════════════════════════
+  //  ADB (isolated 5038 server)
+  // ══════════════════════════════════════════════════════
+  ipcMain.handle('adb_list_devices', async (): Promise<AdbDevice[]> => {
+    try {
+      const out = await runAdb(['-P', ADB_PORT, 'devices', '-l'])
+      return parseAdbDevices(out)
+    } catch (e) {
+      console.warn('[electron] adb devices failed:', e)
+      return []
+    }
+  })
+
+  ipcMain.handle('adb_connect', (_, args: AdbConnectArgs) => {
+    if (!ptyModule) throw new Error('node-pty not installed')
+
+    const { serial, rows, cols } = args
+    const id = crypto.randomUUID()
+    const adb = resolveAdbPath()
+
+    const term = ptyModule.spawn(adb, ['-P', ADB_PORT, '-s', serial, 'shell'], {
+      name: 'xterm-256color',
+      cols: cols || 80,
+      rows: rows || 24,
+      env: { ...process.env, TERM: 'xterm-256color' },
+    })
+
+    ptySessions.set(id, term)
+
+    term.onData((data: string) => {
+      emitToRenderer('terminal-output', { session_id: id, data })
+    })
+
+    term.onExit(({ exitCode }: { exitCode: number }) => {
+      emitToRenderer('session-status', { session_id: id, status: 'disconnected', error: exitCode !== 0 ? `Exit code: ${exitCode}` : undefined })
+      ptySessions.delete(id)
+    })
+
+    emitToRenderer('session-status', { session_id: id, status: 'connected' })
+    return id
+  })
+
+  ipcMain.handle('adb_kill_server', async (): Promise<void> => {
+    try {
+      await runAdb(['-P', ADB_PORT, 'kill-server'])
+    } catch (e) {
+      console.warn('[electron] adb kill-server failed:', e)
+    }
   })
 
   // ══════════════════════════════════════════════════════

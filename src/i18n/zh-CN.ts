@@ -85,6 +85,14 @@ export default {
     connect: '连接',
     cancel: '取消',
   },
+  adb_dialog: {
+    title: 'Android 设备 (ADB)',
+    refresh: '刷新',
+    no_devices: '未发现设备，请确认设备已开启 USB 调试。',
+    caveat: '提示：已被其他 ADB 服务(端口 5037)占用的设备不会在此显示。首次连接时请在手机上确认 RSA 指纹授权。',
+    connect: '连接 Shell',
+    cancel: '取消',
+  },
   session_panel: {
     title: '会话管理',
     groups: '分组',
@@ -123,6 +131,7 @@ export default {
     ssh: 'SSH...',
     telnet: 'Telnet...',
     serial: '串口...',
+    adb: 'Android (ADB)...',
   },
   tool_panel: {
     ai: 'AI 助手',
@@ -367,6 +376,8 @@ export default {
     fullscreen: '全屏',
     exit_fullscreen: '退出全屏',
     guake_mode: 'Guake 模式',
+    adb_auto_kill: '最后一个 ADB 标签关闭后停止 ADB 服务',
+    adb_auto_kill_desc: 'AidTerm 使用独立的 5038 端口 ADB 服务，绝不触碰系统的 5037 服务。',
     ai_provider: '提供商',
     ai_api_config: 'API 配置',
     ai_status: '状态',

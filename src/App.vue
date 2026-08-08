@@ -6,7 +6,7 @@ import { useSettingsStore } from './stores/settingsStore'
 import { useUiStore } from './stores/uiStore'
 import { useThemeStore } from './stores/themeStore'
 import { useUpdateStore } from './stores/updateStore'
-import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, SavedSession, TerminalTab } from './types'
+import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, AdbConnectionInfo, SavedSession, TerminalTab } from './types'
 import { invoke, listen, getCurrentWindow, toFileUrl, saveDialog as save } from '@/api'
 import TabBar from './components/terminal/TabBar.vue'
 import TitleBar from './components/titlebar/TitleBar.vue'
@@ -18,6 +18,7 @@ import RightSidebar from './components/tools/RightSidebar.vue'
 import StatusBar from './components/status/StatusBar.vue'
 import SshDialog from './components/session/SshDialog.vue'
 import SerialDialog from './components/session/SerialDialog.vue'
+import AdbDialog from './components/session/AdbDialog.vue'
 import SessionDialog from './components/session/SessionDialog.vue'
 import SettingsDialog from './components/settings/SettingsDialog.vue'
 import AboutDialog from './components/about/AboutDialog.vue'
@@ -161,8 +162,17 @@ function onSerialConnect(info: SerialConnectionInfo) {
   store.addTab('serial', undefined, undefined, undefined, info)
 }
 
+function onAdbConnect(info: AdbConnectionInfo) {
+  ui.adbDialog = false
+  store.addTab('adb', undefined, undefined, undefined, undefined, undefined, undefined, info)
+}
+
 function onQuickSerial() {
   ui.serialDialog = true
+}
+
+function onQuickAdb() {
+  ui.adbDialog = true
 }
 
 function onEditFile(remotePath: string, connId: string) {
@@ -232,6 +242,7 @@ function onSplitTab(tabId: string, direction: 'horizontal' | 'vertical') {
     sshInfo: tab.sshInfo,
     telnetInfo: tab.telnetInfo,
     serialInfo: tab.serialInfo,
+    adbInfo: tab.adbInfo,
     aiSessionId: tab.aiSessionId,
   }
 
@@ -484,6 +495,7 @@ onUnmounted(() => {
       @quick-ssh="onQuickSsh"
       @quick-telnet="onQuickTelnet"
       @quick-serial="onQuickSerial"
+      @quick-adb="onQuickAdb"
       @connect-session="onConnectSession"
       @split-tab="onSplitTab"
     />
@@ -534,6 +546,11 @@ onUnmounted(() => {
     v-if="ui.serialDialog"
     @connect="onSerialConnect"
     @close="ui.serialDialog = false"
+  />
+  <AdbDialog
+    v-if="ui.adbDialog"
+    @connect="onAdbConnect"
+    @close="ui.adbDialog = false"
   />
   <SettingsDialog
     v-if="ui.settingsDialog"

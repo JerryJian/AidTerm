@@ -85,6 +85,14 @@ export default {
     connect: 'Connect',
     cancel: 'Cancel',
   },
+  adb_dialog: {
+    title: 'Android Device (ADB)',
+    refresh: 'Refresh',
+    no_devices: 'No devices found. Make sure USB debugging is enabled on the device.',
+    caveat: 'Note: devices already connected to another ADB server (port 5037) will not appear here. On first connection, accept the RSA fingerprint prompt on your phone.',
+    connect: 'Connect Shell',
+    cancel: 'Cancel',
+  },
   session_panel: {
     title: 'Session Manager',
     groups: 'Groups',
@@ -123,6 +131,7 @@ export default {
     ssh: 'SSH...',
     telnet: 'Telnet...',
     serial: 'Serial...',
+    adb: 'Android (ADB)...',
   },
   tool_panel: {
     ai: 'AI Assistant',
@@ -367,6 +376,8 @@ export default {
     fullscreen: 'Fullscreen',
     exit_fullscreen: 'Exit Fullscreen',
     guake_mode: 'Guake Mode',
+    adb_auto_kill: 'Stop ADB server after last ADB tab closes',
+    adb_auto_kill_desc: 'AidTerm uses an isolated ADB server on port 5038, never the system one on 5037.',
     ai_provider: 'Provider',
     ai_api_config: 'API Configuration',
     ai_status: 'Status',

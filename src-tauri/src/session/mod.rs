@@ -8,12 +8,14 @@ use tauri::AppHandle;
 use tokio::sync::oneshot;
 use crate::serial;
 use crate::proxy;
+use crate::adb;
 
 pub(crate) enum Session {
     Local(local::LocalSession),
     Ssh(ssh::SshConnection),
     Telnet(telnet::TelnetConnection),
     Serial(serial::SerialConnection),
+    Adb(local::LocalSession),
 }
 
 pub(crate) struct SessionManager {
@@ -34,9 +36,29 @@ impl SessionManager {
         shell: Option<String>,
         working_dir: Option<String>,
     ) -> Result<(), String> {
-        let session = local::LocalSession::spawn(id.clone(), rows, cols, app_handle, shell, working_dir)?;
+        let session = local::LocalSession::spawn(id.clone(), rows, cols, app_handle, shell, working_dir, Vec::new())?;
         let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
         sessions.insert(id, Session::Local(session));
+        Ok(())
+    }
+
+    /// Spawn an interactive `adb -P 5038 -s <serial> shell` inside a PTY.
+    /// The adb server lifecycle (lazy start / kill on last close) is handled
+    /// by the frontend via the `adb_*` commands.
+    pub fn connect_adb(
+        &self,
+        id: String,
+        serial: String,
+        rows: u16,
+        cols: u16,
+        app_handle: AppHandle,
+    ) -> Result<(), String> {
+        adb::ensure_server(&app_handle)?;
+        let adb_bin = adb::adb_path(&app_handle)?.to_string_lossy().to_string();
+        let args = vec!["-P".to_string(), adb::ADB_PORT.to_string(), "-s".to_string(), serial, "shell".to_string()];
+        let session = local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some(adb_bin), None, args)?;
+        let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
+        sessions.insert(id, Session::Adb(session));
         Ok(())
     }
 
@@ -97,6 +119,7 @@ impl SessionManager {
             Session::Ssh(s) => s.write(data),
             Session::Telnet(s) => s.write(data),
             Session::Serial(s) => s.write(data),
+            Session::Adb(s) => s.write(data),
         }
     }
 
@@ -108,6 +131,7 @@ impl SessionManager {
             Session::Ssh(s) => s.resize(rows, cols),
             Session::Telnet(_) => Ok(()),
             Session::Serial(_) => Ok(()),
+            Session::Adb(s) => s.resize(rows, cols),
         }
     }
 
@@ -134,6 +158,7 @@ impl SessionManager {
                 Session::Ssh(mut s) => s.kill(),
                 Session::Telnet(mut s) => s.kill(),
                 Session::Serial(mut s) => s.kill(),
+                Session::Adb(s) => s.kill(),
             }
         }
         Ok(())

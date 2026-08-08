@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { invoke, listen } from '@/api'
-import type { TerminalOutputPayload, SerialConnectionInfo } from '../types'
+import type { TerminalOutputPayload, SerialConnectionInfo, AdbDevice } from '../types'
 
 export function useTerminal() {
   const sessionId = ref<string | null>(null)
@@ -36,6 +36,25 @@ export function useTerminal() {
 
   async function listSerialPorts() {
     return await invoke<{ port_name: string }[]>('serial_list_ports')
+  }
+
+  async function listAdbDevices() {
+    return await invoke<AdbDevice[]>('adb_list_devices')
+  }
+
+  async function adbConnect(serial: string, rows = 24, cols = 80) {
+    const id = await invoke<string>('adb_connect', { serial, rows, cols })
+    sessionId.value = id
+    isConnected.value = true
+    return id
+  }
+
+  async function killAdbServer() {
+    try {
+      await invoke('adb_kill_server')
+    } catch (e) {
+      console.error('Failed to kill adb server:', e)
+    }
   }
 
   async function sshConnect(
@@ -122,6 +141,9 @@ export function useTerminal() {
     telnetConnect,
     serialConnect,
     listSerialPorts,
+    adbConnect,
+    listAdbDevices,
+    killAdbServer,
     writeInput,
     resize,
     killSession,

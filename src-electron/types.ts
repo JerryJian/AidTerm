@@ -61,6 +61,20 @@ export interface SerialConnectArgs {
   flowControl: string
 }
 
+export interface AdbDevice {
+  serial: string
+  state: string
+  model: string
+  product: string
+  transport_id: string | null
+}
+
+export interface AdbConnectArgs {
+  serial: string
+  rows: number
+  cols: number
+}
+
 export interface SftpConnectArgs {
   host: string
   port: number

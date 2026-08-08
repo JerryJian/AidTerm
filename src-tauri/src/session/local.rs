@@ -97,6 +97,7 @@ impl LocalSession {
         app_handle: AppHandle,
         shell: Option<String>,
         working_dir: Option<String>,
+        args: Vec<String>,
     ) -> Result<Self, String> {
         let native_pty = portable_pty::NativePtySystem::default();
         let pair: PtyPair = native_pty
@@ -115,6 +116,9 @@ impl LocalSession {
         });
 
         let mut cmd_builder = portable_pty::CommandBuilder::new(cmd);
+        if !args.is_empty() {
+            cmd_builder.args(args);
+        }
         if let Some(ref wd) = working_dir {
             cmd_builder.cwd(wd);
         }

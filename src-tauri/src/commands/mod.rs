@@ -4,6 +4,7 @@ use std::os::windows::process::CommandExt;
 
 pub mod update;
 use tauri::{Manager, State};
+use crate::adb;
 use crate::ai;
 use crate::keychain;
 use crate::known_hosts;
@@ -66,8 +67,39 @@ pub async fn serial_connect(
 }
 
 #[tauri::command]
-pub fn serial_list_ports() -> Result<Vec<serial::SerialPortInfo>, String> {
+pub async fn serial_list_ports() -> Result<Vec<serial::SerialPortInfo>, String> {
     serial::list_available_ports()
+}
+
+/// List devices from the isolated 5038 adb server.
+/// Uses spawn_blocking so a slow first server start never blocks the UI.
+#[tauri::command]
+pub async fn adb_list_devices(app: tauri::AppHandle) -> Result<Vec<adb::AdbDevice>, String> {
+    tauri::async_runtime::spawn_blocking(move || adb::list_devices(&app))
+        .await
+        .map_err(|e| format!("adb list devices join error: {}", e))?
+}
+
+/// Open an interactive `adb shell` session for the given device serial.
+#[tauri::command]
+pub async fn adb_connect(
+    app: tauri::AppHandle,
+    manager: State<'_, SessionManager>,
+    serial: String,
+    rows: u16,
+    cols: u16,
+) -> Result<String, String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    manager.connect_adb(id.clone(), serial, rows, cols, app)?;
+    Ok(id)
+}
+
+/// Kill the isolated 5038 adb server. Called when the last adb session closes.
+#[tauri::command]
+pub async fn adb_kill_server(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || adb::kill_server(&app))
+        .await
+        .map_err(|e| format!("adb kill-server join error: {}", e))?
 }
 
 #[tauri::command]
