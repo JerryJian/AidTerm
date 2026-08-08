@@ -13,7 +13,7 @@ import { useThemeStore } from '../../stores/themeStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { getOrCreateAiConversation, registerLeafBinding, unregisterLeafBinding } from '../../hooks/terminalAiRegistry'
 import type { AiTerminalBinding } from '../../hooks/useAiConversation'
-import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, AdbConnectionInfo, SystemInfo, TerminalTab } from '../../types'
+import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, AdbConnectionInfo, WslConnectionInfo, SystemInfo, TerminalTab } from '../../types'
 import { useAiStore } from '../../stores/aiStore'
 import { useI18n } from 'vue-i18n'
 
@@ -22,6 +22,7 @@ const props = defineProps<{
   telnetInfo?: TelnetConnectionInfo
   serialInfo?: SerialConnectionInfo
   adbInfo?: AdbConnectionInfo
+  wslInfo?: WslConnectionInfo
   tabId?: string
   tab?: TerminalTab
 }>()
@@ -59,6 +60,7 @@ const sshInfo = computed(() => props.sshInfo ?? props.tab?.sshInfo)
 const telnetInfo = computed(() => props.telnetInfo ?? props.tab?.telnetInfo)
 const serialInfo = computed(() => props.serialInfo ?? props.tab?.serialInfo)
 const adbInfo = computed(() => props.adbInfo ?? props.tab?.adbInfo)
+const wslInfo = computed(() => props.wslInfo ?? props.tab?.wslInfo)
 
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
@@ -70,7 +72,7 @@ let resizeObserver: ResizeObserver | null = null
 let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 let lastSize = { w: 0, h: 0 }
 
-const { createSession, sshConnect, telnetConnect, serialConnect, adbConnect, writeInput, resize, onOutput, killSession, sessionId: sessionIdRef, isConnected: isConnectedRef } = useTerminal()
+const { createSession, wslConnect, sshConnect, telnetConnect, serialConnect, adbConnect, writeInput, resize, onOutput, killSession, sessionId: sessionIdRef, isConnected: isConnectedRef } = useTerminal()
 
 const aiBinding: AiTerminalBinding = {
   getTerminal: () => terminal,
@@ -285,7 +287,7 @@ async function startSession() {
   }
 
   try {
-    const id = sshInfo.value
+    const handle = sshInfo.value
       ? await sshConnect(
           sshInfo.value.host,
           sshInfo.value.port,
@@ -304,9 +306,12 @@ async function startSession() {
           ? await serialConnect(serialInfo.value)
           : adbInfo.value
             ? await adbConnect(adbInfo.value.serial, rows, cols)
-            : await createSession(rows, cols, currentTab.value?.session?.command, currentTab.value?.session?.workingDir)
+            : wslInfo.value
+              ? await wslConnect(wslInfo.value.distro, wslInfo.value.workingDir, rows, cols)
+              : await createSession(rows, cols, currentTab.value?.session?.command, currentTab.value?.session?.workingDir)
 
-    store.updateSessionId(currentTabId.value ?? '', id)
+    store.updateSessionId(currentTabId.value ?? '', handle.id)
+    store.updateSessionCapabilities(currentTabId.value ?? '', handle.capabilities)
     disconnected.value = false
     store.updateSessionStatus(currentTabId.value ?? '', 'connected')
 
@@ -319,7 +324,7 @@ async function startSession() {
       const tabId = currentTabId.value
       if (tabId) {
         invoke<SystemInfo>('get_remote_system_info', {
-          sessionId: id,
+          sessionId: handle.id,
         }).then(info => {
           store.updateSystemInfo(tabId, info)
           store.updateTabTitle(tabId, `${info.os} | ${info.hostname}`)

@@ -10,60 +10,62 @@ use crate::keychain;
 use crate::known_hosts;
 use crate::proxy;
 use crate::serial;
-use crate::session::SessionManager;
+use crate::session::{ConnectionConfig, SessionManager};
 use crate::session_store;
 use crate::sftp;
 use crate::tunnel;
 use crate::zmodem;
 
+#[derive(serde::Serialize)]
+pub struct ConnectionHandle {
+    pub id: String,
+    pub capabilities: Vec<String>,
+}
+
+/// Unified connection creation — dispatch on `config.type`.
 #[tauri::command]
-pub async fn spawn_terminal(
+pub async fn connection_create(
     app: tauri::AppHandle,
     manager: State<'_, SessionManager>,
+    proxy_manager: State<'_, proxy::ProxyManager>,
+    config: ConnectionConfig,
     rows: u16,
     cols: u16,
-    shell: Option<String>,
-    working_dir: Option<String>,
-) -> Result<String, String> {
-    let id = uuid::Uuid::new_v4().to_string();
-    manager.spawn_local(id.clone(), rows, cols, app, shell, working_dir)?;
-    Ok(id)
-}
-
-#[tauri::command]
-pub async fn telnet_connect(
-    app: tauri::AppHandle,
-    manager: State<'_, SessionManager>,
-    host: String,
-    port: u16,
-) -> Result<String, String> {
-    let id = uuid::Uuid::new_v4().to_string();
-    manager.connect_telnet(id.clone(), host, port, app)?;
-    Ok(id)
-}
-
-#[tauri::command]
-pub async fn serial_connect(
-    app: tauri::AppHandle,
-    manager: State<'_, SessionManager>,
-    port_name: String,
-    baud_rate: u32,
-    data_bits: u8,
-    stop_bits: u8,
-    parity: String,
-    flow_control: String,
-) -> Result<String, String> {
-    let id = uuid::Uuid::new_v4().to_string();
-    let config = serial::SerialConfig {
-        port_name,
-        baud_rate,
-        data_bits,
-        stop_bits,
-        parity,
-        flow_control,
+) -> Result<ConnectionHandle, String> {
+    let proxy = match &config {
+        ConnectionConfig::Ssh { proxy_id, .. } => proxy_id.as_deref().and_then(|id| proxy_manager.get(id)),
+        _ => None,
     };
-    manager.connect_serial(id.clone(), config, app)?;
-    Ok(id)
+    let id = manager.create(app, config, rows, cols, proxy)?;
+    let capabilities = manager.capabilities(&id).into_iter().map(|s| s.to_string()).collect();
+    Ok(ConnectionHandle { id, capabilities })
+}
+
+#[tauri::command]
+pub async fn connection_write(
+    manager: State<'_, SessionManager>,
+    session_id: String,
+    data: String,
+) -> Result<(), String> {
+    manager.write(&session_id, &data)
+}
+
+#[tauri::command]
+pub async fn connection_resize(
+    manager: State<'_, SessionManager>,
+    session_id: String,
+    rows: u16,
+    cols: u16,
+) -> Result<(), String> {
+    manager.resize(&session_id, rows, cols)
+}
+
+#[tauri::command]
+pub async fn connection_kill(
+    manager: State<'_, SessionManager>,
+    session_id: String,
+) -> Result<(), String> {
+    manager.kill(&session_id)
 }
 
 #[tauri::command]
@@ -78,20 +80,6 @@ pub async fn adb_list_devices(app: tauri::AppHandle) -> Result<Vec<adb::AdbDevic
     tauri::async_runtime::spawn_blocking(move || adb::list_devices(&app))
         .await
         .map_err(|e| format!("adb list devices join error: {}", e))?
-}
-
-/// Open an interactive `adb shell` session for the given device serial.
-#[tauri::command]
-pub async fn adb_connect(
-    app: tauri::AppHandle,
-    manager: State<'_, SessionManager>,
-    serial: String,
-    rows: u16,
-    cols: u16,
-) -> Result<String, String> {
-    let id = uuid::Uuid::new_v4().to_string();
-    manager.connect_adb(id.clone(), serial, rows, cols, app)?;
-    Ok(id)
 }
 
 /// Kill the isolated 5038 adb server. Called when the last adb session closes.
@@ -112,175 +100,238 @@ pub async fn adb_occupied_devices(app: tauri::AppHandle) -> Result<Vec<String>, 
         .map_err(|e| format!("adb occupied devices join error: {}", e))?)
 }
 
-/// List a directory on an adb device (isolated 5038 server).
+/// Unified file backend. sftp connections live in SftpManager (addressed by
+/// connection id); adb devices are addressed by serial. All operations dispatch
+/// on `kind`, so the frontend speaks one interface regardless of backend.
+#[derive(serde::Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum FileConnectConfig {
+    Sftp {
+        host: String,
+        port: u16,
+        username: String,
+        password: String,
+        private_key_path: Option<String>,
+    },
+    Adb {
+        serial: String,
+    },
+}
+
+/// Connect a file backend and get its handle id (sftp conn id / adb serial).
 #[tauri::command]
-pub async fn adb_list_dir(
+pub async fn file_connect(
     app: tauri::AppHandle,
-    serial: String,
+    manager: State<'_, sftp::SftpManager>,
+    config: FileConnectConfig,
+) -> Result<String, String> {
+    match config {
+        FileConnectConfig::Sftp { host, port, username, password, private_key_path } => {
+            let id = uuid::Uuid::new_v4().to_string();
+            let conn = sftp::SftpConnection::connect(host, port, username, password, private_key_path, app)?;
+            manager.connections.lock().map_err(|e| e.to_string())?.insert(id.clone(), conn);
+            Ok(id)
+        }
+        FileConnectConfig::Adb { serial } => Ok(serial),
+    }
+}
+
+#[tauri::command]
+pub async fn file_disconnect(
+    manager: State<'_, sftp::SftpManager>,
+    kind: String,
+    handle: String,
+) -> Result<(), String> {
+    if kind == "sftp" {
+        let mut connections = manager.connections.lock().map_err(|e| e.to_string())?;
+        if let Some(mut conn) = connections.remove(&handle) {
+            conn.kill();
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn file_list_dir(
+    app: tauri::AppHandle,
+    manager: State<'_, sftp::SftpManager>,
+    kind: String,
+    handle: String,
     path: String,
 ) -> Result<Vec<sftp::FileEntry>, String> {
-    tauri::async_runtime::spawn_blocking(move || adb::list_dir(&app, &serial, &path))
-        .await
-        .map_err(|e| format!("adb list dir join error: {}", e))?
+    match kind.as_str() {
+        "sftp" => sftp_call(&manager, &handle, |tx| sftp::SftpCmd::ListDir { path, resp: tx }).await,
+        "adb" => tauri::async_runtime::spawn_blocking(move || adb::list_dir(&app, &handle, &path))
+            .await
+            .map_err(|e| format!("adb list dir join error: {}", e))?,
+        k => Err(format!("unsupported file kind: {}", k)),
+    }
 }
 
-/// Pull a file/directory from an adb device.
 #[tauri::command]
-pub async fn adb_pull(
+pub async fn file_download(
     app: tauri::AppHandle,
-    serial: String,
+    manager: State<'_, sftp::SftpManager>,
+    kind: String,
+    handle: String,
+    transfer_id: String,
     remote: String,
     local: String,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || adb::pull(&app, &serial, &remote, &local))
-        .await
-        .map_err(|e| format!("adb pull join error: {}", e))?
+    match kind.as_str() {
+        "sftp" => sftp_call(&manager, &handle, |tx| sftp::SftpCmd::Download { id: transfer_id, remote, local, resp: tx }).await,
+        "adb" => tauri::async_runtime::spawn_blocking(move || adb::pull(&app, &handle, &remote, &local))
+            .await
+            .map_err(|e| format!("adb pull join error: {}", e))?,
+        k => Err(format!("unsupported file kind: {}", k)),
+    }
 }
 
-/// Push a local file/directory to an adb device.
 #[tauri::command]
-pub async fn adb_push(
+pub async fn file_upload(
     app: tauri::AppHandle,
-    serial: String,
+    manager: State<'_, sftp::SftpManager>,
+    kind: String,
+    handle: String,
+    transfer_id: String,
     local: String,
     remote: String,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || adb::push(&app, &serial, &local, &remote))
-        .await
-        .map_err(|e| format!("adb push join error: {}", e))?
+    match kind.as_str() {
+        "sftp" => sftp_call(&manager, &handle, |tx| sftp::SftpCmd::Upload { id: transfer_id, local, remote, resp: tx }).await,
+        "adb" => tauri::async_runtime::spawn_blocking(move || adb::push(&app, &handle, &local, &remote))
+            .await
+            .map_err(|e| format!("adb push join error: {}", e))?,
+        k => Err(format!("unsupported file kind: {}", k)),
+    }
 }
 
-/// Create a directory (with parents) on an adb device.
 #[tauri::command]
-pub async fn adb_mkdir(
-    app: tauri::AppHandle,
-    serial: String,
-    path: String,
+#[allow(dead_code)]
+pub async fn file_cancel_transfer(
+    manager: State<'_, sftp::SftpManager>,
+    kind: String,
+    handle: String,
+    transfer_id: String,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || adb::mkdir(&app, &serial, &path))
-        .await
-        .map_err(|e| format!("adb mkdir join error: {}", e))?
+    match kind.as_str() {
+        "sftp" => sftp_call(&manager, &handle, |tx| sftp::SftpCmd::CancelTransfer { id: transfer_id, resp: tx }).await,
+        "adb" => Err("Cancel not supported for adb transfers".to_string()),
+        k => Err(format!("unsupported file kind: {}", k)),
+    }
 }
 
-/// Create an empty file on an adb device.
 #[tauri::command]
-pub async fn adb_touch(
+pub async fn file_remove(
     app: tauri::AppHandle,
-    serial: String,
-    path: String,
-) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || adb::touch(&app, &serial, &path))
-        .await
-        .map_err(|e| format!("adb touch join error: {}", e))?
-}
-
-/// Remove a file/directory tree on an adb device.
-#[tauri::command]
-pub async fn adb_remove(
-    app: tauri::AppHandle,
-    serial: String,
+    manager: State<'_, sftp::SftpManager>,
+    kind: String,
+    handle: String,
     path: String,
     is_dir: bool,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || adb::remove(&app, &serial, &path, is_dir))
-        .await
-        .map_err(|e| format!("adb remove join error: {}", e))?
+    match kind.as_str() {
+        "sftp" => sftp_call(&manager, &handle, |tx| sftp::SftpCmd::Remove { path, resp: tx }).await,
+        "adb" => tauri::async_runtime::spawn_blocking(move || adb::remove(&app, &handle, &path, is_dir))
+            .await
+            .map_err(|e| format!("adb remove join error: {}", e))?,
+        k => Err(format!("unsupported file kind: {}", k)),
+    }
 }
 
-/// Rename/move a file or directory on an adb device.
 #[tauri::command]
-pub async fn adb_rename(
+pub async fn file_rename(
     app: tauri::AppHandle,
-    serial: String,
+    manager: State<'_, sftp::SftpManager>,
+    kind: String,
+    handle: String,
     old_path: String,
     new_path: String,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || adb::rename_item(&app, &serial, &old_path, &new_path))
-        .await
-        .map_err(|e| format!("adb rename join error: {}", e))?
+    match kind.as_str() {
+        "sftp" => sftp_call(&manager, &handle, |tx| sftp::SftpCmd::Rename { old: old_path, new: new_path, resp: tx }).await,
+        "adb" => tauri::async_runtime::spawn_blocking(move || adb::rename_item(&app, &handle, &old_path, &new_path))
+            .await
+            .map_err(|e| format!("adb rename join error: {}", e))?,
+        k => Err(format!("unsupported file kind: {}", k)),
+    }
 }
 
-/// Read a text file from an adb device.
 #[tauri::command]
-pub async fn adb_read_file(
+pub async fn file_mkdir(
     app: tauri::AppHandle,
-    serial: String,
+    manager: State<'_, sftp::SftpManager>,
+    kind: String,
+    handle: String,
+    path: String,
+) -> Result<(), String> {
+    match kind.as_str() {
+        "sftp" => sftp_call(&manager, &handle, |tx| sftp::SftpCmd::Mkdir { path, resp: tx }).await,
+        "adb" => tauri::async_runtime::spawn_blocking(move || adb::mkdir(&app, &handle, &path))
+            .await
+            .map_err(|e| format!("adb mkdir join error: {}", e))?,
+        k => Err(format!("unsupported file kind: {}", k)),
+    }
+}
+
+#[tauri::command]
+pub async fn file_create(
+    app: tauri::AppHandle,
+    manager: State<'_, sftp::SftpManager>,
+    kind: String,
+    handle: String,
+    path: String,
+    is_dir: bool,
+    mode: u32,
+) -> Result<(), String> {
+    match kind.as_str() {
+        "sftp" => sftp_call(&manager, &handle, |tx| sftp::SftpCmd::Create { path, is_dir, mode, resp: tx }).await,
+        "adb" => tauri::async_runtime::spawn_blocking(move || {
+            if is_dir {
+                adb::mkdir(&app, &handle, &path)
+            } else {
+                adb::touch(&app, &handle, &path)
+            }
+        })
+        .await
+        .map_err(|e| format!("adb create join error: {}", e))?,
+        k => Err(format!("unsupported file kind: {}", k)),
+    }
+}
+
+#[tauri::command]
+pub async fn file_read(
+    app: tauri::AppHandle,
+    manager: State<'_, sftp::SftpManager>,
+    kind: String,
+    handle: String,
     remote: String,
 ) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || adb::read_file(&app, &serial, &remote))
-        .await
-        .map_err(|e| format!("adb read file join error: {}", e))?
+    match kind.as_str() {
+        "sftp" => sftp_call(&manager, &handle, |tx| sftp::SftpCmd::ReadFile { remote, resp: tx }).await,
+        "adb" => tauri::async_runtime::spawn_blocking(move || adb::read_file(&app, &handle, &remote))
+            .await
+            .map_err(|e| format!("adb read file join error: {}", e))?,
+        k => Err(format!("unsupported file kind: {}", k)),
+    }
 }
 
-/// Write a text file to an adb device via temp file + push.
 #[tauri::command]
-pub async fn adb_write_file(
+pub async fn file_write(
     app: tauri::AppHandle,
-    serial: String,
+    manager: State<'_, sftp::SftpManager>,
+    kind: String,
+    handle: String,
     remote: String,
     content: String,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || adb::write_file(&app, &serial, &remote, &content))
-        .await
-        .map_err(|e| format!("adb write file join error: {}", e))?
-}
-
-#[tauri::command]
-pub async fn ssh_connect(
-    app: tauri::AppHandle,
-    manager: State<'_, SessionManager>,
-    proxy_manager: State<'_, proxy::ProxyManager>,
-    host: String,
-    port: u16,
-    username: String,
-    password: String,
-    private_key_path: Option<String>,
-    proxy_id: Option<String>,
-    rows: u16,
-    cols: u16,
-    agent_forwarding: Option<bool>,
-    x11_forwarding: Option<bool>,
-) -> Result<String, String> {
-    let proxy = proxy_id.and_then(|id| proxy_manager.get(&id));
-    let id = uuid::Uuid::new_v4().to_string();
-    log::info!("[ssh_connect] calling manager.connect_ssh (id={}, host={}:{})", id, host, port);
-    let result = manager.connect_ssh(
-        id.clone(), host.clone(), port, username, password, private_key_path.clone(),
-        proxy, rows, cols,
-        agent_forwarding.unwrap_or(false),
-        x11_forwarding.unwrap_or(false),
-        app,
-    );
-    log::info!("[ssh_connect] manager.connect_ssh returned: {:?}", result);
-    result?;
-    Ok(id)
-}
-
-#[tauri::command]
-pub async fn write_terminal(
-    manager: State<'_, SessionManager>,
-    session_id: String,
-    data: String,
-) -> Result<(), String> {
-    manager.write(&session_id, &data)
-}
-
-#[tauri::command]
-pub async fn resize_terminal(
-    manager: State<'_, SessionManager>,
-    session_id: String,
-    rows: u16,
-    cols: u16,
-) -> Result<(), String> {
-    manager.resize(&session_id, rows, cols)
-}
-
-#[tauri::command]
-pub async fn kill_terminal(
-    manager: State<'_, SessionManager>,
-    session_id: String,
-) -> Result<(), String> {
-    manager.kill(&session_id)
+    match kind.as_str() {
+        "sftp" => sftp_call(&manager, &handle, |tx| sftp::SftpCmd::WriteFile { remote, content, resp: tx }).await,
+        "adb" => tauri::async_runtime::spawn_blocking(move || adb::write_file(&app, &handle, &remote, &content))
+            .await
+            .map_err(|e| format!("adb write file join error: {}", e))?,
+        k => Err(format!("unsupported file kind: {}", k)),
+    }
 }
 
 #[tauri::command]
@@ -316,116 +367,6 @@ async fn sftp_call<T: Send + 'static>(
 }
 
 #[tauri::command]
-pub async fn sftp_connect(
-    app: tauri::AppHandle,
-    manager: State<'_, sftp::SftpManager>,
-    host: String,
-    port: u16,
-    username: String,
-    password: String,
-    private_key_path: Option<String>,
-) -> Result<String, String> {
-    let id = uuid::Uuid::new_v4().to_string();
-    let conn = sftp::SftpConnection::connect(host, port, username, password, private_key_path, app)?;
-    let mut connections = manager.connections.lock().map_err(|e| e.to_string())?;
-    connections.insert(id.clone(), conn);
-    Ok(id)
-}
-
-#[tauri::command]
-pub async fn sftp_disconnect(
-    manager: State<'_, sftp::SftpManager>,
-    conn_id: String,
-) -> Result<(), String> {
-    let mut connections = manager.connections.lock().map_err(|e| e.to_string())?;
-    if let Some(mut conn) = connections.remove(&conn_id) {
-        conn.kill();
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn sftp_list_dir(
-    manager: State<'_, sftp::SftpManager>,
-    conn_id: String,
-    path: String,
-) -> Result<Vec<sftp::FileEntry>, String> {
-    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::ListDir { path, resp: tx }).await
-}
-
-#[tauri::command]
-pub async fn sftp_download(
-    manager: State<'_, sftp::SftpManager>,
-    conn_id: String,
-    transfer_id: String,
-    remote: String,
-    local: String,
-) -> Result<(), String> {
-    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::Download { id: transfer_id, remote, local, resp: tx }).await
-}
-
-#[tauri::command]
-pub async fn sftp_upload(
-    manager: State<'_, sftp::SftpManager>,
-    conn_id: String,
-    transfer_id: String,
-    remote: String,
-    local: String,
-) -> Result<(), String> {
-    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::Upload { id: transfer_id, local, remote, resp: tx }).await
-}
-
-#[tauri::command]
-#[allow(dead_code)]
-pub async fn sftp_cancel_transfer(
-    manager: State<'_, sftp::SftpManager>,
-    conn_id: String,
-    transfer_id: String,
-) -> Result<(), String> {
-    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::CancelTransfer { id: transfer_id, resp: tx }).await
-}
-
-#[tauri::command]
-#[allow(dead_code)]
-pub async fn sftp_create(
-    manager: State<'_, sftp::SftpManager>,
-    conn_id: String,
-    path: String,
-    is_dir: bool,
-    mode: u32,
-) -> Result<(), String> {
-    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::Create { path, is_dir, mode, resp: tx }).await
-}
-
-#[tauri::command]
-pub async fn sftp_remove(
-    manager: State<'_, sftp::SftpManager>,
-    conn_id: String,
-    path: String,
-) -> Result<(), String> {
-    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::Remove { path, resp: tx }).await
-}
-
-#[tauri::command]
-pub async fn sftp_rename(
-    manager: State<'_, sftp::SftpManager>,
-    conn_id: String,
-    old_path: String,
-    new_path: String,
-) -> Result<(), String> {
-    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::Rename { old: old_path, new: new_path, resp: tx }).await
-}
-
-#[tauri::command]
-pub async fn sftp_mkdir(
-    manager: State<'_, sftp::SftpManager>,
-    conn_id: String,
-    path: String,
-) -> Result<(), String> {
-    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::Mkdir { path, resp: tx }).await
-}
-
-#[tauri::command]
 pub fn zmodem_respond(
     state: State<'_, zmodem::ZmodemState>,
     session_id: String,
@@ -434,25 +375,6 @@ pub fn zmodem_respond(
     let mut responses = state.responses.lock().map_err(|e| e.to_string())?;
     responses.insert(session_id, save_path);
     Ok(())
-}
-
-#[tauri::command]
-pub async fn sftp_read_file(
-    manager: State<'_, sftp::SftpManager>,
-    conn_id: String,
-    remote: String,
-) -> Result<String, String> {
-    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::ReadFile { remote, resp: tx }).await
-}
-
-#[tauri::command]
-pub async fn sftp_write_file(
-    manager: State<'_, sftp::SftpManager>,
-    conn_id: String,
-    remote: String,
-    content: String,
-) -> Result<(), String> {
-    sftp_call(&manager, &conn_id, |tx| sftp::SftpCmd::WriteFile { remote, content, resp: tx }).await
 }
 
 #[tauri::command]

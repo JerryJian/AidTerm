@@ -51,13 +51,19 @@ export interface AdbConnectionInfo {
   product?: string
 }
 
+export interface WslConnectionInfo {
+  distro?: string
+  workingDir?: string
+}
+
 export interface TerminalSession {
   id: string
   title: string
-  type: 'local' | 'ssh' | 'serial' | 'telnet' | 'adb'
+  type: 'local' | 'wsl' | 'ssh' | 'serial' | 'telnet' | 'adb'
   status: 'connecting' | 'connected' | 'disconnected'
   command?: string
   workingDir?: string
+  capabilities?: ConnectionCapability[]
 }
 
 export interface SystemInfo {
@@ -80,7 +86,7 @@ export interface UpdateInfo {
   installer_type: string
 }
 
-export type ToolTab = 'ai' | 'sftp' | 'tunnel'
+export type ToolTab = 'ai' | 'file' | 'tunnel'
 
 export type FileKind = 'sftp' | 'adb'
 
@@ -92,6 +98,7 @@ export interface TerminalTab {
   telnetInfo?: TelnetConnectionInfo
   serialInfo?: SerialConnectionInfo
   adbInfo?: AdbConnectionInfo
+  wslInfo?: WslConnectionInfo
   splitDirection?: 'horizontal' | 'vertical'
   children?: TerminalTab[]
   systemInfo?: SystemInfo
@@ -155,13 +162,55 @@ export interface UploadTask {
   speed?: number
 }
 
-export interface SftpProgress {
+export interface FileProgress {
   remote: string
   local: string
   type: 'upload' | 'download'
   bytes_transferred: number
   total_size: number
 }
+
+/** A connection's declared capabilities; drives which tool panels are available. */
+export type ConnectionCapability = 'file' | 'tunnel' | 'exec' | 'zmodem'
+
+export type ConnectionType = 'local' | 'wsl' | 'ssh' | 'telnet' | 'serial' | 'adb'
+
+export interface ConnectionHandle {
+  id: string
+  capabilities: ConnectionCapability[]
+}
+
+/** Unified connection creation config (field names mirror the backend's snake_case). */
+export type ConnectionConfig =
+  | { type: 'local'; shell?: string | null; working_dir?: string | null }
+  | { type: 'wsl'; distro?: string | null; working_dir?: string | null }
+  | {
+      type: 'ssh'
+      host: string
+      port: number
+      username: string
+      password: string
+      private_key_path?: string | null
+      proxy_id?: string | null
+      agent_forwarding?: boolean
+      x11_forwarding?: boolean
+    }
+  | { type: 'telnet'; host: string; port: number }
+  | {
+      type: 'serial'
+      port_name: string
+      baud_rate: number
+      data_bits: number
+      stop_bits: number
+      parity: string
+      flow_control: string
+    }
+  | { type: 'adb'; serial: string }
+
+/** Unified file connection target; `id` is the sftp conn id or adb device serial. */
+export type FileConnectConfig =
+  | { type: 'sftp'; host: string; port: number; username: string; password: string; private_key_path?: string | null }
+  | { type: 'adb'; serial: string }
 
 export interface FileEntry {
   name: string

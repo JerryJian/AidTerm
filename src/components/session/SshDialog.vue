@@ -47,7 +47,7 @@ async function pickKey() {
     filters: [{ name: 'SSH Keys', extensions: ['pem', 'key', 'id_rsa', 'id_ed25519', '*'] }],
   })
   if (selected) {
-    privateKeyPath.value = selected
+    privateKeyPath.value = Array.isArray(selected) ? selected[0] : selected
   }
 }
 

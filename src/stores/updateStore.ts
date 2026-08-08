@@ -17,9 +17,9 @@ export const useUpdateStore = defineStore('update', () => {
       updateInfo.value = await checkForUpdate()
       if (updateInfo.value.has_update && autoOpen) dialogOpen.value = true
       return updateInfo.value.has_update
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (!silent) {
-        checkError.value = e?.message || String(e)
+        checkError.value = e instanceof Error ? e.message : String(e)
         updateInfo.value = null
       }
       return false

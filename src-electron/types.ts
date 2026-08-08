@@ -34,6 +34,97 @@ export interface KillTerminalArgs {
   sessionId: string
 }
 
+// ── Unified Connection Types (mirror the Rust/`src/types` ConnectionConfig) ──
+
+export type ConnectionConfig =
+  | { type: 'local'; shell?: string | null; working_dir?: string | null }
+  | { type: 'wsl'; distro?: string | null; working_dir?: string | null }
+  | {
+      type: 'ssh'
+      host: string
+      port: number
+      username: string
+      password: string
+      private_key_path?: string | null
+      proxy_id?: string | null
+      agent_forwarding?: boolean
+      x11_forwarding?: boolean
+    }
+  | { type: 'telnet'; host: string; port: number }
+  | {
+      type: 'serial'
+      port_name: string
+      baud_rate: number
+      data_bits: number
+      stop_bits: number
+      parity: string
+      flow_control: string
+    }
+  | { type: 'adb'; serial: string }
+
+export interface ConnectionHandle {
+  id: string
+  capabilities: string[]
+}
+
+export interface ConnectionCreateArgs {
+  config: ConnectionConfig
+  rows: number
+  cols: number
+}
+
+export type FileConnectConfig =
+  | { type: 'sftp'; host: string; port: number; username: string; password: string; private_key_path?: string | null }
+  | { type: 'adb'; serial: string }
+
+export interface FileConnectArgs {
+  config: FileConnectConfig
+}
+
+export interface FileOpArgs {
+  kind: string
+  handle: string
+}
+
+export interface FileListDirArgs extends FileOpArgs {
+  path: string
+}
+
+export interface FileTransferArgs extends FileOpArgs {
+  transferId: string
+  remote: string
+  local: string
+}
+
+export interface FileRemoveArgs extends FileOpArgs {
+  path: string
+  is_dir: boolean
+}
+
+export interface FileRenameArgs extends FileOpArgs {
+  old_path: string
+  new_path: string
+}
+
+export interface FileMkdirArgs extends FileOpArgs {
+  path: string
+}
+
+export interface FileCreateArgs extends FileOpArgs {
+  path: string
+  is_dir: boolean
+  mode: number
+}
+
+export interface FileReadArgs extends FileOpArgs {
+  remote: string
+}
+
+export interface FileWriteArgs extends FileOpArgs {
+  remote: string
+  content: string
+}
+
 export interface SshConnectArgs {
   host: string
   port: number
@@ -368,9 +459,9 @@ export interface AiResponse {
   tool_calls: AiToolCall[]
 }
 
-// ── SFTP Types ──
+// ── File Types ──
 
-export interface SftpFileEntry {
+export interface FileEntry {
   name: string
   is_dir: boolean
   size: number
@@ -378,7 +469,7 @@ export interface SftpFileEntry {
   permissions: string
 }
 
-export interface SftpProgress {
+export interface FileProgress {
   remote: string
   local: string
   type: string

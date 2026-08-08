@@ -5,6 +5,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::oneshot;
 
 use serde::{Deserialize, Serialize};
+use crate::session::{Connection, Capability};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerialConfig {
@@ -169,5 +170,23 @@ impl SerialConnection {
         if let Some(handle) = self.handle.take() {
             let _ = handle.join();
         }
+    }
+}
+
+impl Connection for SerialConnection {
+    fn write(&mut self, data: &str) -> Result<(), String> {
+        SerialConnection::write(self, data)
+    }
+
+    fn resize(&self, _rows: u16, _cols: u16) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn kill(&mut self) {
+        self.kill()
+    }
+
+    fn capabilities(&self) -> &'static [Capability] {
+        crate::session::CAP_NONE
     }
 }

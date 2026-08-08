@@ -4,7 +4,7 @@ import { useFileStore } from '../../stores/fileStore'
 import { useTerminalStore } from '../../stores/terminal'
 import { openDialog as open, saveDialog as save, listen } from '@/api'
 import { useI18n } from 'vue-i18n'
-import type { FileEntry, TerminalTab, UploadTask, SftpProgress, FileKind } from '../../types'
+import type { FileEntry, TerminalTab, UploadTask, FileProgress, FileKind } from '../../types'
 
 const svg = (d: string) => `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
 
@@ -198,7 +198,7 @@ onMounted(async () => {
   })
   unlistens.push(un1)
 
-  const un2 = await listen<SftpProgress>('sftp-progress', (event) => {
+  const un2 = await listen<FileProgress>('file-progress', (event) => {
     const p = event.payload
     const tasks = p.type === 'download' ? downloadTasks : uploadTasks
     const name = p.remote.split('/').pop() || p.remote

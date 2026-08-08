@@ -2,8 +2,21 @@ export type UnlistenFn = () => void
 
 export type ResizeDirection = 'East' | 'North' | 'NorthEast' | 'NorthWest' | 'South' | 'SouthEast' | 'SouthWest' | 'West'
 
-export interface ListenEvent<T = any> {
+export interface ListenEvent<T = unknown> {
   payload: T
+}
+
+export interface DialogFilter {
+  name: string
+  extensions: string[]
+}
+
+export interface DialogOptions {
+  title?: string
+  defaultPath?: string
+  multiple?: boolean
+  directory?: boolean
+  filters?: DialogFilter[]
 }
 
 export interface WindowHandle {

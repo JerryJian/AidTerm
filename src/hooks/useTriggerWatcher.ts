@@ -17,7 +17,7 @@ export function useTriggerWatcher() {
 
       const matched = triggerStore.findMatch(event.payload.data)
       if (matched) {
-        await invoke('write_terminal', {
+        await invoke('connection_write', {
           sessionId: activeSessionId,
           data: matched.response.endsWith('\n') ? matched.response : matched.response + '\r',
         })

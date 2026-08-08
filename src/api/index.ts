@@ -6,8 +6,9 @@
 export type { UnlistenFn } from './types'
 
 import type { UpdateInfo } from '@/types'
+import type { DialogOptions } from './types'
 
-export const isElectron = !!(window as any).electronAPI
+export const isElectron = !!(window as unknown as { electronAPI?: unknown }).electronAPI
 
 type ApiModule = typeof import('./tauri') | typeof import('./electron')
 
@@ -23,7 +24,7 @@ async function getMod(): Promise<ApiModule> {
   return modPromise
 }
 
-export async function invoke<T>(cmd: string, args?: Record<string, any>): Promise<T> {
+export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const mod = await getMod()
   return mod.invoke<T>(cmd, args)
 }
@@ -33,12 +34,12 @@ export async function listen<T>(event: string, handler: (event: { payload: T }) 
   return mod.listen<T>(event, handler)
 }
 
-export async function openDialog(opts?: any): Promise<any> {
+export async function openDialog(opts?: DialogOptions): Promise<null | string | string[]> {
   const mod = await getMod()
   return mod.openDialog(opts)
 }
 
-export async function saveDialog(opts?: any): Promise<any> {
+export async function saveDialog(opts?: DialogOptions): Promise<string | null> {
   const mod = await getMod()
   return mod.saveDialog(opts)
 }

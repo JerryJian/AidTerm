@@ -133,7 +133,7 @@ export const useAiStore = defineStore('ai', () => {
         baseUrl: config.value.base_url,
         apiKey: config.value.api_key,
       })
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Failed to fetch models:', e)
     } finally {
       loadingModels.value = false

@@ -3,6 +3,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 use telnet::{Telnet, Event};
 use tauri::{AppHandle, Emitter};
+use crate::session::{Connection, Capability};
 
 pub struct TelnetConnection {
     pub write_tx: Sender<String>,
@@ -100,5 +101,23 @@ impl TelnetConnection {
         if let Some(handle) = self.handle.take() {
             let _ = handle.join();
         }
+    }
+}
+
+impl Connection for TelnetConnection {
+    fn write(&mut self, data: &str) -> Result<(), String> {
+        TelnetConnection::write(self, data)
+    }
+
+    fn resize(&self, _rows: u16, _cols: u16) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn kill(&mut self) {
+        self.kill()
+    }
+
+    fn capabilities(&self) -> &'static [Capability] {
+        crate::session::CAP_NONE
     }
 }

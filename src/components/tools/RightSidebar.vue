@@ -6,7 +6,7 @@ import { useUiStore } from '../../stores/uiStore'
 import { useAiStore } from '../../stores/aiStore'
 import { getAiConversation } from '../../hooks/terminalAiRegistry'
 import AiSidebar from '../ai/AiSidebar.vue'
-import SftpPanel from '../sftp/SftpPanel.vue'
+import FilePanel from '../file/FilePanel.vue'
 import TunnelPanel from '../tunnel/TunnelPanel.vue'
 import type { FileKind, ToolTab } from '../../types'
 
@@ -25,15 +25,15 @@ const activeTab = computed(() => store.activeTab)
 
 const toolTabs = computed<{ id: ToolTab; icon: string; title: string }[]>(() => {
   const list: { id: ToolTab; icon: string; title: string }[] = []
+  const tab = activeTab.value
   if (ai.enabled) {
     list.push({ id: 'ai', icon: '\u{1F916}', title: t('tool_panel.ai') })
   }
-  const st = store.tabSessionType(activeTab.value)
-  if (st === 'ssh') {
-    list.push({ id: 'sftp', icon: '\u{1F4C2}', title: t('tool_panel.sftp') })
+  if (store.hasCapability(tab, 'file')) {
+    list.push({ id: 'file', icon: '\u{1F4C2}', title: store.tabSessionType(tab) === 'adb' ? t('tool_panel.adb_files') : t('tool_panel.sftp') })
+  }
+  if (store.hasCapability(tab, 'tunnel')) {
     list.push({ id: 'tunnel', icon: '\u{1F50C}', title: t('tool_panel.tunnel') })
-  } else if (st === 'adb') {
-    list.push({ id: 'sftp', icon: '\u{1F4C2}', title: t('tool_panel.adb_files') })
   }
   return list
 })
@@ -99,12 +99,12 @@ function closeSidebar() {
           :ai-conv="aiConv"
           :tab-title="activeTab?.title ?? ''"
         />
-        <SftpPanel
+        <FilePanel
           v-if="activeTab"
-          v-show="activeTool === 'sftp'"
+          v-show="activeTool === 'file'"
           :tab-id="activeTab.id"
           :tab="activeTab"
-          :visible="activeTool === 'sftp'"
+          :visible="activeTool === 'file'"
           @edit-file="(p, c, k) => emit('editFile', p, c, k)"
         />
         <TunnelPanel

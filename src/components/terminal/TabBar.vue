@@ -21,6 +21,7 @@ const emit = defineEmits<{
   quickTelnet: [host: string, port: number]
   quickSerial: []
   quickAdb: []
+  quickWsl: []
   connectSession: [session: SavedSession]
   splitTab: [tabId: string, direction: 'horizontal' | 'vertical']
 }>()
@@ -174,6 +175,11 @@ function openAdb() {
   emit('quickAdb')
 }
 
+function openWsl() {
+  newTabMenuOpen.value = false
+  emit('quickWsl')
+}
+
 function onNewTabClick() {
   newTabMenuOpen.value = !newTabMenuOpen.value
 }
@@ -212,7 +218,7 @@ function onBatchInput(e: KeyboardEvent) {
   const data = batchInput.value
   batchInput.value = ''
   for (const sid of ids) {
-    invoke('write_terminal', { sessionId: sid, data: data + '\r' })
+    invoke('connection_write', { sessionId: sid, data: data + '\r' })
   }
 }
 
@@ -275,6 +281,7 @@ defineExpose({ onKeydown })
         <div v-if="newTabMenuOpen" class="new-tab-menu" @mousedown.prevent>
           <div class="new-tab-section-title">{{ $t('menu.local_shell') }}</div>
           <button v-for="s in localProfiles" :key="s.id" class="menu-item" @click="openLocalProfile(s)"><span class="mi-icon">{{ s.icon || '💻' }}</span><span>{{ s.name }}</span></button>
+          <button class="menu-item" @click="openWsl()"><span class="mi-icon">{{ '\uD83D\uDC27' }}</span><span>{{ $t('menu.wsl') }}</span></button>
           <div class="menu-divider" />
           <div class="new-tab-section-title">{{ $t('menu.remote_connection') }}</div>
           <button class="menu-item" @click="openSsh()"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>{{ $t('menu.ssh') }}</span></button>

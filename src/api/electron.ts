@@ -2,15 +2,15 @@
  * Electron implementation — bridges to the preload-exposed electronAPI.
  */
 
-import type { UnlistenFn, ListenEvent, WindowHandle, ResizeDirection } from './types'
+import type { UnlistenFn, ListenEvent, WindowHandle, ResizeDirection, DialogOptions } from './types'
 
 export type { UnlistenFn }
 
 interface ElectronAPI {
-  invoke(channel: string, args?: Record<string, any>): Promise<any>
-  on(channel: string, listener: (payload: any) => void): () => void
-  openDialog(opts: any): Promise<any>
-  saveDialog(opts: any): Promise<any>
+  invoke(channel: string, args?: Record<string, unknown>): Promise<unknown>
+  on<T>(channel: string, listener: (payload: T) => void): () => void
+  openDialog(opts?: DialogOptions): Promise<null | string | string[]>
+  saveDialog(opts?: DialogOptions): Promise<string | null>
   clipboardWrite(text: string): Promise<void>
   clipboardRead(): Promise<string>
   window: {
@@ -32,7 +32,7 @@ interface ElectronAPI {
 }
 
 function getApi(): ElectronAPI {
-  const api = (window as any).electronAPI as ElectronAPI | undefined
+  const api = (window as unknown as { electronAPI?: ElectronAPI }).electronAPI
   if (!api) throw new Error('electronAPI not available — are you running in Electron?')
   return api
 }
@@ -41,12 +41,12 @@ function getApi(): ElectronAPI {
  * invoke — mirrors Tauri's invoke(cmd, args).
  * Handles special Tauri command names that map to different Electron channels.
  */
-export async function invoke<T>(cmd: string, args?: Record<string, any>): Promise<T> {
+export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const api = getApi()
 
   // Map Tauri clipboard commands to Electron
   if (cmd === 'plugin:clipboard-manager|write_text') {
-    await api.clipboardWrite(args?.text ?? '')
+    await api.clipboardWrite(String(args?.text ?? ''))
     return undefined as T
   }
   if (cmd === 'plugin:clipboard-manager|read_text') {
@@ -60,7 +60,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, any>): Promis
   }
 
   // Default: forward to Electron main process
-  return api.invoke(cmd, args)
+  return api.invoke(cmd, args) as Promise<T>
 }
 
 export function listen<T>(event: string, handler: (event: ListenEvent<T>) => void): Promise<UnlistenFn> {
@@ -92,8 +92,7 @@ export function getCurrentWindow(): WindowHandle {
  * openDialog — wraps Electron's dialog.showOpenDialog.
  * Compatible with @tauri-apps/plugin-dialog's open() signature.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function openDialog(opts?: any): Promise<any> {
+export function openDialog(opts?: DialogOptions): Promise<null | string | string[]> {
   return getApi().openDialog(opts)
 }
 
@@ -101,8 +100,7 @@ export function openDialog(opts?: any): Promise<any> {
  * saveDialog — wraps Electron's dialog.showSaveDialog.
  * Compatible with @tauri-apps/plugin-dialog's save() signature.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function saveDialog(opts?: any): Promise<any> {
+export function saveDialog(opts?: DialogOptions): Promise<string | null> {
   return getApi().saveDialog(opts)
 }
 
@@ -115,5 +113,5 @@ export function clipboardRead(): Promise<string> {
 }
 
 export async function toFileUrl(filePath: string): Promise<string> {
-  return getApi().invoke('file_to_data_url', { path: filePath })
+  return getApi().invoke('file_to_data_url', { path: filePath }) as Promise<string>
 }

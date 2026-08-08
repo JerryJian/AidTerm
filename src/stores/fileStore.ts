@@ -51,9 +51,12 @@ export const useFileStore = defineStore('file', () => {
     tab.kind = 'sftp'
     tab.loading = true
     try {
-      const id = await invoke<string>('sftp_connect', {
-        host, port, username, password,
-        privateKeyPath: privateKeyPath ?? null,
+      const id = await invoke<string>('file_connect', {
+        config: {
+          type: 'sftp',
+          host, port, username, password,
+          private_key_path: privateKeyPath ?? null,
+        },
       })
       tab.connId = id
       tab.connected = true
@@ -78,9 +81,7 @@ export const useFileStore = defineStore('file', () => {
   async function disconnect(tabId: string) {
     const tab = tabState(tabId)
     if (!tab.connId) return
-    if (tab.kind === 'sftp') {
-      await invoke('sftp_disconnect', { connId: tab.connId }).catch(() => {})
-    }
+    await invoke('file_disconnect', { kind: tab.kind, handle: tab.connId }).catch(() => {})
     tab.connId = null
     tab.connected = false
     tab.entries = []
@@ -94,13 +95,9 @@ export const useFileStore = defineStore('file', () => {
     tab.loading = true
     tab.error = ''
     try {
-      if (tab.kind === 'adb') {
-        tab.entries = await invoke<FileEntry[]>('adb_list_dir', { serial: tab.connId, path })
-      } else {
-        tab.entries = await invoke<FileEntry[]>('sftp_list_dir', { connId: tab.connId, path })
-      }
+      tab.entries = await invoke<FileEntry[]>('file_list_dir', { kind: tab.kind, handle: tab.connId, path })
       tab.currentPath = path
-    } catch (e: any) {
+    } catch (e: unknown) {
       tab.error = String(e)
     } finally {
       tab.loading = false
@@ -111,40 +108,28 @@ export const useFileStore = defineStore('file', () => {
     const tab = tabState(tabId)
     if (!tab.connId) return
     tab.error = ''
-    if (tab.kind === 'adb') {
-      await invoke('adb_pull', { serial: tab.connId, remote, local })
-    } else {
-      await invoke('sftp_download', { connId: tab.connId, transferId, remote, local })
-    }
+    await invoke('file_download', { kind: tab.kind, handle: tab.connId, transferId, remote, local })
   }
 
   async function upload(tabId: string, transferId: string, local: string, remote: string) {
     const tab = tabState(tabId)
     if (!tab.connId) return
     tab.error = ''
-    if (tab.kind === 'adb') {
-      await invoke('adb_push', { serial: tab.connId, local, remote })
-    } else {
-      await invoke('sftp_upload', { connId: tab.connId, transferId, remote, local })
-    }
+    await invoke('file_upload', { kind: tab.kind, handle: tab.connId, transferId, remote, local })
     await listDir(tabId, tab.currentPath)
   }
 
   async function cancelTransfer(tabId: string, transferId: string) {
     const tab = tabState(tabId)
-    if (!tab.connId || tab.kind === 'adb') return
-    await invoke('sftp_cancel_transfer', { connId: tab.connId, transferId })
+    if (!tab.connId) return
+    await invoke('file_cancel_transfer', { kind: tab.kind, handle: tab.connId, transferId })
   }
 
   async function remove(tabId: string, path: string, isDir = false) {
     const tab = tabState(tabId)
     if (!tab.connId) return
     tab.error = ''
-    if (tab.kind === 'adb') {
-      await invoke('adb_remove', { serial: tab.connId, path, is_dir: isDir })
-    } else {
-      await invoke('sftp_remove', { connId: tab.connId, path })
-    }
+    await invoke('file_remove', { kind: tab.kind, handle: tab.connId, path, is_dir: isDir })
     await listDir(tabId, tab.currentPath)
   }
 
@@ -152,11 +137,7 @@ export const useFileStore = defineStore('file', () => {
     const tab = tabState(tabId)
     if (!tab.connId) return
     tab.error = ''
-    if (tab.kind === 'adb') {
-      await invoke('adb_rename', { serial: tab.connId, old_path: oldPath, new_path: newPath })
-    } else {
-      await invoke('sftp_rename', { connId: tab.connId, oldPath, newPath })
-    }
+    await invoke('file_rename', { kind: tab.kind, handle: tab.connId, old_path: oldPath, new_path: newPath })
     await listDir(tabId, tab.currentPath)
   }
 
@@ -164,31 +145,22 @@ export const useFileStore = defineStore('file', () => {
     const tab = tabState(tabId)
     if (!tab.connId) return
     tab.error = ''
-    if (tab.kind === 'adb') {
-      if (isDir) {
-        await invoke('adb_mkdir', { serial: tab.connId, path })
-      } else {
-        await invoke('adb_touch', { serial: tab.connId, path })
-      }
+    if (isDir) {
+      await invoke('file_mkdir', { kind: tab.kind, handle: tab.connId, path })
     } else {
-      await invoke('sftp_create', { connId: tab.connId, path, isDir, mode })
+      await invoke('file_create', { kind: tab.kind, handle: tab.connId, path, is_dir: false, mode })
     }
     await listDir(tabId, tab.currentPath)
   }
 
   async function readFile(connId: string, remote: string, kind: FileKind = 'sftp'): Promise<string> {
     if (!connId) return ''
-    if (kind === 'adb') return await invoke<string>('adb_read_file', { serial: connId, remote })
-    return await invoke<string>('sftp_read_file', { connId, remote })
+    return await invoke<string>('file_read', { kind, handle: connId, remote })
   }
 
   async function writeFile(connId: string, remote: string, content: string, kind: FileKind = 'sftp') {
     if (!connId) return
-    if (kind === 'adb') {
-      await invoke('adb_write_file', { serial: connId, remote, content })
-    } else {
-      await invoke('sftp_write_file', { connId, remote, content })
-    }
+    await invoke('file_write', { kind, handle: connId, remote, content })
   }
 
   return {

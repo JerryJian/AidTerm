@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useFileStore } from './fileStore'
 import { useSettingsStore } from './settingsStore'
 import { invoke } from '@/api'
-import type { TerminalTab, TerminalSession, SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, AdbConnectionInfo, SystemInfo, ToolTab } from '../types'
+import type { TerminalTab, TerminalSession, SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, AdbConnectionInfo, WslConnectionInfo, SystemInfo, ToolTab, ConnectionType, ConnectionCapability } from '../types'
 
 let nextId = 1
 function generateId(): string {
@@ -31,6 +31,16 @@ const shellKeyMap: Record<string, string> = {
   '/usr/bin/sh': 'sh',
   '/usr/bin/fish': 'fish',
   '/usr/bin/pwsh': 'pwsh',
+}
+
+/** Default capabilities per connection type (used before the backend reports them). */
+const defaultCapabilities: Record<ConnectionType, ConnectionCapability[]> = {
+  local: [],
+  wsl: [],
+  ssh: ['file', 'tunnel', 'exec', 'zmodem'],
+  telnet: [],
+  serial: [],
+  adb: ['file'],
 }
 
 export const useTerminalStore = defineStore('terminal', () => {
@@ -76,6 +86,17 @@ export const useTerminalStore = defineStore('terminal', () => {
     return resolveSessionTab(tab)?.session?.type ?? null
   }
 
+  /** Capabilities of the tab's session (backend-reported, falling back to per-type defaults). */
+  function tabCapabilities(tab: TerminalTab | null | undefined): ConnectionCapability[] {
+    const s = resolveSessionTab(tab)?.session
+    if (!s) return []
+    return s.capabilities?.length ? s.capabilities : defaultCapabilities[s.type] ?? []
+  }
+
+  function hasCapability(tab: TerminalTab | null | undefined, cap: ConnectionCapability): boolean {
+    return tabCapabilities(tab).includes(cap)
+  }
+
   function leafIdOf(tab: TerminalTab): string | null {
     if (tab.children?.length) {
       const rootId = topLevelTabIdOf(tab.id)
@@ -101,7 +122,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     selectedPaneId.value = tab ? leafIdOf(tab) : null
   }
 
-  function addTab(type: TerminalSession['type'] = 'local', sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo, localCommand?: string, serialInfo?: SerialConnectionInfo, workingDir?: string, titleOverride?: string, adbInfo?: AdbConnectionInfo) {
+  function addTab(type: TerminalSession['type'] = 'local', sshInfo?: SshConnectionInfo, telnetInfo?: TelnetConnectionInfo, localCommand?: string, serialInfo?: SerialConnectionInfo, workingDir?: string, titleOverride?: string, adbInfo?: AdbConnectionInfo, wslInfo?: WslConnectionInfo) {
     const id = generateId()
     let title: string
     if (titleOverride) {
@@ -114,6 +135,8 @@ export const useTerminalStore = defineStore('terminal', () => {
       title = serialInfo ? `Serial ${serialInfo.portName}` : 'Serial'
     } else if (type === 'adb') {
       title = adbInfo ? `ADB ${adbInfo.serial}` : 'ADB'
+    } else if (type === 'wsl') {
+      title = 'WSL'
     } else if (localCommand) {
       const base = localCommand.replace(/\\/g, '/').split('/').pop() || localCommand
       const key = shellKeyMap[localCommand] || base.replace(/\.exe$/, '')
@@ -134,11 +157,13 @@ export const useTerminalStore = defineStore('terminal', () => {
         status: 'connecting',
         command: localCommand,
         workingDir,
+        capabilities: defaultCapabilities[type],
       },
       sshInfo,
       telnetInfo,
       serialInfo,
       adbInfo,
+      wslInfo,
       aiSessionId: `ai-${id}`,
     }
     tabs.value.push(tab)
@@ -369,6 +394,13 @@ export const useTerminalStore = defineStore('terminal', () => {
     }
   }
 
+  function updateSessionCapabilities(tabId: string, capabilities: ConnectionCapability[]) {
+    const tab = findTab(tabId)
+    if (tab?.session) {
+      tab.session.capabilities = capabilities
+    }
+  }
+
   function updateSystemInfo(tabId: string, info: SystemInfo) {
     const tab = findTab(tabId)
     if (tab) {
@@ -414,6 +446,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     updateTabTitle,
     updateSessionStatus,
     updateSessionId,
+    updateSessionCapabilities,
     updateSystemInfo,
     toggleBatch,
     setBatchTabId,
@@ -426,6 +459,8 @@ export const useTerminalStore = defineStore('terminal', () => {
     isToolOpen,
     resolveSessionTab,
     tabSessionType,
+    tabCapabilities,
+    hasCapability,
     requestExport,
     clearExportRequest,
     selectedPaneId,

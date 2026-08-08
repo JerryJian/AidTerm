@@ -1,64 +1,31 @@
 import { ref } from 'vue'
 import { invoke, listen } from '@/api'
-import type { TerminalOutputPayload, SerialConnectionInfo, AdbDevice } from '../types'
+import type {
+  TerminalOutputPayload,
+  SerialConnectionInfo,
+  AdbDevice,
+  ConnectionConfig,
+  ConnectionHandle,
+} from '../types'
 
 export function useTerminal() {
   const sessionId = ref<string | null>(null)
   const isConnected = ref(false)
 
+  /** Unified session creation — builds on `connection_create` and returns the backend handle. */
+  async function connect(config: ConnectionConfig, rows = 24, cols = 80): Promise<ConnectionHandle> {
+    const handle = await invoke<ConnectionHandle>('connection_create', { config, rows, cols })
+    sessionId.value = handle.id
+    isConnected.value = true
+    return handle
+  }
+
   async function createSession(rows = 24, cols = 80, shell?: string, workingDir?: string) {
-    const id = await invoke<string>('spawn_terminal', { rows, cols, shell: shell ?? null, workingDir: workingDir ?? null })
-    sessionId.value = id
-    isConnected.value = true
-    return id
+    return connect({ type: 'local', shell: shell ?? null, working_dir: workingDir ?? null }, rows, cols)
   }
 
-  async function telnetConnect(host: string, port: number) {
-    const id = await invoke<string>('telnet_connect', { host, port })
-    sessionId.value = id
-    isConnected.value = true
-    return id
-  }
-
-  async function serialConnect(info: SerialConnectionInfo) {
-    const id = await invoke<string>('serial_connect', {
-      portName: info.portName,
-      baudRate: info.baudRate,
-      dataBits: info.dataBits,
-      stopBits: info.stopBits,
-      parity: info.parity,
-      flowControl: info.flowControl,
-    })
-    sessionId.value = id
-    isConnected.value = true
-    return id
-  }
-
-  async function listSerialPorts() {
-    return await invoke<{ port_name: string }[]>('serial_list_ports')
-  }
-
-  async function listAdbDevices() {
-    return await invoke<AdbDevice[]>('adb_list_devices')
-  }
-
-  async function occupiedAdbDevices() {
-    return await invoke<string[]>('adb_occupied_devices')
-  }
-
-  async function adbConnect(serial: string, rows = 24, cols = 80) {
-    const id = await invoke<string>('adb_connect', { serial, rows, cols })
-    sessionId.value = id
-    isConnected.value = true
-    return id
-  }
-
-  async function killAdbServer() {
-    try {
-      await invoke('adb_kill_server')
-    } catch (e) {
-      console.error('Failed to kill adb server:', e)
-    }
+  async function wslConnect(distro?: string, workingDir?: string, rows = 24, cols = 80) {
+    return connect({ type: 'wsl', distro: distro ?? null, working_dir: workingDir ?? null }, rows, cols)
   }
 
   async function sshConnect(
@@ -73,27 +40,67 @@ export function useTerminal() {
     rows = 24,
     cols = 80,
   ) {
-    const id = await invoke<string>('ssh_connect', {
-      host,
-      port,
-      username,
-      password,
-      privateKeyPath: privateKeyPath ?? null,
-      proxyId: proxyId ?? null,
-      agentForwarding: agentForwarding ?? false,
-      x11Forwarding: x11Forwarding ?? false,
+    return connect(
+      {
+        type: 'ssh',
+        host,
+        port,
+        username,
+        password,
+        private_key_path: privateKeyPath ?? null,
+        proxy_id: proxyId ?? null,
+        agent_forwarding: agentForwarding ?? false,
+        x11_forwarding: x11Forwarding ?? false,
+      },
       rows,
       cols,
+    )
+  }
+
+  async function telnetConnect(host: string, port: number) {
+    return connect({ type: 'telnet', host, port })
+  }
+
+  async function serialConnect(info: SerialConnectionInfo) {
+    return connect({
+      type: 'serial',
+      port_name: info.portName,
+      baud_rate: info.baudRate,
+      data_bits: info.dataBits,
+      stop_bits: info.stopBits,
+      parity: info.parity,
+      flow_control: info.flowControl,
     })
-    sessionId.value = id
-    isConnected.value = true
-    return id
+  }
+
+  async function adbConnect(serial: string, rows = 24, cols = 80) {
+    return connect({ type: 'adb', serial }, rows, cols)
+  }
+
+  async function listSerialPorts() {
+    return await invoke<{ port_name: string }[]>('serial_list_ports')
+  }
+
+  async function listAdbDevices() {
+    return await invoke<AdbDevice[]>('adb_list_devices')
+  }
+
+  async function occupiedAdbDevices() {
+    return await invoke<string[]>('adb_occupied_devices')
+  }
+
+  async function killAdbServer() {
+    try {
+      await invoke('adb_kill_server')
+    } catch (e) {
+      console.error('Failed to kill adb server:', e)
+    }
   }
 
   async function writeInput(data: string) {
     if (!sessionId.value) return
     try {
-      await invoke('write_terminal', {
+      await invoke('connection_write', {
         sessionId: sessionId.value,
         data,
       })
@@ -105,7 +112,7 @@ export function useTerminal() {
   async function resize(rows: number, cols: number) {
     if (!sessionId.value) return
     try {
-      await invoke('resize_terminal', {
+      await invoke('connection_resize', {
         sessionId: sessionId.value,
         rows,
         cols,
@@ -118,7 +125,7 @@ export function useTerminal() {
   async function killSession() {
     if (!sessionId.value) return
     try {
-      await invoke('kill_terminal', {
+      await invoke('connection_kill', {
         sessionId: sessionId.value,
       })
       isConnected.value = false
@@ -140,7 +147,9 @@ export function useTerminal() {
   return {
     sessionId,
     isConnected,
+    connect,
     createSession,
+    wslConnect,
     sshConnect,
     telnetConnect,
     serialConnect,

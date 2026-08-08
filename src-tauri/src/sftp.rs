@@ -25,7 +25,7 @@ impl SftpManager {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SftpProgress {
+pub struct FileProgress {
     pub remote: String,
     pub local: String,
     pub r#type: String,
@@ -352,7 +352,7 @@ impl SftpConnection {
                 .map_err(|e| format!("local write: {}", e))?;
             transferred += n as u64;
             if total > 0 {
-                let _ = app.emit("sftp-progress", SftpProgress {
+                let _ = app.emit("file-progress", FileProgress {
                     remote: remote_ident.to_string(),
                     local: local_ident.to_string(),
                     r#type: "download".to_string(),
@@ -393,7 +393,7 @@ impl SftpConnection {
                 .map_err(|e| format!("write remote: {}", e))?;
             transferred += n as u64;
             if total > 0 {
-                let _ = app.emit("sftp-progress", SftpProgress {
+                let _ = app.emit("file-progress", FileProgress {
                     remote: remote_ident.to_string(),
                     local: local_ident.to_string(),
                     r#type: "upload".to_string(),

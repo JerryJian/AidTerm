@@ -7,7 +7,7 @@ import { listen as tauriListen } from '@tauri-apps/api/event'
 import { getCurrentWindow as tauriGetCurrentWindow } from '@tauri-apps/api/window'
 import { save as tauriSave, open as tauriOpen } from '@tauri-apps/plugin-dialog'
 
-import type { UnlistenFn, ListenEvent, WindowHandle } from './types'
+import type { UnlistenFn, ListenEvent, WindowHandle, DialogOptions } from './types'
 
 export { type UnlistenFn }
 
@@ -38,13 +38,11 @@ export function getCurrentWindow(): WindowHandle {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function openDialog(opts?: any): Promise<any> {
+export function openDialog(opts?: DialogOptions): Promise<null | string | string[]> {
   return tauriOpen(opts)
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function saveDialog(opts?: any): Promise<any> {
+export function saveDialog(opts?: DialogOptions): Promise<string | null> {
   return tauriSave(opts)
 }
 

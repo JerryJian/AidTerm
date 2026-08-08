@@ -52,7 +52,7 @@ async function pickKey() {
     multiple: false,
     filters: [{ name: 'SSH Keys', extensions: ['pem', 'key', 'id_rsa', 'id_ed25519', '*'] }],
   })
-  if (selected) formKeyPath.value = selected
+  if (selected) formKeyPath.value = Array.isArray(selected) ? selected[0] : selected
 }
 
 async function submitForm() {

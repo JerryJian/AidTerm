@@ -4,22 +4,95 @@ pub(crate) mod telnet;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
+use futures::future::BoxFuture;
 use tauri::AppHandle;
-use tokio::sync::oneshot;
 use crate::serial;
 use crate::proxy;
 use crate::adb;
 
-pub(crate) enum Session {
-    Local(local::LocalSession),
-    Ssh(ssh::SshConnection),
-    Telnet(telnet::TelnetConnection),
-    Serial(serial::SerialConnection),
-    Adb(local::LocalSession),
+/// Declarative capability of a connection. Drives which tool panels the
+/// frontend shows for a tab (file browser, port forwarding, exec, ...).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Capability {
+    File,
+    Tunnel,
+    Exec,
+    Zmodem,
 }
 
-pub(crate) struct SessionManager {
-    sessions: Mutex<HashMap<String, Session>>,
+impl Capability {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Capability::File => "file",
+            Capability::Tunnel => "tunnel",
+            Capability::Exec => "exec",
+            Capability::Zmodem => "zmodem",
+        }
+    }
+}
+
+pub const CAP_FILE: &[Capability] = &[Capability::File];
+pub const CAP_FILE_TUNNEL_EXEC_ZMODEM: &[Capability] = &[Capability::File, Capability::Tunnel, Capability::Exec, Capability::Zmodem];
+pub const CAP_NONE: &[Capability] = &[];
+
+/// Unified connection creation config, dispatched by the `type` tag.
+#[derive(serde::Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ConnectionConfig {
+    Local {
+        shell: Option<String>,
+        working_dir: Option<String>,
+    },
+    Wsl {
+        distro: Option<String>,
+        working_dir: Option<String>,
+    },
+    Ssh {
+        host: String,
+        port: u16,
+        username: String,
+        password: String,
+        private_key_path: Option<String>,
+        proxy_id: Option<String>,
+        agent_forwarding: bool,
+        x11_forwarding: bool,
+    },
+    Telnet {
+        host: String,
+        port: u16,
+    },
+    Serial {
+        port_name: String,
+        baud_rate: u32,
+        data_bits: u8,
+        stop_bits: u8,
+        parity: String,
+        flow_control: String,
+    },
+    Adb {
+        serial: String,
+    },
+}
+
+/// Every connection type implements this interface; `SessionManager` only
+/// ever talks through it, so adding a new connection type is a new module
+/// plus one arm in `SessionManager::create`.
+pub trait Connection: Send {
+    fn write(&mut self, data: &str) -> Result<(), String>;
+    fn resize(&self, rows: u16, cols: u16) -> Result<(), String>;
+    fn kill(&mut self);
+
+    /// Run a non-interactive command and capture its output (SSH only today).
+    fn exec(&self, _cmd: &str) -> BoxFuture<'static, Result<String, String>> {
+        Box::pin(async { Err("Exec not supported for this session type".to_string()) })
+    }
+
+    /// Static capabilities advertised by this connection type.
+    fn capabilities(&self) -> &'static [Capability];
+}
+
+pub struct SessionManager {
+    sessions: Mutex<HashMap<String, Box<dyn Connection>>>,
 }
 
 impl SessionManager {
@@ -27,140 +100,123 @@ impl SessionManager {
         Self { sessions: Mutex::new(HashMap::new()) }
     }
 
-    pub fn spawn_local(
+    /// The single connection factory. Add a new connection type here (and in
+    /// the `ConnectionConfig` enum) — nothing else in the codebase needs to
+    /// know about individual types.
+    pub fn create(
         &self,
-        id: String,
+        app_handle: AppHandle,
+        config: ConnectionConfig,
         rows: u16,
         cols: u16,
-        app_handle: AppHandle,
-        shell: Option<String>,
-        working_dir: Option<String>,
-    ) -> Result<(), String> {
-        let session = local::LocalSession::spawn(id.clone(), rows, cols, app_handle, shell, working_dir, Vec::new())?;
-        let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
-        sessions.insert(id, Session::Local(session));
-        Ok(())
-    }
-
-    /// Spawn an interactive `adb -P 5038 -s <serial> shell` inside a PTY.
-    /// The adb server lifecycle (lazy start / kill on last close) is handled
-    /// by the frontend via the `adb_*` commands.
-    pub fn connect_adb(
-        &self,
-        id: String,
-        serial: String,
-        rows: u16,
-        cols: u16,
-        app_handle: AppHandle,
-    ) -> Result<(), String> {
-        adb::ensure_server(&app_handle)?;
-        let adb_bin = adb::adb_path(&app_handle)?.to_string_lossy().to_string();
-        let args = vec!["-P".to_string(), adb::ADB_PORT.to_string(), "-s".to_string(), serial, "shell".to_string()];
-        let session = local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some(adb_bin), None, args)?;
-        let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
-        sessions.insert(id, Session::Adb(session));
-        Ok(())
-    }
-
-    pub fn connect_telnet(
-        &self,
-        id: String,
-        host: String,
-        port: u16,
-        app_handle: AppHandle,
-    ) -> Result<(), String> {
-        let session = telnet::TelnetConnection::connect(id.clone(), host, port, app_handle)?;
-        let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
-        sessions.insert(id, Session::Telnet(session));
-        Ok(())
-    }
-
-    pub fn connect_serial(
-        &self,
-        id: String,
-        config: serial::SerialConfig,
-        app_handle: AppHandle,
-    ) -> Result<(), String> {
-        let session = serial::SerialConnection::connect(id.clone(), config, app_handle)?;
-        let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
-        sessions.insert(id, Session::Serial(session));
-        Ok(())
-    }
-
-    pub fn connect_ssh(
-        &self,
-        id: String,
-        host: String,
-        port: u16,
-        username: String,
-        password: String,
-        private_key_path: Option<String>,
         proxy: Option<proxy::ProxyConfig>,
-        rows: u16,
-        cols: u16,
-        agent_forwarding: bool,
-        x11_forwarding: bool,
-        app_handle: AppHandle,
-    ) -> Result<(), String> {
-        let session = ssh::SshConnection::connect(
-            id.clone(), host, port, username, password, private_key_path, proxy, rows, cols,
-            agent_forwarding, x11_forwarding, app_handle,
-        )?;
+    ) -> Result<String, String> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let session: Box<dyn Connection> = match config {
+            ConnectionConfig::Local { shell, working_dir } => Box::new(
+                local::LocalSession::spawn(id.clone(), rows, cols, app_handle, shell, working_dir, Vec::new(), CAP_NONE)?,
+            ),
+            ConnectionConfig::Wsl { distro, working_dir } => {
+                if !cfg!(target_os = "windows") {
+                    return Err("WSL is only available on Windows".to_string());
+                }
+                let args = distro.map(|d| vec!["-d".to_string(), d]).unwrap_or_default();
+                Box::new(
+                    local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some("wsl.exe".to_string()), working_dir, args, CAP_NONE)?,
+                )
+            }
+            ConnectionConfig::Ssh {
+                host,
+                port,
+                username,
+                password,
+                private_key_path,
+                proxy_id: _,
+                agent_forwarding,
+                x11_forwarding,
+            } => Box::new(
+                ssh::SshConnection::connect(
+                    id.clone(), host, port, username, password, private_key_path,
+                    proxy, rows, cols, agent_forwarding, x11_forwarding, app_handle,
+                )?,
+            ),
+            ConnectionConfig::Telnet { host, port } => Box::new(
+                telnet::TelnetConnection::connect(id.clone(), host, port, app_handle)?,
+            ),
+            ConnectionConfig::Serial {
+                port_name,
+                baud_rate,
+                data_bits,
+                stop_bits,
+                parity,
+                flow_control,
+            } => Box::new(
+                serial::SerialConnection::connect(
+                    id.clone(),
+                    serial::SerialConfig {
+                        port_name,
+                        baud_rate,
+                        data_bits,
+                        stop_bits,
+                        parity,
+                        flow_control,
+                    },
+                    app_handle,
+                )?,
+            ),
+            ConnectionConfig::Adb { serial } => {
+                adb::ensure_server(&app_handle)?;
+                let adb_bin = adb::adb_path(&app_handle)?.to_string_lossy().to_string();
+                let args = vec![
+                    "-P".to_string(),
+                    adb::ADB_PORT.to_string(),
+                    "-s".to_string(),
+                    serial,
+                    "shell".to_string(),
+                ];
+                Box::new(local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some(adb_bin), None, args, CAP_FILE)?)
+            }
+        };
         let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
-        sessions.insert(id, Session::Ssh(session));
-        Ok(())
+        sessions.insert(id.clone(), session);
+        Ok(id)
     }
 
     pub fn write(&self, id: &str, data: &str) -> Result<(), String> {
         let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
         let session = sessions.get_mut(id).ok_or("Session not found")?;
-        match session {
-            Session::Local(s) => s.write(data),
-            Session::Ssh(s) => s.write(data),
-            Session::Telnet(s) => s.write(data),
-            Session::Serial(s) => s.write(data),
-            Session::Adb(s) => s.write(data),
-        }
+        session.write(data)
     }
 
     pub fn resize(&self, id: &str, rows: u16, cols: u16) -> Result<(), String> {
         let sessions = self.sessions.lock().map_err(|e| e.to_string())?;
         let session = sessions.get(id).ok_or("Session not found")?;
-        match session {
-            Session::Local(s) => s.resize(rows, cols),
-            Session::Ssh(s) => s.resize(rows, cols),
-            Session::Telnet(_) => Ok(()),
-            Session::Serial(_) => Ok(()),
-            Session::Adb(s) => s.resize(rows, cols),
-        }
+        session.resize(rows, cols)
     }
 
     pub async fn exec(&self, id: &str, command: &str) -> Result<String, String> {
-        let exec_tx = {
+        let command = command.to_string();
+        let fut = {
             let sessions = self.sessions.lock().map_err(|e| e.to_string())?;
             let session = sessions.get(id).ok_or("Session not found")?;
-            match session {
-                Session::Ssh(s) => s.exec_tx(),
-                _ => return Err("Exec not supported for this session type".to_string()),
-            }
+            session.exec(&command)
         };
-        let tx = exec_tx.ok_or("SSH exec unavailable")?;
-        let (resp_tx, resp_rx) = oneshot::channel();
-        tx.send((command.to_string(), resp_tx)).map_err(|e| format!("Exec send: {}", e))?;
-        resp_rx.await.map_err(|e| format!("Exec recv: {}", e))?
+        fut.await
     }
 
     pub fn kill(&self, id: &str) -> Result<(), String> {
         let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
-        if let Some(session) = sessions.remove(id) {
-            match session {
-                Session::Local(s) => s.kill(),
-                Session::Ssh(mut s) => s.kill(),
-                Session::Telnet(mut s) => s.kill(),
-                Session::Serial(mut s) => s.kill(),
-                Session::Adb(s) => s.kill(),
-            }
+        if let Some(mut session) = sessions.remove(id) {
+            session.kill();
         }
         Ok(())
+    }
+
+    pub fn capabilities(&self, id: &str) -> Vec<&'static str> {
+        let sessions = self.sessions.lock().map_err(|e| e.to_string()).ok();
+        match sessions {
+            Some(s) => s.get(id).map(|s| s.capabilities().iter().map(|c| c.as_str()).collect()).unwrap_or_default(),
+            None => Vec::new(),
+        }
     }
 }

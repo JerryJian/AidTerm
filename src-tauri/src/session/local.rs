@@ -2,6 +2,7 @@ use std::io::{Read, Write};
 use std::time::Duration;
 use portable_pty::{PtyPair, MasterPty, PtySize, PtySystem, ChildKiller};
 use tauri::{AppHandle, Emitter};
+use crate::session::{Connection, Capability};
 
 pub struct LocalSession {
     pub writer: Box<dyn Write + Send>,
@@ -9,6 +10,7 @@ pub struct LocalSession {
     pub killer: Box<dyn ChildKiller + Send>,
     #[cfg_attr(not(unix), allow(dead_code))]
     pub pid: Option<u32>,
+    pub capabilities: &'static [Capability],
 }
 
 #[cfg(windows)]
@@ -98,6 +100,7 @@ impl LocalSession {
         shell: Option<String>,
         working_dir: Option<String>,
         args: Vec<String>,
+        capabilities: &'static [Capability],
     ) -> Result<Self, String> {
         let native_pty = portable_pty::NativePtySystem::default();
         let pair: PtyPair = native_pty
@@ -193,7 +196,13 @@ impl LocalSession {
             }));
         });
 
-        Ok(Self { writer: Box::new(writer), master, killer, pid: child_pid })
+        Ok(Self {
+            writer: Box::new(writer),
+            master,
+            killer,
+            pid: child_pid,
+            capabilities,
+        })
     }
 
     pub fn write(&mut self, data: &str) -> Result<(), String> {
@@ -208,7 +217,7 @@ impl LocalSession {
             .map_err(|e| format!("Resize error: {}", e))
     }
 
-    pub fn kill(mut self) {
+    pub fn kill(&mut self) {
         #[cfg(unix)]
         {
             if let Some(pid) = self.pid {
@@ -235,5 +244,23 @@ impl LocalSession {
             }
         }
         let _ = self.killer.kill();
+    }
+}
+
+impl Connection for LocalSession {
+    fn write(&mut self, data: &str) -> Result<(), String> {
+        self.write(data)
+    }
+
+    fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
+        self.resize(rows, cols)
+    }
+
+    fn kill(&mut self) {
+        self.kill()
+    }
+
+    fn capabilities(&self) -> &'static [Capability] {
+        self.capabilities
     }
 }

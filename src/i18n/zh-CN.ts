@@ -127,6 +127,7 @@ export default {
     quick_connect: '快速连接',
     new_ssh: '新建 SSH...',
     local_shell: '本地终端',
+    wsl: 'WSL',
     saved_sessions: '已保存会话',
     remote_connection: '远程连接',
     ssh: 'SSH...',

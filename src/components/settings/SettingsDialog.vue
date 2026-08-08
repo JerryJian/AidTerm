@@ -94,7 +94,7 @@ async function selectBackgroundImage() {
     filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'gif'] }],
   })
   if (selected) {
-    settings.backgroundImage = selected
+    settings.backgroundImage = Array.isArray(selected) ? selected[0] : selected
   }
 }
 

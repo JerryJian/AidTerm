@@ -167,6 +167,10 @@ function onAdbConnect(info: AdbConnectionInfo) {
   store.addTab('adb', undefined, undefined, undefined, undefined, undefined, undefined, info)
 }
 
+function onQuickWsl() {
+  store.addTab('wsl', undefined, undefined, undefined, undefined, undefined, undefined, undefined, { distro: undefined })
+}
+
 function onQuickSerial() {
   ui.serialDialog = true
 }
@@ -496,6 +500,7 @@ onUnmounted(() => {
       @quick-telnet="onQuickTelnet"
       @quick-serial="onQuickSerial"
       @quick-adb="onQuickAdb"
+      @quick-wsl="onQuickWsl"
       @connect-session="onConnectSession"
       @split-tab="onSplitTab"
     />

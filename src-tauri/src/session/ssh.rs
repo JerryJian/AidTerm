@@ -2,6 +2,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
+use futures::future::BoxFuture;
 use russh::client;
 use russh::ChannelMsg;
 use russh::keys::*;
@@ -11,6 +12,7 @@ use tokio::sync::mpsc::{self as tokio_mpsc, UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot;
 use crate::proxy;
 use crate::zmodem;
+use crate::session::{Connection, Capability};
 
 type ExecResponse = oneshot::Sender<Result<String, String>>;
 
@@ -422,10 +424,6 @@ impl SshConnection {
         Ok(())
     }
 
-    pub fn exec_tx(&self) -> Option<UnboundedSender<(String, ExecResponse)>> {
-        self.exec_tx.clone()
-    }
-
     pub fn write(&self, data: &str) -> Result<(), String> {
         self.write_tx.send(data.to_string()).map_err(|e| e.to_string())
     }
@@ -441,5 +439,34 @@ impl SshConnection {
         if let Some(handle) = self.handle.take() {
             let _ = handle.join();
         }
+    }
+}
+
+impl Connection for SshConnection {
+    fn write(&mut self, data: &str) -> Result<(), String> {
+        SshConnection::write(self, data)
+    }
+
+    fn resize(&self, rows: u16, cols: u16) -> Result<(), String> {
+        self.resize(rows, cols)
+    }
+
+    fn kill(&mut self) {
+        self.kill()
+    }
+
+    fn exec(&self, cmd: &str) -> BoxFuture<'static, Result<String, String>> {
+        let exec_tx = self.exec_tx.clone();
+        let cmd = cmd.to_string();
+        Box::pin(async move {
+            let tx = exec_tx.ok_or("SSH exec unavailable")?;
+            let (resp_tx, resp_rx) = oneshot::channel();
+            tx.send((cmd, resp_tx)).map_err(|e| format!("Exec send: {}", e))?;
+            resp_rx.await.map_err(|e| format!("Exec recv: {}", e))?
+        })
+    }
+
+    fn capabilities(&self) -> &'static [Capability] {
+        crate::session::CAP_FILE_TUNNEL_EXEC_ZMODEM
     }
 }

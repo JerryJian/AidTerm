@@ -102,7 +102,7 @@ async function pickKeyFile() {
     filters: [{ name: 'SSH Keys', extensions: ['pem', 'key', 'id_rsa', 'id_ed25519', '*'] }],
   })
   if (selected) {
-    importPath.value = selected
+    importPath.value = Array.isArray(selected) ? selected[0] : selected
   }
 }
 

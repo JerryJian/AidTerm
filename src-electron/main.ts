@@ -10,13 +10,13 @@ import type {
   PtySession, SshSession, SerialSession, TunnelState, TunnelInfo,
   ProxyConfig, AiMessage, AiResponse, AiConfig, AiToolCall,
   KeyInfo, KnownHostEntry, SessionStoreData, SystemInfo,
-  SftpFileEntry, SftpProgress, SerialPortInfo,
+  FileEntry, FileProgress, SerialPortInfo,
   SpawnTerminalArgs, WriteTerminalArgs, ResizeTerminalArgs, KillTerminalArgs,
   SshConnectArgs, TelnetConnectArgs, SerialConnectArgs,
   AdbConnectArgs, AdbDevice,
-  SftpConnectArgs, SftpDisconnectArgs, SftpListDirArgs, SftpTransferArgs,
-  SftpMkdirArgs, SftpRemoveArgs, SftpRenameArgs, SftpCreateArgs,
-  SftpReadFileArgs, SftpWriteFileArgs,
+  ConnectionConfig, ConnectionHandle, ConnectionCreateArgs,
+  FileOpArgs, FileConnectArgs, FileListDirArgs, FileTransferArgs, FileRemoveArgs,
+  FileRenameArgs, FileMkdirArgs, FileCreateArgs, FileReadArgs, FileWriteArgs,
   TunnelCreateArgs, TunnelRemoveArgs,
   ProxySaveArgs, ProxyDeleteArgs,
   AiChatArgs, AiExecuteArgs, AiContinueArgs, AiClearHistoryArgs,
@@ -132,8 +132,8 @@ function runAdbShell(serial: string, quotedParts: string[]): Promise<string> {
   return runAdb(['-s', serial, 'shell', ...quotedParts])
 }
 
-function parseLsEntries(output: string): SftpFileEntry[] {
-  const entries: SftpFileEntry[] = []
+function parseLsEntries(output: string): FileEntry[] {
+  const entries: FileEntry[] = []
   for (const line of output.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed || trimmed.startsWith('total ')) continue
@@ -627,25 +627,59 @@ function registerIpcHandlers(): void {
   })
 
   // ══════════════════════════════════════════════════════
-  //  PTY (node-pty)
+  //  Unified connection lifecycle (connection_*)
+  //
+  //  All session types are created through `connection_create`, which returns
+  //  { id, capabilities }. write/resize/kill dispatch across the underlying
+  //  maps exactly like the old write_terminal/resize_terminal/kill_terminal.
   // ══════════════════════════════════════════════════════
-  ipcMain.handle('spawn_terminal', (_, args: SpawnTerminalArgs) => {
-    const { rows, cols, shell } = args
+  ipcMain.handle('connection_write', (_, args: WriteTerminalArgs) => {
+    const { sessionId, data } = args
+    const term = ptySessions.get(sessionId)
+    if (term) { term.write(data); return }
+    const ssh = sshSessions.get(sessionId)
+    if (ssh) { ssh.writeCh!.write(data); return }
+    const sp = serialSessions.get(sessionId)
+    if (sp) { sp.port.write(data); return }
+    throw new Error(`Session ${sessionId} not found`)
+  })
+
+  ipcMain.handle('connection_resize', (_, args: ResizeTerminalArgs) => {
+    const { sessionId, rows, cols } = args
+    const term = ptySessions.get(sessionId)
+    if (term) { term.resize(cols, rows); return }
+    const ssh = sshSessions.get(sessionId)
+    if (ssh) { ssh.writeCh!.setWindow(rows, cols, rows, cols); return }
+  })
+
+  ipcMain.handle('connection_kill', (_, args: KillTerminalArgs) => {
+    const { sessionId } = args
+    const term = ptySessions.get(sessionId)
+    if (term) { killPty(term); ptySessions.delete(sessionId); return }
+    const ssh = sshSessions.get(sessionId)
+    if (ssh) { try { ssh.conn.end() } catch {}; sshSessions.delete(sessionId); return }
+    const sp = serialSessions.get(sessionId)
+    if (sp) { try { sp.port.close() } catch {}; serialSessions.delete(sessionId); return }
+  })
+
+  // ── Shared session creators (used by `connection_create`) ──
+
+  function spawnLocalPty(opts: { rows: number; cols: number; shell?: string | null; cwd?: string | null; args?: string[] }): string {
     if (!ptyModule) throw new Error('node-pty not installed')
 
     const id = crypto.randomUUID()
-    const shellCmd = shell || (process.platform === 'win32'
+    const shellCmd = opts.shell || (process.platform === 'win32'
       ? (process.env.ComSpec || 'cmd.exe')
       : (process.env.SHELL || (process.platform === 'darwin' ? 'zsh' : 'bash')))
 
     const termEnv: NodeJS.ProcessEnv = { ...process.env, TERM: 'xterm-256color' }
     if (!process.env.LANG && !process.env.LC_ALL && !process.env.LC_CTYPE) termEnv.LANG = 'C.UTF-8'
 
-    const term = ptyModule.spawn(shellCmd, [], {
+    const term = ptyModule.spawn(shellCmd, opts.args || [], {
       name: 'xterm-256color',
-      cols: cols || 80,
-      rows: rows || 24,
-      cwd: process.env.HOME || process.env.USERPROFILE || '.',
+      cols: opts.cols || 80,
+      rows: opts.rows || 24,
+      cwd: opts.cwd || process.env.HOME || process.env.USERPROFILE || '.',
       env: termEnv,
     })
 
@@ -662,41 +696,12 @@ function registerIpcHandlers(): void {
 
     emitToRenderer('session-status', { session_id: id, status: 'connected' })
     return id
-  })
-
-  ipcMain.handle('write_terminal', (_, args: WriteTerminalArgs) => {
-    const { sessionId, data } = args
-    const term = ptySessions.get(sessionId)
-    if (term) { term.write(data); return }
-    const ssh = sshSessions.get(sessionId)
-    if (ssh) { ssh.writeCh!.write(data); return }
-    const sp = serialSessions.get(sessionId)
-    if (sp) { sp.port.write(data); return }
-    throw new Error(`Session ${sessionId} not found`)
-  })
-
-  ipcMain.handle('resize_terminal', (_, args: ResizeTerminalArgs) => {
-    const { sessionId, rows, cols } = args
-    const term = ptySessions.get(sessionId)
-    if (term) { term.resize(cols, rows); return }
-    const ssh = sshSessions.get(sessionId)
-    if (ssh) { ssh.writeCh!.setWindow(rows, cols, rows, cols); return }
-  })
-
-  ipcMain.handle('kill_terminal', (_, args: KillTerminalArgs) => {
-    const { sessionId } = args
-    const term = ptySessions.get(sessionId)
-    if (term) { killPty(term); ptySessions.delete(sessionId); return }
-    const ssh = sshSessions.get(sessionId)
-    if (ssh) { try { ssh.conn.end() } catch {}; sshSessions.delete(sessionId); return }
-    const sp = serialSessions.get(sessionId)
-    if (sp) { try { sp.port.close() } catch {}; serialSessions.delete(sessionId); return }
-  })
+  }
 
   // ══════════════════════════════════════════════════════
   //  SSH (ssh2)
   // ══════════════════════════════════════════════════════
-  ipcMain.handle('ssh_connect', (_, args: SshConnectArgs) => {
+  function connectSshInternal(args: SshConnectArgs): string {
     if (!ssh2Module) throw new Error('ssh2 not installed')
 
     const { host, port, username, password, privateKeyPath, proxyId, rows, cols } = args
@@ -772,13 +777,18 @@ function registerIpcHandlers(): void {
     }
 
     return id
+  }
+
+  // Kept: used for one-shot SSH connections (TunnelManager). Terminal sessions
+  // go through `connection_create` instead.
+  ipcMain.handle('ssh_connect', (_, args: SshConnectArgs) => {
+    return connectSshInternal(args)
   })
 
   // ══════════════════════════════════════════════════════
   //  Telnet (net.Socket)
   // ══════════════════════════════════════════════════════
-  ipcMain.handle('telnet_connect', (_, args: TelnetConnectArgs) => {
-    const { host, port } = args
+  function connectTelnet(host: string, port: number): string {
     const id = crypto.randomUUID()
     const sock = new net.Socket()
 
@@ -801,12 +811,12 @@ function registerIpcHandlers(): void {
 
     serialSessions.set(id, { port: { write: (d: string) => { sock.write(d) }, close: () => { sock.destroy() } } })
     return id
-  })
+  }
 
   // ══════════════════════════════════════════════════════
   //  Serial (serialport)
   // ══════════════════════════════════════════════════════
-  ipcMain.handle('serial_connect', (_, args: SerialConnectArgs) => {
+  function connectSerial(args: SerialConnectArgs): string {
     if (!SerialPortClass) throw new Error('serialport not installed')
 
     const { portName, baudRate, dataBits, stopBits, parity, flowControl } = args
@@ -842,7 +852,7 @@ function registerIpcHandlers(): void {
 
     serialSessions.set(id, { port })
     return id
-  })
+  }
 
   ipcMain.handle('serial_list_ports', async () => {
     if (!SerialPortClass) return []
@@ -855,20 +865,9 @@ function registerIpcHandlers(): void {
   // ══════════════════════════════════════════════════════
   //  ADB (isolated 5038 server)
   // ══════════════════════════════════════════════════════
-  ipcMain.handle('adb_list_devices', async (): Promise<AdbDevice[]> => {
-    try {
-      const out = await runAdb(['-P', ADB_PORT, 'devices', '-l'])
-      return parseAdbDevices(out)
-    } catch (e) {
-      console.warn('[electron] adb devices failed:', e)
-      return []
-    }
-  })
-
-  ipcMain.handle('adb_connect', (_, args: AdbConnectArgs) => {
+  function connectAdb(serial: string, rows: number, cols: number): string {
     if (!ptyModule) throw new Error('node-pty not installed')
 
-    const { serial, rows, cols } = args
     const id = crypto.randomUUID()
     const adb = resolveAdbPath()
 
@@ -892,6 +891,72 @@ function registerIpcHandlers(): void {
 
     emitToRenderer('session-status', { session_id: id, status: 'connected' })
     return id
+  }
+
+  // ── Unified connection factory ──
+
+  ipcMain.handle('connection_create', (_, args: ConnectionCreateArgs): ConnectionHandle => {
+    const { config, rows, cols } = args
+    switch (config.type) {
+      case 'local': {
+        const id = spawnLocalPty({ rows, cols, shell: config.shell ?? null, cwd: config.working_dir ?? null })
+        return { id, capabilities: [] }
+      }
+      case 'wsl': {
+        const id = spawnLocalPty({
+          rows,
+          cols,
+          shell: 'wsl.exe',
+          args: config.distro ? ['-d', config.distro] : [],
+          cwd: config.working_dir ?? null,
+        })
+        return { id, capabilities: [] }
+      }
+      case 'ssh': {
+        const id = connectSshInternal({
+          host: config.host,
+          port: config.port,
+          username: config.username,
+          password: config.password,
+          privateKeyPath: config.private_key_path ?? null,
+          proxyId: config.proxy_id ?? null,
+          agentForwarding: config.agent_forwarding ?? false,
+          x11Forwarding: config.x11_forwarding ?? false,
+          rows,
+          cols,
+        })
+        return { id, capabilities: ['file', 'tunnel', 'exec', 'zmodem'] }
+      }
+      case 'telnet': {
+        const id = connectTelnet(config.host, config.port)
+        return { id, capabilities: [] }
+      }
+      case 'serial': {
+        const id = connectSerial({
+          portName: config.port_name,
+          baudRate: config.baud_rate,
+          dataBits: config.data_bits,
+          stopBits: config.stop_bits,
+          parity: config.parity,
+          flowControl: config.flow_control,
+        })
+        return { id, capabilities: [] }
+      }
+      case 'adb': {
+        const id = connectAdb(config.serial, rows, cols)
+        return { id, capabilities: ['file'] }
+      }
+    }
+  })
+
+  ipcMain.handle('adb_list_devices', async (): Promise<AdbDevice[]> => {
+    try {
+      const out = await runAdb(['-P', ADB_PORT, 'devices', '-l'])
+      return parseAdbDevices(out)
+    } catch (e) {
+      console.warn('[electron] adb devices failed:', e)
+      return []
+    }
   })
 
   ipcMain.handle('adb_kill_server', async (): Promise<void> => {
@@ -926,107 +991,24 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('adb_list_dir', async (_, args: { serial: string; path: string }): Promise<SftpFileEntry[]> => {
-    try {
-      const out = await runAdbShell(args.serial, ['ls', '-la', shq(args.path)])
-      return parseLsEntries(out)
-    } catch (e) {
-      console.warn('[electron] adb list dir failed:', e)
-      throw new Error(e instanceof Error ? e.message : String(e))
-    }
-  })
-
-  ipcMain.handle('adb_pull', async (_, args: { serial: string; remote: string; local: string }): Promise<void> => {
-    try {
-      await runAdb(['-s', args.serial, 'pull', args.remote, args.local])
-    } catch (e) {
-      console.warn('[electron] adb pull failed:', e)
-      throw new Error(e instanceof Error ? e.message : String(e))
-    }
-  })
-
-  ipcMain.handle('adb_push', async (_, args: { serial: string; local: string; remote: string }): Promise<void> => {
-    try {
-      await runAdb(['-s', args.serial, 'push', args.local, args.remote])
-    } catch (e) {
-      console.warn('[electron] adb push failed:', e)
-      throw new Error(e instanceof Error ? e.message : String(e))
-    }
-  })
-
-  ipcMain.handle('adb_mkdir', async (_, args: { serial: string; path: string }): Promise<void> => {
-    try {
-      await runAdbShell(args.serial, ['mkdir', '-p', shq(args.path)])
-    } catch (e) {
-      console.warn('[electron] adb mkdir failed:', e)
-      throw new Error(e instanceof Error ? e.message : String(e))
-    }
-  })
-
-  ipcMain.handle('adb_touch', async (_, args: { serial: string; path: string }): Promise<void> => {
-    try {
-      await runAdbShell(args.serial, ['touch', shq(args.path)])
-    } catch (e) {
-      console.warn('[electron] adb touch failed:', e)
-      throw new Error(e instanceof Error ? e.message : String(e))
-    }
-  })
-
-  ipcMain.handle('adb_remove', async (_, args: { serial: string; path: string; is_dir: boolean }): Promise<void> => {
-    try {
-      await runAdbShell(args.serial, ['rm', args.is_dir ? '-rf' : '-f', shq(args.path)])
-    } catch (e) {
-      console.warn('[electron] adb remove failed:', e)
-      throw new Error(e instanceof Error ? e.message : String(e))
-    }
-  })
-
-  ipcMain.handle('adb_rename', async (_, args: { serial: string; old_path: string; new_path: string }): Promise<void> => {
-    try {
-      await runAdbShell(args.serial, ['mv', shq(args.old_path), shq(args.new_path)])
-    } catch (e) {
-      console.warn('[electron] adb rename failed:', e)
-      throw new Error(e instanceof Error ? e.message : String(e))
-    }
-  })
-
-  ipcMain.handle('adb_read_file', async (_, args: { serial: string; remote: string }): Promise<string> => {
-    try {
-      return await runAdbShell(args.serial, ['cat', shq(args.remote)])
-    } catch (e) {
-      console.warn('[electron] adb read file failed:', e)
-      throw new Error(e instanceof Error ? e.message : String(e))
-    }
-  })
-
-  ipcMain.handle('adb_write_file', async (_, args: { serial: string; remote: string; content: string }): Promise<void> => {
-    const tmp = path.join(os.tmpdir(), `aidterm_upload_${crypto.randomUUID()}.tmp`)
-    try {
-      fs.writeFileSync(tmp, args.content)
-      await runAdb(['-s', args.serial, 'push', tmp, args.remote])
-    } catch (e) {
-      console.warn('[electron] adb write file failed:', e)
-      throw new Error(e instanceof Error ? e.message : String(e))
-    } finally {
-      try { fs.unlinkSync(tmp) } catch { /* ignore */ }
-    }
-  })
-
   // ══════════════════════════════════════════════════════
-  //  SFTP (ssh2-sftp-client)
+  //  Unified file backend (file_*)
+  //  `kind` is 'sftp' (handle = connection id) or 'adb' (handle = device serial).
+  //  Mirrors the Rust `file_*` commands one-to-one.
   // ══════════════════════════════════════════════════════
-  ipcMain.handle('sftp_connect', async (_, args: SftpConnectArgs) => {
+  ipcMain.handle('file_connect', async (_, args: FileConnectArgs): Promise<string> => {
+    const { config } = args
+    if (config.type === 'adb') return config.serial
     if (!SftpClientClass) throw new Error('ssh2-sftp-client not installed')
 
-    const { host, port, username, password, privateKeyPath } = args
     const connId = crypto.randomUUID()
     const client = new SftpClientClass('sftp-' + connId)
 
-    const opts: Record<string, unknown> = { host, port: port || 22, username }
-    if (privateKeyPath && fs.existsSync(privateKeyPath)) {
-      opts.privateKey = fs.readFileSync(privateKeyPath)
-    } else if (password) {
-      opts.password = password
+    const opts: Record<string, unknown> = { host: config.host, port: config.port || 22, username: config.username }
+    if (config.private_key_path && fs.existsSync(config.private_key_path)) {
+      opts.privateKey = fs.readFileSync(config.private_key_path)
+    } else if (config.password) {
+      opts.password = config.password
     }
 
     await client.connect(opts as Parameters<SftpClient['connect']>[0])
@@ -1034,21 +1016,31 @@ function registerIpcHandlers(): void {
     return connId
   })
 
-  ipcMain.handle('sftp_disconnect', async (_, args: SftpDisconnectArgs) => {
-    const { connId } = args
-    const client = sftpConnections.get(connId)
+  ipcMain.handle('file_disconnect', async (_, args: FileOpArgs) => {
+    const { kind, handle } = args
+    if (kind !== 'sftp') return
+    const client = sftpConnections.get(handle)
     if (client) {
       try { await client.end() } catch {}
-      sftpConnections.delete(connId)
+      sftpConnections.delete(handle)
     }
   })
 
-  ipcMain.handle('sftp_list_dir', async (_, args: SftpListDirArgs) => {
-    const { connId, path: dirPath } = args
-    const client = sftpConnections.get(connId)
+  ipcMain.handle('file_list_dir', async (_, args: FileListDirArgs): Promise<FileEntry[]> => {
+    const { kind, handle, path } = args
+    if (kind === 'adb') {
+      try {
+        const out = await runAdbShell(handle, ['ls', '-la', shq(path)])
+        return parseLsEntries(out)
+      } catch (e) {
+        console.warn('[electron] adb list dir failed:', e)
+        throw new Error(e instanceof Error ? e.message : String(e))
+      }
+    }
+    const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
-    const list = await client.list(dirPath || '/')
-    return list.map((item): SftpFileEntry => ({
+    const list = await client.list(path || '/')
+    return list.map((item): FileEntry => ({
       name: item.name,
       is_dir: item.type === 'd',
       size: item.size || 0,
@@ -1057,9 +1049,18 @@ function registerIpcHandlers(): void {
     }))
   })
 
-  ipcMain.handle('sftp_download', async (_, args: SftpTransferArgs) => {
-    const { connId, transferId, remote, local } = args
-    const client = sftpConnections.get(connId)
+  ipcMain.handle('file_download', async (_, args: FileTransferArgs) => {
+    const { kind, handle, transferId, remote, local } = args
+    if (kind === 'adb') {
+      try {
+        await runAdb(['-s', handle, 'pull', remote, local])
+      } catch (e) {
+        console.warn('[electron] adb pull failed:', e)
+        throw new Error(e instanceof Error ? e.message : String(e))
+      }
+      return
+    }
+    const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
 
     const stat = await client.stat(remote)
@@ -1068,14 +1069,14 @@ function registerIpcHandlers(): void {
 
     const rdr = client.createReadStream(remote)
     const wtr = fs.createWriteStream(local)
-    const handle = {
+    const h = {
       abort: () => {
         cancelled = true
         rdr.destroy()
         wtr.destroy()
       },
     }
-    sftpTransfers.set(transferId, handle)
+    sftpTransfers.set(transferId, h)
 
     try {
       let transferred = 0
@@ -1093,7 +1094,7 @@ function registerIpcHandlers(): void {
             return
           }
           transferred += chunk.length
-          emitToRenderer('sftp-progress', {
+          emitToRenderer('file-progress', {
             remote, local, type: 'download',
             bytes_transferred: transferred, total_size: totalSize,
           })
@@ -1108,9 +1109,18 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('sftp_upload', async (_, args: SftpTransferArgs) => {
-    const { connId, transferId, remote, local } = args
-    const client = sftpConnections.get(connId)
+  ipcMain.handle('file_upload', async (_, args: FileTransferArgs) => {
+    const { kind, handle, transferId, local, remote } = args
+    if (kind === 'adb') {
+      try {
+        await runAdb(['-s', handle, 'push', local, remote])
+      } catch (e) {
+        console.warn('[electron] adb push failed:', e)
+        throw new Error(e instanceof Error ? e.message : String(e))
+      }
+      return
+    }
+    const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
 
     const totalSize = fs.statSync(local).size
@@ -1118,14 +1128,14 @@ function registerIpcHandlers(): void {
 
     const rdr = fs.createReadStream(local)
     const wtr = client.createWriteStream(remote)
-    const handle = {
+    const h = {
       abort: () => {
         cancelled = true
         rdr.destroy()
         wtr.destroy()
       },
     }
-    sftpTransfers.set(transferId, handle)
+    sftpTransfers.set(transferId, h)
 
     try {
       let transferred = 0
@@ -1143,7 +1153,7 @@ function registerIpcHandlers(): void {
             return
           }
           transferred += chunk.length
-          emitToRenderer('sftp-progress', {
+          emitToRenderer('file-progress', {
             remote, local, type: 'upload',
             bytes_transferred: transferred, total_size: totalSize,
           })
@@ -1158,59 +1168,116 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('sftp_cancel_transfer', async (_, args: SftpTransferArgs) => {
-    const { transferId } = args
-    const handle = sftpTransfers.get(transferId)
-    if (!handle) throw new Error('Transfer not found or already completed')
-    handle.abort()
-  })
-  ipcMain.handle('sftp_mkdir', async (_, args: SftpMkdirArgs) => {
-    const { connId, path: dirPath } = args
-    const client = sftpConnections.get(connId)
-    if (!client) throw new Error('SFTP connection not found')
-    await client.mkdir(dirPath)
+  ipcMain.handle('file_cancel_transfer', async (_, args: FileOpArgs & { transferId: string }) => {
+    const h = sftpTransfers.get(args.transferId)
+    if (!h) throw new Error('Transfer not found or already completed')
+    h.abort()
   })
 
-  ipcMain.handle('sftp_remove', async (_, args: SftpRemoveArgs) => {
-    const { connId, path: filePath } = args
-    const client = sftpConnections.get(connId)
+  ipcMain.handle('file_mkdir', async (_, args: FileMkdirArgs) => {
+    const { kind, handle, path } = args
+    if (kind === 'adb') {
+      try {
+        await runAdbShell(handle, ['mkdir', '-p', shq(path)])
+      } catch (e) {
+        console.warn('[electron] adb mkdir failed:', e)
+        throw new Error(e instanceof Error ? e.message : String(e))
+      }
+      return
+    }
+    const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
-    const stat = await client.stat(filePath)
-    if (stat.isDirectory) await client.rmdir(filePath)
-    else await client.delete(filePath)
+    await client.mkdir(path)
   })
 
-  ipcMain.handle('sftp_rename', async (_, args: SftpRenameArgs) => {
-    const { connId, oldPath, newPath } = args
-    const client = sftpConnections.get(connId)
+  ipcMain.handle('file_remove', async (_, args: FileRemoveArgs) => {
+    const { kind, handle, path, is_dir } = args
+    if (kind === 'adb') {
+      try {
+        await runAdbShell(handle, ['rm', is_dir ? '-rf' : '-f', shq(path)])
+      } catch (e) {
+        console.warn('[electron] adb remove failed:', e)
+        throw new Error(e instanceof Error ? e.message : String(e))
+      }
+      return
+    }
+    const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
-    await client.rename(oldPath, newPath)
+    const stat = await client.stat(path)
+    if (stat.isDirectory) await client.rmdir(path)
+    else await client.delete(path)
   })
 
-  ipcMain.handle('sftp_create', async (_, args: SftpCreateArgs) => {
-    const { connId, path: filePath, isDir, mode } = args
-    const client = sftpConnections.get(connId)
+  ipcMain.handle('file_rename', async (_, args: FileRenameArgs) => {
+    const { kind, handle, old_path, new_path } = args
+    if (kind === 'adb') {
+      try {
+        await runAdbShell(handle, ['mv', shq(old_path), shq(new_path)])
+      } catch (e) {
+        console.warn('[electron] adb rename failed:', e)
+        throw new Error(e instanceof Error ? e.message : String(e))
+      }
+      return
+    }
+    const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
-    if (isDir) {
-      await client.mkdir(filePath)
-      if (mode) await client.chmod(filePath, mode)
+    await client.rename(old_path, new_path)
+  })
+
+  ipcMain.handle('file_create', async (_, args: FileCreateArgs) => {
+    const { kind, handle, path, is_dir, mode } = args
+    if (kind === 'adb') {
+      try {
+        await runAdbShell(handle, is_dir ? ['mkdir', '-p', shq(path)] : ['touch', shq(path)])
+      } catch (e) {
+        console.warn('[electron] adb create failed:', e)
+        throw new Error(e instanceof Error ? e.message : String(e))
+      }
+      return
+    }
+    const client = sftpConnections.get(handle)
+    if (!client) throw new Error('SFTP connection not found')
+    if (is_dir) {
+      await client.mkdir(path)
+      if (mode) await client.chmod(path, mode)
     } else {
-      await client.put(Buffer.from(''), filePath)
-      if (mode) await client.chmod(filePath, mode)
+      await client.put(Buffer.from(''), path)
+      if (mode) await client.chmod(path, mode)
     }
   })
 
-  ipcMain.handle('sftp_read_file', async (_, args: SftpReadFileArgs) => {
-    const { connId, remote } = args
-    const client = sftpConnections.get(connId)
+  ipcMain.handle('file_read', async (_, args: FileReadArgs): Promise<string> => {
+    const { kind, handle, remote } = args
+    if (kind === 'adb') {
+      try {
+        return await runAdbShell(handle, ['cat', shq(remote)])
+      } catch (e) {
+        console.warn('[electron] adb read file failed:', e)
+        throw new Error(e instanceof Error ? e.message : String(e))
+      }
+    }
+    const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
     const buf = await client.get(remote)
     return Buffer.isBuffer(buf) ? buf.toString('utf8') : String(buf)
   })
 
-  ipcMain.handle('sftp_write_file', async (_, args: SftpWriteFileArgs) => {
-    const { connId, remote, content } = args
-    const client = sftpConnections.get(connId)
+  ipcMain.handle('file_write', async (_, args: FileWriteArgs) => {
+    const { kind, handle, remote, content } = args
+    if (kind === 'adb') {
+      const tmp = path.join(os.tmpdir(), `aidterm_upload_${crypto.randomUUID()}.tmp`)
+      try {
+        fs.writeFileSync(tmp, content)
+        await runAdb(['-s', handle, 'push', tmp, remote])
+      } catch (e) {
+        console.warn('[electron] adb write file failed:', e)
+        throw new Error(e instanceof Error ? e.message : String(e))
+      } finally {
+        try { fs.unlinkSync(tmp) } catch { /* ignore */ }
+      }
+      return
+    }
+    const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
     await client.put(Buffer.from(content), remote)
   })

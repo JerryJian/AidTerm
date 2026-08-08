@@ -127,6 +127,7 @@ export default {
     quick_connect: 'Quick Connect',
     new_ssh: 'New SSH...',
     local_shell: 'Local Shell',
+    wsl: 'WSL',
     saved_sessions: 'Saved Sessions',
     remote_connection: 'Remote Connection',
     ssh: 'SSH...',

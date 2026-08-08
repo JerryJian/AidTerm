@@ -48,7 +48,7 @@ async function pickKey() {
     multiple: false,
     filters: [{ name: 'SSH Keys', extensions: ['pem', 'key', 'id_rsa', 'id_ed25519', '*'] }],
   })
-  if (selected) form.value.privateKeyPath = selected
+  if (selected) form.value.privateKeyPath = Array.isArray(selected) ? selected[0] : selected
 }
 
 async function handleCreate() {
