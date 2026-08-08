@@ -120,6 +120,45 @@ function parseAdbDevices(output: string): AdbDevice[] {
   return devices
 }
 
+// Strictly read-only query of the user's default adb server (5037) over the raw
+// wire protocol. We never shell out to the adb binary here: a client-version
+// mismatch would make `adb` kill and restart the user's server.
+function query5037Devices(): Promise<AdbDevice[]> {
+  return new Promise<AdbDevice[]>((resolve) => {
+    let done = false
+    const finish = (devices: AdbDevice[]): void => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      sock.destroy()
+      resolve(devices)
+    }
+    const sock = net.connect(5037, '127.0.0.1')
+    const timer = setTimeout(() => finish([]), 1200)
+    let buf = Buffer.alloc(0)
+    sock.once('connect', () => {
+      const msg = Buffer.from('host:devices-l')
+      const head = Buffer.from(msg.length.toString(16).padStart(4, '0'))
+      sock.write(Buffer.concat([head, msg]))
+    })
+    sock.on('data', (chunk: Buffer) => {
+      buf = Buffer.concat([buf, chunk])
+      if (buf.length < 8) return
+      const status = buf.subarray(0, 4).toString()
+      if (status !== 'OKAY') return finish([])
+      const len = parseInt(buf.subarray(4, 8).toString(), 16)
+      if (Number.isNaN(len) || buf.length < 8 + len) return
+      finish(parseAdbDevices(buf.subarray(8, 8 + len).toString()))
+    })
+    sock.once('error', () => finish([]))
+    sock.once('close', () => finish([]))
+  })
+}
+
+function isUsbSerial(serial: string): boolean {
+  return !serial.startsWith('emulator-') && !serial.includes(':')
+}
+
 function createWindow(): void {
   const isWindows = process.platform === 'win32'
   const isLinux = process.platform === 'linux'
@@ -820,6 +859,30 @@ function registerIpcHandlers(): void {
       await runAdb(['-P', ADB_PORT, 'kill-server'])
     } catch (e) {
       console.warn('[electron] adb kill-server failed:', e)
+    }
+  })
+
+  // USB devices held by the user's own 5037 server never show up on our isolated
+  // 5038 server. Report them so the UI can explain why a device is missing.
+  ipcMain.handle('adb_occupied_devices', async (): Promise<string[]> => {
+    try {
+      const own = new Set<string>()
+      try {
+        const out = await runAdb(['-P', ADB_PORT, 'devices', '-l'])
+        parseAdbDevices(out).forEach(d => own.add(d.serial))
+      } catch { /* fall through with empty own list */ }
+
+      const occupied: string[] = []
+      const userDevices = await query5037Devices()
+      for (const d of userDevices) {
+        if (d.state === 'device' && isUsbSerial(d.serial) && !own.has(d.serial)) {
+          occupied.push(d.serial)
+        }
+      }
+      return occupied
+    } catch (e) {
+      console.warn('[electron] adb occupied devices failed:', e)
+      return []
     }
   })
 

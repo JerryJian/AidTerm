@@ -12,6 +12,7 @@ const emit = defineEmits<{
 }>()
 
 const devices = ref<AdbDevice[]>([])
+const occupied = ref<string[]>([])
 const selectedSerial = ref('')
 const refreshing = ref(false)
 const error = ref('')
@@ -24,7 +25,12 @@ async function refreshDevices() {
   refreshing.value = true
   error.value = ''
   try {
-    devices.value = await invoke<AdbDevice[]>('adb_list_devices')
+    const [devs, occ] = await Promise.all([
+      invoke<AdbDevice[]>('adb_list_devices'),
+      invoke<string[]>('adb_occupied_devices'),
+    ])
+    devices.value = devs
+    occupied.value = occ
     const firstReady = connectedDevices.value[0]
     if (firstReady && !devices.value.some(d => d.serial === selectedSerial.value)) {
       selectedSerial.value = firstReady.serial
@@ -75,6 +81,9 @@ onMounted(() => {
           <button class="refresh-btn" @click="refreshDevices" :disabled="refreshing">
             {{ refreshing ? '...' : '↻' }} {{ t('adb_dialog.refresh') }}
           </button>
+        </div>
+        <div v-if="occupied.length" class="occupied-hint">
+          {{ t('adb_dialog.occupied') }} {{ occupied.join(', ') }}
         </div>
         <div v-if="devices.length === 0 && !refreshing" class="empty-hint">
           {{ t('adb_dialog.no_devices') }}
@@ -170,6 +179,16 @@ onMounted(() => {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
   border-radius: 4px;
   color: var(--danger);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.occupied-hint {
+  padding: 8px 10px;
+  border: 1px solid var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border-radius: 4px;
+  color: var(--warning);
   font-size: 12px;
   word-break: break-all;
 }

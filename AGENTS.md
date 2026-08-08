@@ -3,7 +3,7 @@
 ## 项目概述
 使用 **Tauri 2.x** + **Vue 3 (Composition API + TypeScript)** + **Rust** 后端构建跨平台终端模拟器，另带 **Electron 双后端**（`src-electron/`，基于 node-pty / ssh2 / serialport，前端 `src/api/index.ts` 自动检测并统一调用）。
 
-> **双后端差异**：Electron 端端口转发仅 Local、代理为裸 TCP 直连（无 HTTP CONNECT / SOCKS5 握手）、Zmodem 与 Deep Link 为占位、`write_text_file` 缺失（终端文本导出会失败）、本地 shell 忽略 `workingDir`；Tauri 端以上均完整（Remote/Dynamic 转发、HTTP/SOCKS5/JumpHost、Deep Link、zmodem 检测）。
+> **双后端差异**：Electron 端端口转发仅 Local、代理为裸 TCP 直连（无 HTTP CONNECT / SOCKS5 握手）、Zmodem 与 Deep Link 为占位、`write_text_file` 缺失（终端文本导出会失败）、本地 shell 忽略 `workingDir`；Tauri 端以上均完整（Remote/Dynamic 转发、HTTP/SOCKS5/JumpHost、Deep Link、zmodem 检测）。ADB 在双后端均完整（5038 隔离 + 模拟器自动发现 + 5037 占用只读检测）。
 
 当前版本：0.3.0。下方复选框与 Phase 表反映**代码实际状态**（2026-08 核对）。
 
@@ -19,6 +19,7 @@
 - [x] **Serial (串口)** — 波特率、数据位、停止位、奇偶校验配置
 - [x] **本地 Shell** — Windows (`cmd`, `powershell`)、Linux/macOS (`bash`, `zsh`)，自动探测
 - [x] **SFTP** — 远程文件浏览、上传、下载、删除、重命名
+- [x] **ADB** — Android 设备交互 shell（独立 5038 server，绝不触碰 5037；模拟器由 server 自动发现；5037 占用用裸 adb 协议只读检测，不重启用户 server；adb 二进制可用 `npm run fetch-adb` 内置打包，`AIDTERM_ADB`/PATH 兜底）
 - [ ] **SCP** — 快速文件传输
 - [ ] **Zmodem** — 后端接收检测已接线（SSH 流中发 `zmodem-start/end`），保存/接收循环为死代码待接线，前端交互/发送待做
 

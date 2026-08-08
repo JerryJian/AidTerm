@@ -14,6 +14,11 @@ dist-ssr
 src-electron/out
 *.local
 
+# adb binary fetched by `npm run fetch-adb` (bin/ keeps only scripts + README)
+bin/adb
+bin/adb.exe
+bin/platform-tools-*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

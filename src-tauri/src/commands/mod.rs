@@ -102,6 +102,16 @@ pub async fn adb_kill_server(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| format!("adb kill-server join error: {}", e))?
 }
 
+/// USB devices held by the user's own 5037 server and therefore invisible to
+/// our isolated 5038 server. The check is strictly read-only (raw wire
+/// protocol), so the user's adb server is never killed or restarted.
+#[tauri::command]
+pub async fn adb_occupied_devices(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    Ok(tauri::async_runtime::spawn_blocking(move || adb::occupied_devices(&app))
+        .await
+        .map_err(|e| format!("adb occupied devices join error: {}", e))?)
+}
+
 #[tauri::command]
 pub async fn ssh_connect(
     app: tauri::AppHandle,

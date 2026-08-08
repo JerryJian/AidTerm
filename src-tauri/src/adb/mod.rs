@@ -1,5 +1,8 @@
+use std::collections::HashSet;
+use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::Duration;
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
@@ -106,6 +109,8 @@ pub fn kill_server(app: &AppHandle) -> Result<(), String> {
 
 /// List attached devices via `adb -P 5038 devices -l`.
 /// Ensure the server is running first so a freshly connected phone shows up.
+/// Emulators are visible automatically (the server discovers local emulator
+/// transports on its own), so no extra port scanning is needed.
 pub fn list_devices(app: &AppHandle) -> Result<Vec<AdbDevice>, String> {
     ensure_server(app)?;
     let (stdout, _, ok) = run_adb(app, &["devices", "-l"])?;
@@ -113,6 +118,87 @@ pub fn list_devices(app: &AppHandle) -> Result<Vec<AdbDevice>, String> {
         return Err("adb devices failed".to_string());
     }
     Ok(parse_devices(&stdout))
+}
+
+/// USB devices held by the user's own adb server (default port 5037).
+///
+/// A physical USB device can only be claimed by one adb server at a time, so
+/// anything already grabbed by the user's 5037 server will never show up on our
+/// isolated 5038 server. We query the user's server strictly read-only over the
+/// raw adb wire protocol (never via the adb binary, whose client-version check
+/// would kill + restart the user's server on mismatch) and return the serials
+/// we cannot see.
+pub fn occupied_devices(app: &AppHandle) -> Vec<String> {
+    let own: HashSet<String> = list_devices(app)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|d| d.serial)
+        .collect();
+    query_5037_devices()
+        .into_iter()
+        .filter(|d| is_usb_serial(&d.serial) && !own.contains(&d.serial))
+        .map(|d| d.serial)
+        .collect()
+}
+
+fn is_usb_serial(serial: &str) -> bool {
+    !serial.starts_with("emulator-") && !serial.contains(':')
+}
+
+/// Minimal, strictly read-only query of the user's default adb server (5037).
+///
+/// We intentionally do NOT shell out to the adb binary here: when the client
+/// version differs from the running server's, `adb` prints "server version does
+/// not match client" and kills + restarts the server. Speaking the
+/// `host:devices-l` wire protocol directly keeps this read-only, so the user's
+/// server is never touched. Returns an empty list when no server is listening.
+fn query_5037_devices() -> Vec<AdbDevice> {
+    use std::io::{Read, Write};
+    use std::net::ToSocketAddrs;
+
+    let Ok(mut addrs) = ("127.0.0.1", 5037u16).to_socket_addrs() else {
+        return Vec::new();
+    };
+    let Some(addr) = addrs.next() else {
+        return Vec::new();
+    };
+    let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(300)) else {
+        return Vec::new();
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(800)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+
+    let msg = b"host:devices-l";
+    let mut req = Vec::with_capacity(8 + msg.len());
+    req.extend_from_slice(format!("{:04x}", msg.len()).as_bytes());
+    req.extend_from_slice(msg);
+    if stream.write_all(&req).is_err() {
+        return Vec::new();
+    }
+
+    let mut header = [0u8; 4];
+    if stream.read_exact(&mut header).is_err() {
+        return Vec::new();
+    }
+    if &header == b"FAIL" {
+        return Vec::new();
+    }
+    if &header != b"OKAY" {
+        return Vec::new();
+    }
+
+    let mut lenbuf = [0u8; 4];
+    if stream.read_exact(&mut lenbuf).is_err() {
+        return Vec::new();
+    }
+    let Ok(len) = usize::from_str_radix(String::from_utf8_lossy(&lenbuf).trim(), 16) else {
+        return Vec::new();
+    };
+    let mut payload = vec![0u8; len];
+    if stream.read_exact(&mut payload).is_err() {
+        return Vec::new();
+    }
+    parse_devices(&String::from_utf8_lossy(&payload))
 }
 
 fn parse_devices(output: &str) -> Vec<AdbDevice> {

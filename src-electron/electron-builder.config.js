@@ -23,6 +23,10 @@ module.exports = () => {
       {
         from: '../dist',
         to: 'dist'
+      },
+      {
+        from: '../bin',
+        to: 'bin'
       }
     ],
     linux: {

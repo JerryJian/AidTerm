@@ -42,6 +42,10 @@ export function useTerminal() {
     return await invoke<AdbDevice[]>('adb_list_devices')
   }
 
+  async function occupiedAdbDevices() {
+    return await invoke<string[]>('adb_occupied_devices')
+  }
+
   async function adbConnect(serial: string, rows = 24, cols = 80) {
     const id = await invoke<string>('adb_connect', { serial, rows, cols })
     sessionId.value = id
@@ -143,6 +147,7 @@ export function useTerminal() {
     listSerialPorts,
     adbConnect,
     listAdbDevices,
+    occupiedAdbDevices,
     killAdbServer,
     writeInput,
     resize,

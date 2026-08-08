@@ -55,6 +55,7 @@ pub fn run() {
             commands::adb_list_devices,
             commands::adb_connect,
             commands::adb_kill_server,
+            commands::adb_occupied_devices,
             commands::write_terminal,
             commands::resize_terminal,
             commands::kill_terminal,

@@ -90,6 +90,7 @@ export default {
     refresh: '刷新',
     no_devices: '未发现设备，请确认设备已开启 USB 调试。',
     caveat: '提示：已被其他 ADB 服务(端口 5037)占用的设备不会在此显示。首次连接时请在手机上确认 RSA 指纹授权。',
+    occupied: '已被系统 ADB 服务 (5037) 占用，请先停止占用后重试：',
     connect: '连接 Shell',
     cancel: '取消',
   },

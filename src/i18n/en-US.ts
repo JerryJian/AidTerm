@@ -90,6 +90,7 @@ export default {
     refresh: 'Refresh',
     no_devices: 'No devices found. Make sure USB debugging is enabled on the device.',
     caveat: 'Note: devices already connected to another ADB server (port 5037) will not appear here. On first connection, accept the RSA fingerprint prompt on your phone.',
+    occupied: 'Held by another ADB server (port 5037). Stop that server to use these devices here:',
     connect: 'Connect Shell',
     cancel: 'Cancel',
   },
