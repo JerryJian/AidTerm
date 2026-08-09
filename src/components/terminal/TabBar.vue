@@ -281,7 +281,7 @@ defineExpose({ onKeydown })
         <div v-if="newTabMenuOpen" class="new-tab-menu" @mousedown.prevent>
           <div class="new-tab-section-title">{{ $t('menu.local_shell') }}</div>
           <button v-for="s in localProfiles" :key="s.id" class="menu-item" @click="openLocalProfile(s)"><span class="mi-icon">{{ s.icon || '💻' }}</span><span>{{ s.name }}</span></button>
-          <button class="menu-item" @click="openWsl()"><span class="mi-icon">{{ '\uD83D\uDC27' }}</span><span>{{ $t('menu.wsl') }}</span></button>
+          <button class="menu-item" @click="openWsl()"><span class="mi-icon">{{ '\uD83D\uDC27' }}</span><span>{{ $t('menu.wsl_advanced') }}</span></button>
           <div class="menu-divider" />
           <div class="new-tab-section-title">{{ $t('menu.remote_connection') }}</div>
           <button class="menu-item" @click="openSsh()"><span class="mi-icon">{{ '\uD83D\uDD12' }}</span><span>{{ $t('menu.ssh') }}</span></button>

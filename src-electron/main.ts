@@ -1590,6 +1590,7 @@ function registerIpcHandlers(): void {
       if (fs.existsSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')) shells.push({ name: 'Windows PowerShell', command: 'powershell.exe', icon: '\u{1F4DF}' })
       if (has('pwsh.exe')) shells.push({ name: 'PowerShell', command: 'pwsh.exe', icon: '\u{1F4DF}' })
       if (has('wsl.exe')) shells.push({ name: 'WSL', command: 'wsl.exe', icon: '\u{1F427}' })
+      if (has('bash.exe')) shells.push({ name: 'Bash', command: 'bash.exe', icon: '\u{1F40D}' })
       return shells
     }
     if (process.platform === 'darwin' && has('zsh')) shells.push({ name: 'Zsh', command: 'zsh', icon: '\u{1F334}' })

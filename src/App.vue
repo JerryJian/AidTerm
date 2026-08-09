@@ -413,7 +413,6 @@ async function handleCliArgs() {
 
 async function initBuiltInLocalProfiles() {
   if (!sessionStore.loaded) await sessionStore.load()
-  if (sessionStore.hasBuiltInLocalProfiles()) return
   try {
     const result = await invoke<Array<{ name: string; command: string; icon: string } | string>>('detect_shells')
     const shells = (result ?? []).map((shell) => {

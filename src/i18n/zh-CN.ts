@@ -137,6 +137,7 @@ export default {
     new_ssh: '新建 SSH...',
     local_shell: '本地终端',
     wsl: 'WSL',
+    wsl_advanced: 'WSL (高级)...',
     saved_sessions: '已保存会话',
     remote_connection: '远程连接',
     ssh: 'SSH...',

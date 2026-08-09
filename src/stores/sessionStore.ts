@@ -146,15 +146,37 @@ export const useSessionStore = defineStore('sessions', () => {
   }
 
   function initBuiltInProfiles(shells: Array<{ name: string; command: string; icon: string }>) {
-    if (sessions.value.some(s => s.session_type === 'local' && s.built_in)) return
     const groupName = te('menu.local_shell') ? t('menu.local_shell') : 'Local Shell'
     let group = groups.value.find(g => g.built_in)
     if (!group) {
       group = { id: genId(), name: groupName, expanded: true, built_in: true }
       groups.value.push(group)
     }
+    const kept: SavedSession[] = []
+    let changed = false
+    for (const session of sessions.value) {
+      if (session.session_type === 'local' && session.built_in) {
+        const shell = shells.find(s => s.command === session.command)
+        if (!shell) {
+          changed = true
+          continue
+        }
+        if (session.name !== shell.name) {
+          session.name = shell.name
+          changed = true
+        }
+        if (session.icon !== shell.icon) {
+          session.icon = shell.icon
+          changed = true
+        }
+        kept.push(session)
+      } else {
+        kept.push(session)
+      }
+    }
     for (const shell of shells) {
-      sessions.value.push({
+      if (kept.some(s => s.session_type === 'local' && s.built_in && s.command === shell.command)) continue
+      kept.push({
         id: genId(),
         name: shell.name,
         session_type: 'local',
@@ -177,8 +199,10 @@ export const useSessionStore = defineStore('sessions', () => {
         built_in: true,
         hidden: false,
       })
+      changed = true
     }
-    save()
+    sessions.value = kept
+    if (changed) save()
   }
 
   function removeSession(id: string) {
@@ -216,10 +240,6 @@ export const useSessionStore = defineStore('sessions', () => {
     return getSessionsByGroup(null)
   }
 
-  function hasBuiltInLocalProfiles(): boolean {
-    return sessions.value.some(s => s.session_type === 'local' && s.built_in)
-  }
-
   function toggleSessionHidden(id: string) {
     const s = sessions.value.find(s => s.id === id)
     if (s) {
@@ -246,7 +266,6 @@ export const useSessionStore = defineStore('sessions', () => {
     getSessionsByGroup,
     getUngroupedSessions,
     ensureGroup,
-    hasBuiltInLocalProfiles,
     groupName,
     toggleSessionHidden,
     initBuiltInProfiles,

@@ -137,6 +137,7 @@ export default {
     new_ssh: 'New SSH...',
     local_shell: 'Local Shell',
     wsl: 'WSL',
+    wsl_advanced: 'WSL (Advanced)...',
     saved_sessions: 'Saved Sessions',
     remote_connection: 'Remote Connection',
     ssh: 'SSH...',
