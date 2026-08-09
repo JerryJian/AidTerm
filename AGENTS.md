@@ -79,7 +79,7 @@
 - [ ] **全局快捷键（Guake 模式）** — i18n 有占位，功能未实现
 - [x] **终端背景图** — 设置面板可选背景图片
 - [x] **Deep Link** — tauri-plugin-deep-link（仅 Tauri；Electron 未实现）
-- [x] **命令行传参** — Electron argv ✅；Tauri `get_cli_args` 已实现但前端未接线（前端调 `cli_args`）
+- [x] **命令行传参** — 双端均经 `cli_args` IPC：Electron 读 `process.argv`，Tauri 返回 `std::env::args`（前端 `App.vue` 解析 `--ssh user@host[:port]` 预填 SSH 对话框）
 - [x] **检查更新** — 关于对话框：GitHub Releases 检查最新版 → 下载安装包 → 调起安装（Tauri `commands/update.rs` / Electron `check_for_update` 等 IPC；Windows 按注册表 Uninstall 键检测安装包类型并下载对应 MSI/EXE，`msiexec /i ... /qn` 或 `/S` 静默装、macOS `open` dmg、Linux 运行 AppImage）
 - [ ] **Trzsz 文件传输** — tmux 兼容的 Zmodem 替代方案
 - [ ] **MCP Widget** — 供 AI 助手和外部工具集成的组件
@@ -156,7 +156,7 @@
 | 6.5 | 全屏模式 | F11 / 设置 ✅ |
 | 6.6 | 系统托盘 | 待做 |
 | 6.7 | Deep Link 协议 | tauri-plugin-deep-link ✅（仅 Tauri；Electron 未实现） |
-| 6.8 | 命令行传参 | Electron argv ✅；Tauri `get_cli_args` 已实现但前端未接线 |
+| 6.8 | 命令行传参 | 双端均经 `cli_args` IPC：Electron `process.argv`，Tauri `std::env::args`，前端解析 `--ssh user@host[:port]` 预填 SSH 对话框 ✅ |
 
 ### Phase 7: AI 智能助手
 | # | 任务 | 说明 |

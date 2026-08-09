@@ -637,7 +637,7 @@ pub async fn get_remote_system_info(
 }
 
 #[tauri::command]
-pub fn get_cli_args() -> Vec<String> {
+pub fn cli_args() -> Vec<String> {
     std::env::args().skip(1).collect()
 }
 
