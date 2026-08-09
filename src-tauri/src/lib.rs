@@ -1,5 +1,6 @@
 mod ai;
 mod adb;
+mod cast;
 mod commands;
 mod crypto;
 mod file_fs;
@@ -47,6 +48,7 @@ pub fn run() {
         .manage(zmodem::ZmodemState::new())
         .manage(tunnel::TunnelManager::new())
         .manage(proxy::ProxyManager::new())
+        .manage(cast::CastState::default())
         .invoke_handler(tauri::generate_handler![
             commands::connection_create,
             commands::connection_write,
@@ -57,6 +59,10 @@ pub fn run() {
             commands::adb_list_devices,
             commands::adb_kill_server,
             commands::adb_occupied_devices,
+            commands::cast_start,
+            commands::cast_stop,
+            commands::cast_frame,
+            commands::cast_input,
             commands::file_connect,
             commands::file_disconnect,
             commands::file_home_dir,

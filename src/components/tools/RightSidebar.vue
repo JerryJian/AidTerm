@@ -5,6 +5,7 @@ import { useTerminalStore } from '../../stores/terminal'
 import { useUiStore } from '../../stores/uiStore'
 import { getAiConversation } from '../../hooks/terminalAiRegistry'
 import AiSidebar from '../ai/AiSidebar.vue'
+import CastPanel from './CastPanel.vue'
 import FilePanel from '../file/FilePanel.vue'
 import TunnelPanel from '../tunnel/TunnelPanel.vue'
 import type { FileKind, ToolTab } from '../../types'
@@ -30,6 +31,9 @@ const toolTabs = computed<{ id: ToolTab; icon: string; title: string }[]>(() => 
   }
   if (store.hasCapability(tab, 'tunnel')) {
     list.push({ id: 'tunnel', icon: '\u{1F50C}', title: t('tool_panel.tunnel') })
+  }
+  if (store.hasCapability(tab, 'cast')) {
+    list.push({ id: 'cast', icon: '\u{1F4FA}', title: t('tool_panel.cast') })
   }
   return list
 })
@@ -105,6 +109,12 @@ function closeSidebar() {
         <TunnelPanel
           v-if="activeTab"
           v-show="activeTool === 'tunnel'"
+          :tab-id="activeTab.id"
+          :tab="activeTab"
+        />
+        <CastPanel
+          v-if="activeTab"
+          v-show="activeTool === 'cast'"
           :tab-id="activeTab.id"
           :tab="activeTab"
         />

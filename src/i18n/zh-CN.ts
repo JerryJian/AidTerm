@@ -155,6 +155,18 @@ export default {
     trigger: '触发器',
     key: '密钥',
     knownHosts: '主机',
+    cast: '投屏',
+  },
+  cast_panel: {
+    start: '开始',
+    stop: '停止',
+    starting: '启动中...',
+    waiting: '点击开始以镜像设备屏幕',
+    not_supported: '当前环境不支持投屏',
+    no_device: '未选择 ADB 设备',
+    failed: '投屏失败：{msg}',
+    disconnected: '投屏已结束',
+    hint_tap: '单击=点按，拖动=滑动，滚轮=滚动',
   },
   status: {
     tabs_count: '{count} 个标签页',

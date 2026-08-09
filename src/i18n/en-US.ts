@@ -155,6 +155,18 @@ export default {
     trigger: 'Triggers',
     key: 'Keys',
     knownHosts: 'Hosts',
+    cast: 'Cast',
+  },
+  cast_panel: {
+    start: 'Start',
+    stop: 'Stop',
+    starting: 'Starting...',
+    waiting: 'Click Start to mirror the device screen',
+    not_supported: 'Screen casting is not supported in this environment',
+    no_device: 'No ADB device selected',
+    failed: 'Cast failed: {msg}',
+    disconnected: 'Cast ended',
+    hint_tap: 'Click to tap, drag to swipe, wheel to scroll',
   },
   status: {
     tabs_count: '{count} tab(s)',

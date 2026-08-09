@@ -19,6 +19,9 @@ bin/adb
 bin/adb.exe
 bin/platform-tools-*
 
+# scrcpy-server jar fetched by `npm run fetch-scrcpy`
+bin/scrcpy-server.jar
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

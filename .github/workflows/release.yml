@@ -75,6 +75,11 @@ jobs:
             libayatana-appindicator3-dev \
             xdg-utils
 
+      - name: Fetch runtime binaries (adb + scrcpy-server)
+        run: |
+          npm run fetch-adb
+          npm run fetch-scrcpy
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v1
         with:

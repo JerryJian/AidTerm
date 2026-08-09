@@ -21,6 +21,7 @@
 - [x] **SFTP** — 远程文件浏览、上传、下载、删除、重命名
 - [x] **ADB** — Android 设备交互 shell（独立 5038 server，绝不触碰 5037；模拟器由 server 自动发现；5037 占用用裸 adb 协议只读检测，不重启用户 server；adb 二进制可用 `npm run fetch-adb` 内置打包，`AIDTERM_ADB`/PATH 兜底）
 - [x] **ADB 文件浏览** — 复用 SFTP 面板（`fileStore` 按 `kind: 'sftp'|'adb'` 分发，tool_tab 复用 'sftp'），目录列表/上传(`adb push`)/下载(`adb pull`)/新建/删除/重命名/远程编辑(`adb cat` + 临时文件 push) 全部走 `-P 5038 -s <serial>`；设备端路径经 `shq` 单引号转义后进 `adb shell`，ls 解析兼容 toybox/GNU 日期格式并剥离符号链接目标
+- [x] **ADB 投屏 (Cast)** — 右侧面板 tab（仅 Tauri）：scrcpy-server 独立版 `raw_stream=true` 推 H.264 Annex-B 流，Rust `cast.rs` 按 start code 切 NAL、留最近帧+SPS/PPS avcC 配置，前端 WebCodecs 解码绘制 canvas，触摸(`tap/swipe`)/滚轮/键盘经 `adb shell input` 注入；`scrcpy-server.jar` 用 `npm run fetch-scrcpy` 内置打包（版本须匹配 `SCRCPY_VERSION`），`AIDTERM_SCRCPY` 兜底
 - [ ] **SCP** — 快速文件传输
 - [ ] **Zmodem** — 后端接收检测已接线（SSH 流中发 `zmodem-start/end`），保存/接收循环为死代码待接线，前端交互/发送待做
 
@@ -231,6 +232,7 @@ AidTerm/
 │   │   ├── terminal/       # TerminalWrapper, TerminalPane, TabBar
 │   │   ├── session/        # SessionPanel, SessionDialog, SshDialog, SerialDialog
 │   │   ├── sftp/           # SftpPanel / FilePanel（SFTP + ADB 文件浏览，复用）
+│   │   ├── tools/          # RightSidebar, CastPanel（ADB 投屏，仅 Tauri）
 │   │   ├── tunnel/         # TunnelPanel（端口转发）
 │   │   ├── proxy/          # ProxyPanel
 │   │   ├── trigger/        # TriggerPanel（宏/触发器）
@@ -252,10 +254,11 @@ AidTerm/
 │   │   ├── commands/       # Tauri IPC 命令
 │   │   ├── session/        # local, ssh, telnet
 │   │   ├── serial/ sftp/ tunnel/ proxy/ keychain/ ai/ crypto/
-│   │   ├── session_store.rs / zmodem.rs
+│   │   ├── session_store.rs / zmodem.rs / cast.rs
 │   │   ├── Cargo.toml
 │   │   └── tauri.conf.json
 ├── AGENTS.md
+├── bin/                  # fetch-adb.mjs / fetch-scrcpy.mjs（发布时内置打包）
 └── package.json
 ```
 

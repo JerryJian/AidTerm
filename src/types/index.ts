@@ -86,7 +86,7 @@ export interface UpdateInfo {
   installer_type: string
 }
 
-export type ToolTab = 'ai' | 'file' | 'tunnel'
+export type ToolTab = 'ai' | 'file' | 'tunnel' | 'cast'
 
 export type FileKind = 'sftp' | 'adb' | 'local' | 'wsl'
 
@@ -171,7 +171,7 @@ export interface FileProgress {
 }
 
 /** A connection's declared capabilities; drives which tool panels are available. */
-export type ConnectionCapability = 'file' | 'tunnel' | 'exec' | 'zmodem'
+export type ConnectionCapability = 'file' | 'tunnel' | 'exec' | 'zmodem' | 'cast'
 
 export type ConnectionType = 'local' | 'wsl' | 'ssh' | 'telnet' | 'serial' | 'adb'
 

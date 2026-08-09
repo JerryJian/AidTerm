@@ -18,6 +18,7 @@ pub enum Capability {
     Tunnel,
     Exec,
     Zmodem,
+    Cast,
 }
 
 impl Capability {
@@ -27,11 +28,12 @@ impl Capability {
             Capability::Tunnel => "tunnel",
             Capability::Exec => "exec",
             Capability::Zmodem => "zmodem",
+            Capability::Cast => "cast",
         }
     }
 }
 
-pub const CAP_FILE: &[Capability] = &[Capability::File];
+pub const CAP_FILE_CAST: &[Capability] = &[Capability::File, Capability::Cast];
 pub const CAP_FILE_TUNNEL_EXEC_ZMODEM: &[Capability] = &[Capability::File, Capability::Tunnel, Capability::Exec, Capability::Zmodem];
 pub const CAP_NONE: &[Capability] = &[];
 
@@ -174,7 +176,7 @@ impl SessionManager {
                     serial,
                     "shell".to_string(),
                 ];
-                Box::new(local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some(adb_bin), None, args, CAP_FILE)?)
+                Box::new(local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some(adb_bin), None, args, CAP_FILE_CAST)?)
             }
         };
         let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;

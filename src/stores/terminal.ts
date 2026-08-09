@@ -40,7 +40,7 @@ const defaultCapabilities: Record<ConnectionType, ConnectionCapability[]> = {
   ssh: ['file', 'tunnel', 'exec', 'zmodem'],
   telnet: [],
   serial: [],
-  adb: ['file'],
+  adb: ['file', 'cast'],
 }
 
 export const useTerminalStore = defineStore('terminal', () => {
