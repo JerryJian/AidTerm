@@ -458,6 +458,8 @@ export default {
     executing: '执行中...',
     analyzing: 'AI 分析中...',
     output_truncated: '输出较长，已截断发送给 AI',
+    config_placeholder: '请先配置 AI 服务',
+    config_click: '点击此处打开配置',
     no_config: '请在设置 → AI 中配置 API Key 后使用 AI 助手',
     no_active_terminal: '暂无活动终端，请选择一个终端',
     reset: '重置对话',

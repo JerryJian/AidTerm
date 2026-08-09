@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { setLanguage } from '../../i18n'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { useAiStore } from '../../stores/aiStore'
 import { useProxyStore } from '../../stores/proxyStore'
+import { useUiStore } from '../../stores/uiStore'
 import { getCurrentWindow, openDialog as open } from '@/api'
 import type { ProxyConfig, ProxyType } from '../../types'
 
@@ -14,6 +15,7 @@ const settings = useSettingsStore()
 const theme = useThemeStore()
 const ai = useAiStore()
 const proxyStore = useProxyStore()
+const ui = useUiStore()
 
 const emit = defineEmits<{
   close: []
@@ -25,7 +27,8 @@ onUnmounted(() => document.removeEventListener('keydown', escHandler))
 
 onMounted(() => proxyStore.refresh())
 
-const activeTab = ref<'general' | 'ai' | 'proxy'>('general')
+const activeTab = ref<'general' | 'ai' | 'proxy'>(ui.settingsTab)
+watch(activeTab, (v) => { ui.settingsTab = v })
 const showProxyForm = ref(false)
 const editProxyId = ref<string | null>(null)
 const proxyForm = ref({

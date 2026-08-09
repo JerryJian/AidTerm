@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTerminalStore } from '../../stores/terminal'
 import { useUiStore } from '../../stores/uiStore'
-import { useAiStore } from '../../stores/aiStore'
 import { getAiConversation } from '../../hooks/terminalAiRegistry'
 import AiSidebar from '../ai/AiSidebar.vue'
 import FilePanel from '../file/FilePanel.vue'
@@ -17,7 +16,6 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const store = useTerminalStore()
 const ui = useUiStore()
-const ai = useAiStore()
 
 const dragging = ref(false)
 
@@ -26,9 +24,7 @@ const activeTab = computed(() => store.activeTab)
 const toolTabs = computed<{ id: ToolTab; icon: string; title: string }[]>(() => {
   const list: { id: ToolTab; icon: string; title: string }[] = []
   const tab = activeTab.value
-  if (ai.enabled) {
-    list.push({ id: 'ai', icon: '\u{1F916}', title: t('tool_panel.ai') })
-  }
+  list.push({ id: 'ai', icon: '\u{1F916}', title: t('tool_panel.ai') })
   if (store.hasCapability(tab, 'file')) {
     list.push({ id: 'file', icon: '\u{1F4C2}', title: store.tabSessionType(tab) === 'adb' ? t('tool_panel.adb_files') : t('tool_panel.sftp') })
   }
@@ -94,8 +90,7 @@ function closeSidebar() {
       </div>
       <div class="right-body">
         <AiSidebar
-          v-if="aiConv"
-          v-show="activeTool === 'ai'"
+          v-if="activeTool === 'ai'"
           :ai-conv="aiConv"
           :tab-title="activeTab?.title ?? ''"
         />

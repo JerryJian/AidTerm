@@ -2,19 +2,23 @@
 import { ref, nextTick, watch, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAiConversation } from '../../hooks/useAiConversation'
+import { useAiStore } from '../../stores/aiStore'
+import { useUiStore } from '../../stores/uiStore'
 import { marked } from 'marked'
 
 const { t } = useI18n()
+const ai = useAiStore()
+const ui = useUiStore()
 
 const props = defineProps<{
-  aiConv: ReturnType<typeof useAiConversation>
+  aiConv?: ReturnType<typeof useAiConversation>
   tabTitle?: string
 }>()
 
 const inputText = ref('')
 const messagesContainer = ref<HTMLDivElement>()
 
-const conversationMessages = computed(() => props.aiConv.conversationMessages)
+const conversationMessages = computed(() => props.aiConv?.conversationMessages ?? [])
 
 const lastCommand = computed(() => {
   const msgs = conversationMessages.value
@@ -23,6 +27,11 @@ const lastCommand = computed(() => {
   }
   return null
 })
+
+function openAiSettings() {
+  ui.settingsTab = 'ai'
+  ui.settingsDialog = true
+}
 
 function renderMarkdown(text: string): string {
   try {
@@ -42,20 +51,21 @@ function onKeydown(e: KeyboardEvent) {
 function doSend() {
   const text = inputText.value.trim()
   if (!text) return
+  if (!props.aiConv) return
   inputText.value = ''
-  props.aiConv.submitInput(text)
+  props.aiConv?.submitInput(text)
 }
 
 function doConfirm() {
-  props.aiConv.onConfirmCommand()
+  props.aiConv?.onConfirmCommand()
 }
 
 function doCancel() {
-  props.aiConv.onCancelCommand()
+  props.aiConv?.onCancelCommand()
 }
 
 function doReset() {
-  props.aiConv.resetConversation()
+  props.aiConv?.resetConversation()
 }
 
 function getCopyText(msg: { role: string; content: string; command?: string }): string {
@@ -138,6 +148,17 @@ watch(conversationMessages, async () => {
 
 <template>
   <div class="ai-sidebar">
+    <div v-if="!ai.enabled" class="ai-config-prompt" @click="openAiSettings">
+      <div class="ai-empty-icon">&#x1F916;</div>
+      <div class="ai-config-title">{{ t('ai.config_placeholder') }}</div>
+      <div class="ai-config-sub">{{ t('ai.config_click') }}</div>
+    </div>
+    <template v-else-if="!aiConv">
+      <div class="ai-config-prompt">
+        <div class="ai-empty-text">{{ t('ai.no_active_terminal') }}</div>
+      </div>
+    </template>
+    <template v-else>
     <div class="ai-header">
       <span class="ai-title" :title="tabTitle">{{ tabTitle }}</span>
       <button class="ai-header-btn" @click="doReset" :title="t('ai.new_conversation')">
@@ -188,23 +209,23 @@ watch(conversationMessages, async () => {
             <div class="command-header">
               <span v-if="msg.dangerous" class="danger-badge">⚠️ {{ t('ai.dangerous_command') }}</span>
               <span v-else class="safe-badge">✅ {{ t('ai.safe_command') }}</span>
-              <button v-if="aiConv.waitingForCommand.value && msg === lastCommand" class="ai-stop-btn" @click="aiConv.stopWaitingForCommand()" :title="t('ai.stop_waiting')" />
+              <button v-if="aiConv?.waitingForCommand.value && msg === lastCommand" class="ai-stop-btn" @click="aiConv?.stopWaitingForCommand()" :title="t('ai.stop_waiting')" />
               <button class="copy-btn copy-btn-sm" @click="copyMessage(msg)" :title="t('ai.copy')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               </button>
             </div>
             <pre class="command-text">{{ msg.command }}</pre>
-            <div v-if="aiConv.showConfirm.value && aiConv.pendingToolId.value === msg.toolCallId" class="command-actions">
+            <div v-if="aiConv?.showConfirm.value && aiConv?.pendingToolId.value === msg.toolCallId" class="command-actions">
               <button class="cmd-btn cmd-cancel" @click="doCancel">{{ t('ai.cancel') }}</button>
               <button class="cmd-btn cmd-confirm" :class="{ 'cmd-confirm-danger': msg.dangerous }" @click="doConfirm">{{ t('ai.execute') }}</button>
             </div>
-            <div v-else-if="aiConv.showConfirm.value && aiConv.pendingToolId.value !== msg.toolCallId" class="command-pending">
+            <div v-else-if="aiConv?.showConfirm.value && aiConv?.pendingToolId.value !== msg.toolCallId" class="command-pending">
               {{ t('ai.thinking') }}
             </div>
-            <div v-else-if="!msg.dangerous && aiConv.autoExecute && msg.autoExecStatus === 'completed'" class="command-auto command-auto-done">
+            <div v-else-if="!msg.dangerous && aiConv?.autoExecute && msg.autoExecStatus === 'completed'" class="command-auto command-auto-done">
               ✅ {{ t('ai.auto_execute_done') }}
             </div>
-            <div v-if="!msg.dangerous && aiConv.autoExecute && msg.autoExecStatus === 'executing'" class="command-footer">
+            <div v-if="!msg.dangerous && aiConv?.autoExecute && msg.autoExecStatus === 'executing'" class="command-footer">
               <span class="command-auto-running">⏳ {{ t('ai.auto_executing') }}</span>
             </div>
           </div>
@@ -248,16 +269,16 @@ watch(conversationMessages, async () => {
         :placeholder="t('ai.input_placeholder')"
         rows="2"
         @keydown="onKeydown"
-        :disabled="aiConv.busy.value"
+        :disabled="aiConv?.busy.value"
       />
       <button
         class="ai-send-btn"
-        :class="{ 'ai-send-btn-cancel': aiConv.busy.value }"
-        :title="aiConv.busy.value ? t('ai.cancel_conversation') : t('ai.send')"
-        @click="aiConv.busy.value ? aiConv.cancelConversation() : doSend()"
-        :disabled="!aiConv.busy.value && !inputText.trim()"
+        :class="{ 'ai-send-btn-cancel': aiConv?.busy.value }"
+        :title="aiConv?.busy.value ? t('ai.cancel_conversation') : t('ai.send')"
+        @click="aiConv?.busy.value ? aiConv?.cancelConversation() : doSend()"
+        :disabled="!aiConv?.busy.value && !inputText.trim()"
       >
-        <svg v-if="!aiConv.busy.value" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg v-if="!aiConv?.busy.value" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4Z" />
         </svg>
         <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -271,6 +292,7 @@ watch(conversationMessages, async () => {
       <button class="ai-ctx-item" @click="ctxAction('copy')">{{ t('ai.copy') }}</button>
       <button class="ai-ctx-item" @click="ctxAction('selectAll')">{{ t('ai.select_all') }}</button>
     </div>
+    </template>
   </div>
 </template>
 
@@ -352,6 +374,36 @@ watch(conversationMessages, async () => {
 
 .ai-empty-text {
   font-size: 13px;
+}
+
+.ai-config-prompt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-overlay0);
+  cursor: pointer;
+  user-select: none;
+}
+.ai-config-prompt:hover {
+  color: var(--text-sub0);
+}
+.ai-config-prompt:hover .ai-empty-icon {
+  opacity: 0.8;
+}
+
+.ai-config-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ai-config-sub {
+  font-size: 12px;
+  color: var(--accent);
 }
 
 .ai-msg {

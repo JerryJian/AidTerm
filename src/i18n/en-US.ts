@@ -458,6 +458,8 @@ export default {
     executing: 'Executing...',
     analyzing: 'AI analyzing...',
     output_truncated: 'Output truncated for AI',
+    config_placeholder: 'Configure the AI service first',
+    config_click: 'Click here to open settings',
     no_config: 'Configure API Key in Settings → AI first',
     no_active_terminal: 'No active terminal, please select one',
     reset: 'Reset Chat',

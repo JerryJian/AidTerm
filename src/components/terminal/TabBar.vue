@@ -5,14 +5,12 @@ import { useI18n } from 'vue-i18n'
 import { useTerminalStore } from '../../stores/terminal'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useUiStore } from '../../stores/uiStore'
-import { useAiStore } from '../../stores/aiStore'
 import type { SavedSession, TerminalTab } from '../../types'
 import QuickConnectBar from '../session/QuickConnectBar.vue'
 
 const store = useTerminalStore()
 const sessionStore = useSessionStore()
 const ui = useUiStore()
-const aiStore = useAiStore()
 const { t } = useI18n()
 
 const emit = defineEmits<{
@@ -123,12 +121,7 @@ function tabStatus(tab: TerminalTab): string {
   return store.resolveSessionTab(tab)?.session?.status ?? ''
 }
 
-const rightSidebarAvailable = computed(() => {
-  if (!store.activeTabId) return false
-  if (aiStore.enabled) return true
-  const st = store.tabSessionType(store.activeTab)
-  return st === 'ssh' || st === 'adb'
-})
+const rightSidebarAvailable = computed(() => !!store.activeTabId)
 
 function toggleRightSidebar() {
   if (store.activeTabId) {

@@ -9,6 +9,7 @@ export const useUiStore = defineStore('ui', () => {
   const adbDialog = ref(false)
   const wslDialog = ref(false)
   const settingsDialog = ref(false)
+  const settingsTab = ref<'general' | 'ai' | 'proxy'>('general')
   const aboutDialog = ref(false)
   const leftSidebarWidth = ref(280)
   const rightSidebarWidth = ref(380)
@@ -21,6 +22,7 @@ export const useUiStore = defineStore('ui', () => {
     adbDialog,
     wslDialog,
     settingsDialog,
+    settingsTab,
     aboutDialog,
     leftSidebarWidth,
     rightSidebarWidth,
