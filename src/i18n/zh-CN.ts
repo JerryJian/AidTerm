@@ -147,7 +147,7 @@ export default {
   },
   tool_panel: {
     ai: 'AI 助手',
-    sftp: 'SFTP',
+    sftp: '文件管理',
     adb_files: '设备文件',
     tunnel: '隧道',
     proxy: '代理',
@@ -201,7 +201,7 @@ export default {
     icon: '图标',
   },
   sftp: {
-    panel_title: 'SFTP',
+    panel_title: '文件管理',
     connect: '连接',
     disconnect: '断开',
     go_up: '上一级',
@@ -210,7 +210,7 @@ export default {
     new_file: '新建文件',
     actions: '操作',
     empty_directory: '空目录',
-    title: 'SFTP - {host}',
+    title: '文件管理 - {host}',
     local: '本地',
     remote: '远程',
     upload: '上传',
@@ -250,6 +250,9 @@ export default {
   },
   adb_file: {
     not_connected: '设备未连接。请先在设备列表连接一个 adb 会话，再打开文件面板。',
+  },
+  file_fs: {
+    local_ready: '本地文件系统，打开即浏览本机磁盘。',
   },
   tunnel: {
     title: '端口转发',

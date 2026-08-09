@@ -150,6 +150,31 @@ pub enum FileConnectConfig {
     Adb {
         serial: String,
     },
+    Local,
+    Wsl {
+        distro: Option<String>,
+    },
+}
+
+/// Build the filesystem target used by the `local`/`wsl` file kinds.
+fn fs_target(kind: &str, handle: &str) -> crate::file_fs::FsTarget {
+    if kind == "wsl" {
+        crate::file_fs::FsTarget::Wsl { distro: handle.to_string() }
+    } else {
+        crate::file_fs::FsTarget::Local
+    }
+}
+
+/// Run a blocking filesystem operation for the `local`/`wsl` kinds.
+async fn fs_op<T: Send + 'static>(
+    kind: String,
+    handle: String,
+    op: impl FnOnce(crate::file_fs::FsTarget) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let kind_inner = kind.clone();
+    tauri::async_runtime::spawn_blocking(move || op(fs_target(&kind_inner, &handle)))
+        .await
+        .map_err(|e| format!("{} file op join error: {}", kind, e))?
 }
 
 /// Connect a file backend and get its handle id (sftp conn id / adb serial).
@@ -167,6 +192,8 @@ pub async fn file_connect(
             Ok(id)
         }
         FileConnectConfig::Adb { serial } => Ok(serial),
+        FileConnectConfig::Local => Ok("local".to_string()),
+        FileConnectConfig::Wsl { distro } => Ok(distro.unwrap_or_default()),
     }
 }
 
@@ -185,6 +212,12 @@ pub async fn file_disconnect(
     Ok(())
 }
 
+/// Home directory of the current user (used as the initial local browser path).
+#[tauri::command]
+pub fn file_home_dir() -> Result<String, String> {
+    Ok(crate::file_fs::home_dir().to_string_lossy().into_owned())
+}
+
 #[tauri::command]
 pub async fn file_list_dir(
     app: tauri::AppHandle,
@@ -198,6 +231,7 @@ pub async fn file_list_dir(
         "adb" => tauri::async_runtime::spawn_blocking(move || adb::list_dir(&app, &handle, &path))
             .await
             .map_err(|e| format!("adb list dir join error: {}", e))?,
+        "local" | "wsl" => fs_op(kind, handle, move |t| crate::file_fs::list_dir(&t, &path)).await,
         k => Err(format!("unsupported file kind: {}", k)),
     }
 }
@@ -217,6 +251,7 @@ pub async fn file_download(
         "adb" => tauri::async_runtime::spawn_blocking(move || adb::pull(&app, &handle, &remote, &local))
             .await
             .map_err(|e| format!("adb pull join error: {}", e))?,
+        "local" | "wsl" => fs_op(kind, handle, move |t| crate::file_fs::download(&t, &remote, &local)).await,
         k => Err(format!("unsupported file kind: {}", k)),
     }
 }
@@ -236,6 +271,7 @@ pub async fn file_upload(
         "adb" => tauri::async_runtime::spawn_blocking(move || adb::push(&app, &handle, &local, &remote))
             .await
             .map_err(|e| format!("adb push join error: {}", e))?,
+        "local" | "wsl" => fs_op(kind, handle, move |t| crate::file_fs::upload(&t, &local, &remote)).await,
         k => Err(format!("unsupported file kind: {}", k)),
     }
 }
@@ -269,6 +305,7 @@ pub async fn file_remove(
         "adb" => tauri::async_runtime::spawn_blocking(move || adb::remove(&app, &handle, &path, is_dir))
             .await
             .map_err(|e| format!("adb remove join error: {}", e))?,
+        "local" | "wsl" => fs_op(kind, handle, move |t| crate::file_fs::remove(&t, &path, is_dir)).await,
         k => Err(format!("unsupported file kind: {}", k)),
     }
 }
@@ -287,6 +324,7 @@ pub async fn file_rename(
         "adb" => tauri::async_runtime::spawn_blocking(move || adb::rename_item(&app, &handle, &old_path, &new_path))
             .await
             .map_err(|e| format!("adb rename join error: {}", e))?,
+        "local" | "wsl" => fs_op(kind, handle, move |t| crate::file_fs::rename(&t, &old_path, &new_path)).await,
         k => Err(format!("unsupported file kind: {}", k)),
     }
 }
@@ -304,6 +342,7 @@ pub async fn file_mkdir(
         "adb" => tauri::async_runtime::spawn_blocking(move || adb::mkdir(&app, &handle, &path))
             .await
             .map_err(|e| format!("adb mkdir join error: {}", e))?,
+        "local" | "wsl" => fs_op(kind, handle, move |t| crate::file_fs::mkdir(&t, &path)).await,
         k => Err(format!("unsupported file kind: {}", k)),
     }
 }
@@ -329,6 +368,7 @@ pub async fn file_create(
         })
         .await
         .map_err(|e| format!("adb create join error: {}", e))?,
+        "local" | "wsl" => fs_op(kind, handle, move |t| crate::file_fs::create_file(&t, &path, is_dir)).await,
         k => Err(format!("unsupported file kind: {}", k)),
     }
 }
@@ -346,6 +386,7 @@ pub async fn file_read(
         "adb" => tauri::async_runtime::spawn_blocking(move || adb::read_file(&app, &handle, &remote))
             .await
             .map_err(|e| format!("adb read file join error: {}", e))?,
+        "local" | "wsl" => fs_op(kind, handle, move |t| crate::file_fs::read_file(&t, &remote)).await,
         k => Err(format!("unsupported file kind: {}", k)),
     }
 }
@@ -364,6 +405,7 @@ pub async fn file_write(
         "adb" => tauri::async_runtime::spawn_blocking(move || adb::write_file(&app, &handle, &remote, &content))
             .await
             .map_err(|e| format!("adb write file join error: {}", e))?,
+        "local" | "wsl" => fs_op(kind, handle, move |t| crate::file_fs::write_file(&t, &remote, &content)).await,
         k => Err(format!("unsupported file kind: {}", k)),
     }
 }

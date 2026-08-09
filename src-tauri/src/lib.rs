@@ -2,6 +2,7 @@ mod ai;
 mod adb;
 mod commands;
 mod crypto;
+mod file_fs;
 mod keychain;
 mod known_hosts;
 mod netaddr;
@@ -58,6 +59,7 @@ pub fn run() {
             commands::adb_occupied_devices,
             commands::file_connect,
             commands::file_disconnect,
+            commands::file_home_dir,
             commands::file_list_dir,
             commands::file_download,
             commands::file_upload,

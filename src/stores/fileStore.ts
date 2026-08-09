@@ -78,6 +78,36 @@ export const useFileStore = defineStore('file', () => {
     await listDir(tabId, '/sdcard')
   }
 
+  async function connectLocal(tabId: string) {
+    const tab = tabState(tabId)
+    if (tab.connected && tab.kind === 'local') return
+    tab.kind = 'local'
+    tab.connId = 'local'
+    tab.connected = true
+    tab.error = ''
+    const home = await invoke<string>('file_home_dir')
+    await listDir(tabId, home)
+  }
+
+  async function connectWsl(tabId: string, distro = '') {
+    const tab = tabState(tabId)
+    if (tab.connected && tab.kind === 'wsl' && tab.connId === distro) return
+    if (!distro) {
+      try {
+        const list = await invoke<string[]>('wsl_list_distros')
+        distro = list[0] ?? ''
+      } catch { /* ignore */ }
+    }
+    if (!distro) {
+      throw new Error('WSL not found')
+    }
+    tab.kind = 'wsl'
+    tab.connId = distro
+    tab.connected = true
+    tab.error = ''
+    await listDir(tabId, '/')
+  }
+
   async function disconnect(tabId: string) {
     const tab = tabState(tabId)
     if (!tab.connId) return
@@ -166,7 +196,7 @@ export const useFileStore = defineStore('file', () => {
   return {
     tabState,
     connected, connId, currentPath, entries, loading, error, kind,
-    connect, connectAdb, disconnect, listDir, download, upload, cancelTransfer,
+    connect, connectAdb, connectLocal, connectWsl, disconnect, listDir, download, upload, cancelTransfer,
     remove, renameItem, createFile, readFile, writeFile,
   }
 })

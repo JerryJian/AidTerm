@@ -88,7 +88,7 @@ export interface UpdateInfo {
 
 export type ToolTab = 'ai' | 'file' | 'tunnel'
 
-export type FileKind = 'sftp' | 'adb'
+export type FileKind = 'sftp' | 'adb' | 'local' | 'wsl'
 
 export interface TerminalTab {
   id: string
@@ -211,6 +211,8 @@ export type ConnectionConfig =
 export type FileConnectConfig =
   | { type: 'sftp'; host: string; port: number; username: string; password: string; private_key_path?: string | null }
   | { type: 'adb'; serial: string }
+  | { type: 'local' }
+  | { type: 'wsl'; distro?: string | null }
 
 export interface FileEntry {
   name: string

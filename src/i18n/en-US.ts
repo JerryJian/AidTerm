@@ -147,7 +147,7 @@ export default {
   },
   tool_panel: {
     ai: 'AI Assistant',
-    sftp: 'SFTP',
+    sftp: 'Files',
     adb_files: 'Device Files',
     tunnel: 'Tunnel',
     proxy: 'Proxy',
@@ -201,7 +201,7 @@ export default {
     icon: 'Icon',
   },
   sftp: {
-    panel_title: 'SFTP',
+    panel_title: 'Files',
     connect: 'Connect',
     disconnect: 'Disconnect',
     go_up: 'Go Up',
@@ -210,7 +210,7 @@ export default {
     new_file: 'New file',
     actions: 'Actions',
     empty_directory: 'Empty directory',
-    title: 'SFTP - {host}',
+    title: 'Files - {host}',
     local: 'Local',
     remote: 'Remote',
     upload: 'Upload',
@@ -250,6 +250,9 @@ export default {
   },
   adb_file: {
     not_connected: 'Device not connected. Open an adb session first, then open the file panel.',
+  },
+  file_fs: {
+    local_ready: 'Local file system — open to browse this machine.',
   },
   tunnel: {
     title: 'Port Forwarding',

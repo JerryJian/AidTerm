@@ -76,6 +76,8 @@ export interface ConnectionCreateArgs {
 export type FileConnectConfig =
   | { type: 'sftp'; host: string; port: number; username: string; password: string; private_key_path?: string | null }
   | { type: 'adb'; serial: string }
+  | { type: 'local' }
+  | { type: 'wsl'; distro?: string | null }
 
 export interface FileConnectArgs {
   config: FileConnectConfig

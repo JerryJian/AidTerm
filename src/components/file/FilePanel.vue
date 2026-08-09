@@ -41,7 +41,31 @@ const s = computed(() => store.tabState(props.tabId))
 
 const sessionTab = computed(() => terminalStore.resolveSessionTab(props.tab))
 
-const isAdb = computed(() => sessionTab.value?.session?.type === 'adb')
+const ss = computed(() => sessionTab.value?.session)
+const isAdbSession = computed(() => ss.value?.type === 'adb')
+const isLocalLike = computed(() => ss.value?.type === 'local' || ss.value?.type === 'wsl')
+const usesBackslash = computed(() => s.value.kind === 'local')
+
+function pathJoin(dir: string, name: string): string {
+  if (usesBackslash.value) return dir.replace(/\\$/, '') + '\\' + name
+  return dir.replace(/\/$/, '') + '/' + name
+}
+
+function parentDir(path: string): string {
+  if (usesBackslash.value) {
+    const p = path.replace(/\\$/, '')
+    if (/^[A-Za-z]:\\?$/.test(p)) return p.endsWith('\\') ? p : p + '\\'
+    if (/^\\\\/.test(p)) {
+      const idx = p.lastIndexOf('\\')
+      return idx <= 1 ? p : p.slice(0, idx)
+    }
+    const idx = p.lastIndexOf('\\')
+    return idx <= 0 ? p : p.slice(0, idx)
+  }
+  const p = path.replace(/\/$/, '')
+  const idx = p.lastIndexOf('/')
+  return idx <= 0 ? '/' : p.slice(0, idx)
+}
 
 const host = ref('')
 const port = ref(22)
@@ -101,52 +125,61 @@ let autoConnecting = false
 async function autoConnect() {
   if (autoConnecting || s.value.connected) return
   const leaf = sessionTab.value
-  const ss = leaf?.session
-  if (!ss || ss.status !== 'connected') return
-  if (ss.type === 'adb' && leaf.adbInfo?.serial) {
-    autoConnecting = true
-    connecting.value = true
-    try {
-      await store.connectAdb(props.tabId, leaf.adbInfo.serial)
-    } catch (e: any) {
-      s.value.error = String(e)
-    }
-    connecting.value = false
-    autoConnecting = false
-    return
-  }
-  const info = leaf?.sshInfo
-  if (ss.type !== 'ssh' || !info) return
-  host.value = info.host
-  port.value = info.port
-  username.value = info.username
-  password.value = info.password || ''
-  if (!host.value.trim()) return
+  const ssn = leaf?.session
+  if (!ssn) return
   autoConnecting = true
   connecting.value = true
   try {
-    await store.connect(props.tabId, info.host, info.port, info.username, info.password || '')
-  } catch { /* ignored */ }
-  connecting.value = false
-  autoConnecting = false
+    if (ssn.type === 'adb' && leaf.adbInfo?.serial) {
+      await store.connectAdb(props.tabId, leaf.adbInfo.serial)
+    } else if (ssn.type === 'wsl') {
+      await store.connectWsl(props.tabId, leaf.wslInfo?.distro)
+    } else if (ssn.type === 'local') {
+      if (ssn.command === 'wsl.exe') {
+        await store.connectWsl(props.tabId)
+      } else {
+        await store.connectLocal(props.tabId)
+      }
+    } else if (ssn.type === 'ssh' && ssn.status === 'connected' && leaf.sshInfo) {
+      const info = leaf.sshInfo
+      host.value = info.host
+      port.value = info.port
+      username.value = info.username
+      password.value = info.password || ''
+      if (!host.value.trim()) return
+      await store.connect(props.tabId, info.host, info.port, info.username, info.password || '')
+    }
+  } catch (e: unknown) {
+    s.value.error = String(e)
+  } finally {
+    connecting.value = false
+    autoConnecting = false
+  }
 }
 
 watch(
   () => {
     const leaf = sessionTab.value
-    const s = leaf?.session
-    if (!s) return null
-    if (s.type === 'ssh' && leaf?.sshInfo) {
-      return `${s.id}:${s.status}:ssh:${leaf.sshInfo.host}:${leaf.sshInfo.port}:${leaf.sshInfo.username}`
+    const ssn = leaf?.session
+    if (!ssn) return null
+    if (ssn.type === 'ssh' && leaf?.sshInfo) {
+      return `${ssn.id}:${ssn.status}:ssh:${leaf.sshInfo.host}:${leaf.sshInfo.port}:${leaf.sshInfo.username}`
     }
-    if (s.type === 'adb' && leaf?.adbInfo) {
-      return `${s.id}:${s.status}:adb:${leaf.adbInfo.serial}`
+    if (ssn.type === 'adb' && leaf?.adbInfo) {
+      return `${ssn.id}:${ssn.status}:adb:${leaf.adbInfo.serial}`
+    }
+    if (ssn.type === 'wsl') {
+      return `${ssn.id}:${ssn.status}:wsl:${leaf?.wslInfo?.distro ?? ''}`
+    }
+    if (ssn.type === 'local') {
+      return `${ssn.id}:${ssn.status}:local:${ssn.command ?? ''}`
     }
     return null
   },
   async (key) => {
     if (props.visible === false) return
-    if (key && key.includes(':connected:')) await autoConnect()
+    if (!key) return
+    if (key.includes(':connected:') || key.includes(':wsl') || key.includes(':local')) await autoConnect()
   },
   { immediate: true },
 )
@@ -190,7 +223,7 @@ onMounted(async () => {
     if (type === 'drop' && paths && paths.length > 0) {
       for (const path of paths) {
         const name = path.split('\\').pop()?.split('/').pop() || 'file'
-        const remotePath = s.value.currentPath.replace(/\/?$/, '/') + name
+        const remotePath = pathJoin(s.value.currentPath, name)
         store.upload(props.tabId, genId(), path, remotePath)
       }
       dragOver.value = false
@@ -238,12 +271,6 @@ function formatSpeed(bytesPerSec: number): string {
   return `${(bytesPerSec / (1024 * 1024)).toFixed(1)}MB/s`
 }
 
-function parentDir(path: string): string {
-  const p = path.replace(/\/$/, '')
-  const idx = p.lastIndexOf('/')
-  return idx <= 0 ? '/' : p.slice(0, idx)
-}
-
 async function doConnect() {
   if (!host.value.trim()) return
   connecting.value = true
@@ -265,11 +292,11 @@ function goUp() {
 }
 
 function onEntryDblClick(entry: FileEntry) {
-  const path = s.value.currentPath.replace(/\/?$/, '/') + entry.name
+  const path = pathJoin(s.value.currentPath, entry.name)
   if (entry.is_dir) {
     navigateTo(path)
   } else {
-    emit('editFile', path, s.value.connId ?? '', isAdb.value ? 'adb' : 'sftp')
+    emit('editFile', path, s.value.connId ?? '', s.value.kind)
   }
 }
 
@@ -283,7 +310,7 @@ async function doUpload() {
   const files = Array.isArray(selected) ? selected : [selected]
   for (const file of files) {
     const name = file.split('\\').pop()?.split('/').pop() || 'file'
-    const remotePath = s.value.currentPath.replace(/\/?$/, '/') + name
+    const remotePath = pathJoin(s.value.currentPath, name)
     const id = genId()
     const task: UploadTask = { id, name, status: 'uploading', type: 'upload' }
     uploadTasks.value.push(task)
@@ -306,7 +333,7 @@ async function doUpload() {
 }
 
 async function doDownload(entry: FileEntry) {
-  const remotePath = s.value.currentPath.replace(/\/?$/, '/') + entry.name
+  const remotePath = pathJoin(s.value.currentPath, entry.name)
   const dest = await save({ defaultPath: entry.name })
   if (!dest) return
   const id = genId()
@@ -347,7 +374,7 @@ function cancelConfirmDelete() {
 
 async function doDelete(entry: FileEntry) {
   deleteConfirm.value = null
-  const path = s.value.currentPath.replace(/\/?$/, '/') + entry.name
+  const path = pathJoin(s.value.currentPath, entry.name)
   await store.remove(props.tabId, path, entry.is_dir)
 }
 
@@ -359,8 +386,8 @@ function startRename(entry: FileEntry) {
 
 async function confirmRename() {
   if (!renameEntry.value || !renameValue.value.trim()) return
-  const oldPath = s.value.currentPath.replace(/\/?$/, '/') + renameEntry.value.name
-  const newPath = s.value.currentPath.replace(/\/?$/, '/') + renameValue.value.trim()
+  const oldPath = pathJoin(s.value.currentPath, renameEntry.value.name)
+  const newPath = pathJoin(s.value.currentPath, renameValue.value.trim())
   await store.renameItem(props.tabId, oldPath, newPath)
   showRenameDialog.value = false
   renameEntry.value = null
@@ -400,7 +427,7 @@ function openCreateDialog(isDir: boolean) {
 
 async function doCreateItem() {
   if (!createName.value.trim()) return
-  const path = s.value.currentPath.replace(/\/?$/, '/') + createName.value.trim()
+  const path = pathJoin(s.value.currentPath, createName.value.trim())
   const mode = permsToMode()
   await store.createFile(props.tabId, path, createIsDir.value, mode)
   createName.value = ''
@@ -424,7 +451,8 @@ function fileIcon(entry: FileEntry): string {
   <div class="sftp-panel">
     <!-- Connection form -->
     <div v-if="!s.connected" class="connect-form">
-      <div v-if="isAdb" class="adb-notice">{{ t('adb_file.not_connected') }}</div>
+      <div v-if="isAdbSession" class="adb-notice">{{ t('adb_file.not_connected') }}</div>
+      <div v-else-if="isLocalLike" class="adb-notice">{{ t('file_fs.local_ready') }}</div>
       <template v-else>
         <input v-model="host" :placeholder="t('common.host')" class="sftp-input" />
         <input v-model="port" type="number" :placeholder="t('common.port')" class="sftp-input sftp-input-sm" />
@@ -546,7 +574,7 @@ function fileIcon(entry: FileEntry): string {
               <label><input type="radio" v-model="createIsDir" :value="true" /> {{ t('sftp.dir') }}</label>
               <label><input type="radio" v-model="createIsDir" :value="false" /> {{ t('sftp.file') }}</label>
             </div>
-            <div class="create-perms" v-if="!isAdb">
+            <div class="create-perms" v-if="s.kind === 'sftp'">
               <div class="perm-row perm-header">
                 <span class="perm-label"></span>
                 <span class="perm-col">r</span>

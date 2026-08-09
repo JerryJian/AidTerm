@@ -6,7 +6,7 @@ import { useSettingsStore } from './stores/settingsStore'
 import { useUiStore } from './stores/uiStore'
 import { useThemeStore } from './stores/themeStore'
 import { useUpdateStore } from './stores/updateStore'
-import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, AdbConnectionInfo, SavedSession, TerminalTab } from './types'
+import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, AdbConnectionInfo, SavedSession, TerminalTab, FileKind } from './types'
 import { invoke, listen, getCurrentWindow, toFileUrl, saveDialog as save } from '@/api'
 import TabBar from './components/terminal/TabBar.vue'
 import TitleBar from './components/titlebar/TitleBar.vue'
@@ -39,7 +39,7 @@ const update = useUpdateStore()
 const sshDialogPrefill = ref<{ host: string; port: number; username: string; password?: string }>()
 const showSessionDialog = ref(false)
 const editingSession = ref<SavedSession | undefined>()
-const editorFile = ref<{ connId: string; remotePath: string; kind: 'sftp' | 'adb' } | null>(null)
+const editorFile = ref<{ connId: string; remotePath: string; kind: FileKind } | null>(null)
 const locked = ref(false)
 const isFullscreen = ref(false)
 
@@ -188,7 +188,7 @@ function onQuickAdb() {
   ui.adbDialog = true
 }
 
-function onEditFile(remotePath: string, connId: string, kind: 'sftp' | 'adb' = 'sftp') {
+function onEditFile(remotePath: string, connId: string, kind: FileKind = 'sftp') {
   editorFile.value = { connId, remotePath, kind }
 }
 

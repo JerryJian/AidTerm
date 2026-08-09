@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, clipboard } from 'electron'
 import * as path from 'path'
+const pathModule = path
 import * as os from 'os'
 import * as fs from 'fs'
 import * as net from 'net'
@@ -85,6 +86,27 @@ function resolveAdbPath(): string {
   if (fs.existsSync(bundled)) return bundled
   // Fall back to PATH resolution by the OS; execFile will surface ENOENT if missing.
   return exeName
+}
+
+/** Map a WSL POSIX path onto the `\\wsl$` UNC namespace for a distro. */
+function wslUncPath(distro: string, remote: string): string {
+  const root = `\\\\wsl$\\${distro}`
+  const rel = remote.replace(/^\//, '')
+  if (!rel) return root
+  return `${root}\\${rel.split('/').filter(Boolean).join('\\')}`
+}
+
+/** Resolve a browsed path for the `local`/`wsl` file kinds. */
+function resolveLocalFsPath(kind: string, handle: string, remote: string): string {
+  if (kind === 'wsl') return wslUncPath(handle, remote)
+  if (!remote) return os.homedir()
+  return remote
+}
+
+function formatLocalMtime(ms: number): string {
+  const d = new Date(ms)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function runAdb(args: string[]): Promise<string> {
@@ -1016,6 +1038,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle('file_connect', async (_, args: FileConnectArgs): Promise<string> => {
     const { config } = args
     if (config.type === 'adb') return config.serial
+    if (config.type === 'local') return 'local'
+    if (config.type === 'wsl') return config.distro ?? ''
     if (!SftpClientClass) throw new Error('ssh2-sftp-client not installed')
 
     const connId = crypto.randomUUID()
@@ -1043,6 +1067,8 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('file_home_dir', (): string => os.homedir())
+
   ipcMain.handle('file_list_dir', async (_, args: FileListDirArgs): Promise<FileEntry[]> => {
     const { kind, handle, path } = args
     if (kind === 'adb') {
@@ -1053,6 +1079,23 @@ function registerIpcHandlers(): void {
         console.warn('[electron] adb list dir failed:', e)
         throw new Error(e instanceof Error ? e.message : String(e))
       }
+    }
+    if (kind === 'local' || kind === 'wsl') {
+      const dir = resolveLocalFsPath(kind, handle, path)
+      const names = fs.readdirSync(dir)
+      return names.map((name): FileEntry | null => {
+        const full = pathModule.join(dir, name)
+        let st: fs.Stats | null = null
+        try { st = fs.statSync(full) } catch { st = null }
+        if (!st) return null
+        return {
+          name,
+          is_dir: st.isDirectory(),
+          size: st.size,
+          modified: formatLocalMtime(st.mtimeMs),
+          permissions: '',
+        }
+      }).filter((x): x is FileEntry => x !== null)
     }
     const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
@@ -1075,6 +1118,10 @@ function registerIpcHandlers(): void {
         console.warn('[electron] adb pull failed:', e)
         throw new Error(e instanceof Error ? e.message : String(e))
       }
+      return
+    }
+    if (kind === 'local' || kind === 'wsl') {
+      fs.copyFileSync(resolveLocalFsPath(kind, handle, remote), local)
       return
     }
     const client = sftpConnections.get(handle)
@@ -1135,6 +1182,10 @@ function registerIpcHandlers(): void {
         console.warn('[electron] adb push failed:', e)
         throw new Error(e instanceof Error ? e.message : String(e))
       }
+      return
+    }
+    if (kind === 'local' || kind === 'wsl') {
+      fs.copyFileSync(local, resolveLocalFsPath(kind, handle, remote))
       return
     }
     const client = sftpConnections.get(handle)
@@ -1202,6 +1253,10 @@ function registerIpcHandlers(): void {
       }
       return
     }
+    if (kind === 'local' || kind === 'wsl') {
+      fs.mkdirSync(resolveLocalFsPath(kind, handle, path), { recursive: true })
+      return
+    }
     const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
     await client.mkdir(path)
@@ -1216,6 +1271,12 @@ function registerIpcHandlers(): void {
         console.warn('[electron] adb remove failed:', e)
         throw new Error(e instanceof Error ? e.message : String(e))
       }
+      return
+    }
+    if (kind === 'local' || kind === 'wsl') {
+      const target = resolveLocalFsPath(kind, handle, path)
+      if (is_dir) fs.rmSync(target, { recursive: true, force: true })
+      else fs.unlinkSync(target)
       return
     }
     const client = sftpConnections.get(handle)
@@ -1236,6 +1297,10 @@ function registerIpcHandlers(): void {
       }
       return
     }
+    if (kind === 'local' || kind === 'wsl') {
+      fs.renameSync(resolveLocalFsPath(kind, handle, old_path), resolveLocalFsPath(kind, handle, new_path))
+      return
+    }
     const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
     await client.rename(old_path, new_path)
@@ -1250,6 +1315,12 @@ function registerIpcHandlers(): void {
         console.warn('[electron] adb create failed:', e)
         throw new Error(e instanceof Error ? e.message : String(e))
       }
+      return
+    }
+    if (kind === 'local' || kind === 'wsl') {
+      const target = resolveLocalFsPath(kind, handle, path)
+      if (is_dir) fs.mkdirSync(target, { recursive: true })
+      else fs.closeSync(fs.openSync(target, 'a'))
       return
     }
     const client = sftpConnections.get(handle)
@@ -1273,6 +1344,9 @@ function registerIpcHandlers(): void {
         throw new Error(e instanceof Error ? e.message : String(e))
       }
     }
+    if (kind === 'local' || kind === 'wsl') {
+      return fs.readFileSync(resolveLocalFsPath(kind, handle, remote), 'utf8')
+    }
     const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
     const buf = await client.get(remote)
@@ -1292,6 +1366,10 @@ function registerIpcHandlers(): void {
       } finally {
         try { fs.unlinkSync(tmp) } catch { /* ignore */ }
       }
+      return
+    }
+    if (kind === 'local' || kind === 'wsl') {
+      fs.writeFileSync(resolveLocalFsPath(kind, handle, remote), content)
       return
     }
     const client = sftpConnections.get(handle)
