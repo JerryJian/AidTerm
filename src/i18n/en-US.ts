@@ -174,6 +174,7 @@ export default {
     nav_home: 'Home',
     nav_recent: 'Recents',
     reconnecting: 'Reconnecting...',
+    disconnect: 'Disconnect',
   },
   status: {
     tabs_count: '{count} tab(s)',

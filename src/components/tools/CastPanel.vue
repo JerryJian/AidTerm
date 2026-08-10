@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke, isElectron } from '../../api'
 import type { TerminalTab } from '../../types'
@@ -12,6 +12,7 @@ const containerRef = ref<HTMLDivElement | null>(null)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const bezelRef = ref<HTMLDivElement | null>(null)
 const navRef = ref<HTMLDivElement | null>(null)
+const controlsRef = ref<HTMLDivElement | null>(null)
 
 const running = ref(false)
 const starting = ref(false)
@@ -97,6 +98,7 @@ function fitCanvas() {
   const canvas = canvasRef.value
   const bezel = bezelRef.value
   const nav = navRef.value
+  const controls = controlsRef.value
   if (!stage || !canvas || !bezel || !nav) return
   const dw = devWidth.value || 720
   const dh = devHeight.value || 1280
@@ -108,7 +110,10 @@ function fitCanvas() {
   const bezelPadX = parseFloat(bs.paddingLeft) + parseFloat(bs.paddingRight)
   const bezelPadY = parseFloat(bs.paddingTop) + parseFloat(bs.paddingBottom)
   const navH = nav.getBoundingClientRect().height
-  const availW = stage.clientWidth - stagePadX - bezelPadX
+  // The controls column sits to the right of the bezel; reserve its width plus
+  // the gap so the canvas never overlaps it.
+  const controlsW = controls ? controls.getBoundingClientRect().width + 12 : 0
+  const availW = stage.clientWidth - stagePadX - bezelPadX - controlsW
   const availH = stage.clientHeight - stagePadY - bezelPadY - navH
   if (availW <= 0 || availH <= 0) return
   const scale = Math.min(availW / dw, availH / dh) * 0.995
@@ -123,6 +128,17 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(fitCanvas)
     resizeObserver.observe(containerRef.value)
   }
+})
+
+// When casting starts/stops, the internal layout changes (phone frame + controls
+// appear/disappear). The stage div itself does not resize, so the ResizeObserver
+// alone is not enough — we must re-fit the canvas after Vue commits the DOM.
+watch(running, (r) => {
+  if (r) nextTick(() => requestAnimationFrame(fitCanvas))
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
 })
 
 function onDecoderError(e: unknown) {
@@ -548,49 +564,23 @@ window.addEventListener('keydown', onWindowKeyDown)
 
 <template>
   <div class="cast-panel">
-    <div class="cast-toolbar">
-      <button class="cb-btn" :disabled="running || starting || reconnecting" @click="startCasting">
-        {{ starting ? t('cast_panel.starting') : t('cast_panel.start') }}
-      </button>
-      <button class="cb-btn danger" :disabled="!running && !reconnecting" @click="stopCasting">
-        {{ t('cast_panel.stop') }}
-      </button>
-    </div>
     <div class="cast-stage" ref="containerRef">
       <div v-if="error" class="cast-error">{{ error }}</div>
       <div v-else-if="!running && !reconnecting" class="cast-wait">
         <div v-if="!supported" class="cast-msg">{{ t('cast_panel.not_supported') }}</div>
         <div v-else-if="!serial" class="cast-msg">{{ t('cast_panel.no_device') }}</div>
-        <div v-else class="cast-msg">{{ t('cast_panel.waiting') }}</div>
+        <button
+          v-else
+          class="cast-start-btn"
+          :disabled="starting"
+          @click="startCasting"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+          <span>{{ starting ? t('cast_panel.starting') : t('cast_panel.start') }}</span>
+        </button>
       </div>
       <div v-else class="phone-frame">
         <div class="phone-bezel" ref="bezelRef">
-          <div class="phone-side-buttons">
-            <button
-              class="phone-btn side-btn vol-up"
-              :title="t('cast_panel.volume_up')"
-              @pointerdown.stop
-              @click="sendKeyEvent(PHONE_KEYS.volumeUp)"
-            >
-              <span class="vol-icon">+</span>
-            </button>
-            <button
-              class="phone-btn side-btn vol-down"
-              :title="t('cast_panel.volume_down')"
-              @pointerdown.stop
-              @click="sendKeyEvent(PHONE_KEYS.volumeDown)"
-            >
-              <span class="vol-icon">−</span>
-            </button>
-            <button
-              class="phone-btn side-btn power"
-              :title="t('cast_panel.power')"
-              @pointerdown.stop
-              @click="sendKeyEvent(PHONE_KEYS.power)"
-            >
-              <span class="power-icon" />
-            </button>
-          </div>
           <div class="phone-screen">
             <canvas
               ref="canvasRef"
@@ -627,8 +617,41 @@ window.addEventListener('keydown', onWindowKeyDown)
             </button>
           </div>
         </div>
+        <div class="phone-controls" ref="controlsRef">
+          <button
+            class="ctrl-btn"
+            :title="t('cast_panel.power')"
+            @pointerdown.stop
+            @click="sendKeyEvent(PHONE_KEYS.power)"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0" /><line x1="12" y1="2" x2="12" y2="12" /></svg>
+          </button>
+          <button
+            class="ctrl-btn"
+            :title="t('cast_panel.volume_up')"
+            @pointerdown.stop
+            @click="sendKeyEvent(PHONE_KEYS.volumeUp)"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /></svg>
+          </button>
+          <button
+            class="ctrl-btn"
+            :title="t('cast_panel.volume_down')"
+            @pointerdown.stop
+            @click="sendKeyEvent(PHONE_KEYS.volumeDown)"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
+          </button>
+          <button
+            class="ctrl-btn danger"
+            :title="t('cast_panel.disconnect')"
+            @pointerdown.stop
+            @click="stopCasting"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18.84 12.25 1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="m5.17 11.75-1.71 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71" /><line x1="8" y1="2" x2="8" y2="5" /><line x1="2" y1="8" x2="5" y2="8" /><line x1="16" y1="19" x2="16" y2="22" /><line x1="19" y1="16" x2="22" y2="16" /></svg>
+          </button>
+        </div>
       </div>
-      <div v-if="running" class="cast-hint">{{ t('cast_panel.hint_tap') }}</div>
       <div v-if="(running || reconnecting) && diag" class="cast-diag">{{ diag }}</div>
       <div v-if="reconnecting && !running" class="cast-reconnecting">
         <span class="reconnect-spinner" />
@@ -645,38 +668,27 @@ window.addEventListener('keydown', onWindowKeyDown)
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.cast-toolbar {
-  display: flex;
-  gap: 8px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--bg-surface0);
-  flex-shrink: 0;
-}
-
-.cb-btn {
-  border: 1px solid var(--bg-surface1);
-  background: var(--bg-surface0);
-  color: var(--text);
-  border-radius: 5px;
-  padding: 6px 14px;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.cb-btn:hover:not(:disabled) {
-  background: var(--bg-surface1);
-}
-
-.cb-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.cb-btn.danger:hover:not(:disabled) {
-  background: rgba(220, 60, 60, 0.15);
-  color: #e0656a;
+  /* Cast-local theme tokens. They reference global theme vars so they flip
+     automatically with [data-theme]. The stage stays a "desk surface" and the
+     controls column uses the same surface tokens as the rest of the UI. The
+     phone bezel itself stays dark in both themes — it mimics a real phone. */
+  --cast-stage-bg: var(--bg-crust);
+  --cast-controls-bg: linear-gradient(150deg, var(--bg-surface0), var(--bg-crust));
+  --cast-controls-border: var(--bg-surface1);
+  --cast-btn-bg: var(--bg-surface1);
+  --cast-btn-fg: var(--text-sub1);
+  --cast-btn-fg-hover: var(--text);
+  --cast-btn-bg-hover: var(--accent-glass);
+  --cast-start-bg: var(--bg-surface0);
+  --cast-start-border: var(--bg-surface1);
+  --cast-start-fg: var(--text);
+  --cast-start-bg-hover: var(--bg-surface1);
+  /* Phone bezel — intentionally dark in both themes (looks like a real device). */
+  --cast-bezel-bg: linear-gradient(150deg, #2a2b31, #141518);
+  --cast-bezel-border: rgba(255, 255, 255, 0.05);
+  --cast-nav-fg: rgba(255, 255, 255, 0.72);
+  --cast-nav-fg-hover: #fff;
+  --cast-nav-home-bg: rgba(255, 255, 255, 0.08);
 }
 
 .cast-stage {
@@ -687,7 +699,7 @@ window.addEventListener('keydown', onWindowKeyDown)
   justify-content: center;
   overflow: hidden;
   position: relative;
-  background: #101014;
+  background: var(--cast-stage-bg);
   padding: 12px;
 }
 
@@ -695,6 +707,7 @@ window.addEventListener('keydown', onWindowKeyDown)
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 12px;
   width: 100%;
   height: 100%;
 }
@@ -706,12 +719,12 @@ window.addEventListener('keydown', onWindowKeyDown)
   align-items: center;
   max-width: 100%;
   max-height: 100%;
-  padding: 18px 16px 8px;
-  background: linear-gradient(150deg, #2a2b31, #141518);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 32px;
+  padding: 9px 7px 7px;
+  background: var(--cast-bezel-bg);
+  border: 1px solid var(--cast-bezel-border);
+  border-radius: 20px;
   box-shadow:
-    0 14px 44px rgba(0, 0, 0, 0.55),
+    0 10px 32px rgba(0, 0, 0, 0.45),
     inset 0 0 0 1px rgba(0, 0, 0, 0.9),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
@@ -723,22 +736,22 @@ window.addEventListener('keydown', onWindowKeyDown)
   justify-content: center;
   max-width: 100%;
   max-height: 100%;
-  border-radius: 20px;
+  border-radius: 16px;
   overflow: hidden;
   background: #000;
-  box-shadow: inset 0 0 0 2px #000, 0 0 0 1px rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px #000, 0 0 0 1px rgba(0, 0, 0, 0.2);
   flex-shrink: 1;
 }
 
 .phone-screen::before {
   content: '';
   position: absolute;
-  top: 6px;
+  top: 4px;
   left: 50%;
   transform: translateX(-50%);
-  width: 84px;
-  height: 5px;
-  border-radius: 3px;
+  width: 52px;
+  height: 4px;
+  border-radius: 2px;
   background: rgba(0, 0, 0, 0.85);
   z-index: 2;
   pointer-events: none;
@@ -753,105 +766,28 @@ window.addEventListener('keydown', onWindowKeyDown)
   display: block;
 }
 
-.phone-side-buttons {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.phone-btn {
-  pointer-events: auto;
-  position: absolute;
-  border: none;
-  cursor: pointer;
-  background: #3a3b42;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+.phone-controls {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
   align-items: center;
-  justify-content: center;
-}
-
-.phone-btn:hover:not(:disabled) {
-  background: #4c4d56;
-}
-
-.phone-btn:active:not(:disabled) {
-  background: #2c2d33;
-  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.6);
-}
-
-.side-btn.vol-up,
-.side-btn.vol-down {
-  left: 0;
-  width: 10px;
-  height: 46px;
-  border-radius: 6px 0 0 6px;
-}
-
-.side-btn.vol-up {
-  top: 18%;
-}
-
-.side-btn.vol-down {
-  top: calc(18% + 52px);
-}
-
-.side-btn.power {
-  right: 0;
-  width: 10px;
-  height: 56px;
-  border-radius: 0 6px 6px 0;
-  top: 24%;
-}
-
-.vol-icon {
-  position: absolute;
-  left: 2px;
-  font-size: 11px;
-  line-height: 1;
-  color: rgba(255, 255, 255, 0.55);
-  font-weight: 600;
-}
-
-.power-icon {
-  position: absolute;
-  right: 2px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.55);
-}
-
-.power-icon::after {
-  content: '';
-  position: absolute;
-  top: -5px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 1.5px;
-  height: 5px;
-  background: rgba(255, 255, 255, 0.55);
-}
-
-.phone-nav {
-  display: flex;
-  gap: 34px;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 12px 4px;
-  width: 100%;
   flex-shrink: 0;
+  padding: 6px 4px;
+  background: var(--cast-controls-bg);
+  border: 1px solid var(--cast-controls-border);
+  border-radius: 12px;
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.nav-btn {
-  width: 42px;
-  height: 38px;
+.ctrl-btn {
+  width: 30px;
+  height: 30px;
   border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.72);
-  border-radius: 10px;
+  background: var(--cast-btn-bg);
+  color: var(--cast-btn-fg);
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -861,9 +797,64 @@ window.addEventListener('keydown', onWindowKeyDown)
     color 0.15s;
 }
 
+.ctrl-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ctrl-btn:hover:not(:disabled) {
+  background: var(--cast-btn-bg-hover);
+  color: var(--cast-btn-fg-hover);
+}
+
+.ctrl-btn:active:not(:disabled) {
+  background: var(--accent-glass);
+  color: var(--accent);
+}
+
+.ctrl-btn.danger:hover:not(:disabled) {
+  background: rgba(220, 60, 60, 0.18);
+  color: var(--danger);
+}
+
+.ctrl-btn.danger:active:not(:disabled) {
+  background: rgba(220, 60, 60, 0.28);
+}
+
+.phone-nav {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px 4px;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.nav-btn {
+  width: 32px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--cast-nav-fg);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.nav-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
 .nav-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  color: var(--cast-nav-fg-hover);
 }
 
 .nav-btn:active:not(:disabled) {
@@ -871,9 +862,9 @@ window.addEventListener('keydown', onWindowKeyDown)
 }
 
 .home-btn {
-  width: 74px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.08);
+  width: 56px;
+  border-radius: 20px;
+  background: var(--cast-nav-home-bg);
 }
 
 .cast-wait,
@@ -882,23 +873,53 @@ window.addEventListener('keydown', onWindowKeyDown)
   color: var(--text-sub0);
   font-size: 13px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
 
 .cast-error {
-  color: #e0656a;
+  color: var(--danger);
 }
 
-.cast-hint {
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
-  background: rgba(0, 0, 0, 0.45);
-  border-radius: 4px;
-  padding: 4px 10px;
-  pointer-events: none;
+.cast-start-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--cast-start-border);
+  background: var(--cast-start-bg);
+  color: var(--cast-start-fg);
+  border-radius: 10px;
+  padding: 14px 22px;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    transform 0.1s,
+    border-color 0.15s;
+}
+
+.cast-start-btn:hover:not(:disabled) {
+  background: var(--cast-start-bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.cast-start-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.cast-start-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.cast-start-btn svg {
+  width: 28px;
+  height: 28px;
 }
 
 .cast-diag {

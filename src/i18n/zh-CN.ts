@@ -174,6 +174,7 @@ export default {
     nav_home: '主页',
     nav_recent: '最近任务',
     reconnecting: '正在重连...',
+    disconnect: '断开连接',
   },
   status: {
     tabs_count: '{count} 个标签页',
