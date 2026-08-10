@@ -38,6 +38,12 @@ let downX = 0
 let downY = 0
 let downTime = 0
 let downActive = false
+// Real device display resolution (native orientation, usually portrait) from
+// `adb shell wm size`. 0 = unknown (wm size failed) — canvasPos then falls
+// back to the streamed video size, which is only correct when max_size does
+// not downscale the video.
+let realWidth = 0
+let realHeight = 0
 
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64)
@@ -272,8 +278,13 @@ async function pollFrame() {
         if (!reconnecting.value || manualStop) return
         try {
           await invoke('cast_stop', { serial: serial.value }).catch(() => {})
-          const port = await invoke<number>('cast_start', { serial: serial.value, maxSize: 1280 })
-          console.log('[cast] reconnected, port', port)
+          const info = await invoke<{ port: number; width: number | null; height: number | null }>(
+            'cast_start',
+            { serial: serial.value, maxSize: 1280 },
+          )
+          realWidth = info.width ?? 0
+          realHeight = info.height ?? 0
+          console.log('[cast] reconnected, port', info.port)
           reconnecting.value = false
           setupDecoder()
           lastSeq = 0
@@ -344,8 +355,13 @@ async function startCasting() {
   try {
     // Ensure any previous session is fully stopped before starting a new one
     await invoke('cast_stop', { serial: serial.value }).catch(() => {})
-    const port = await invoke<number>('cast_start', { serial: serial.value, maxSize: 1280 })
-    console.log('[cast] cast_start returned port', port)
+    const info = await invoke<{ port: number; width: number | null; height: number | null }>(
+      'cast_start',
+      { serial: serial.value, maxSize: 1280 },
+    )
+    realWidth = info.width ?? 0
+    realHeight = info.height ?? 0
+    console.log('[cast] cast_start returned port', info.port, 'real', realWidth, 'x', realHeight)
     setupDecoder()
     lastSeq = 0
     pollsSinceNewFrame = 0
@@ -385,6 +401,8 @@ function stopCasting() {
   // stretches it back to phone size.
   devWidth.value = 0
   devHeight.value = 0
+  realWidth = 0
+  realHeight = 0
   lastSeq = 0
   pollsSinceNewFrame = 0
   downX = 0
@@ -401,9 +419,31 @@ function canvasPos(e: PointerEvent | WheelEvent): { x: number; y: number } | nul
   if (!canvas || !devWidth.value || !devHeight.value) return null
   const rect = canvas.getBoundingClientRect()
   if (!rect.width || !rect.height) return null
+  // `adb shell input tap/swipe` operates in the device's REAL screen coordinate
+  // space, but the streamed video is downscaled by scrcpy's max_size. So the
+  // click ratio across the canvas must be mapped to the real resolution, not
+  // the video resolution. Without this, taps land in the top-left quadrant.
+  //
+  // realWidth/Height come from `wm size` in the device's NATIVE orientation
+  // (usually portrait). scrcpy follows device rotation, so the video swaps
+  // orientation when the device rotates — orient the real dimensions to match
+  // the current video orientation before mapping.
+  let rw = realWidth
+  let rh = realHeight
+  if (rw > 0 && rh > 0) {
+    const videoLandscape = devWidth.value > devHeight.value
+    const realLandscape = rw > rh
+    if (videoLandscape !== realLandscape) {
+      ;[rw, rh] = [rh, rw]
+    }
+  } else {
+    // Fallback: real size unknown (wm size failed) — use video dimensions.
+    rw = devWidth.value
+    rh = devHeight.value
+  }
   return {
-    x: Math.round(((e.clientX - rect.left) * devWidth.value) / rect.width),
-    y: Math.round(((e.clientY - rect.top) * devHeight.value) / rect.height),
+    x: Math.round(((e.clientX - rect.left) * rw) / rect.width),
+    y: Math.round(((e.clientY - rect.top) * rh) / rect.height),
   }
 }
 

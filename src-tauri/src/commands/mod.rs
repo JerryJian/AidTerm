@@ -136,12 +136,15 @@ pub async fn adb_occupied_devices(app: tauri::AppHandle) -> Result<Vec<String>, 
 }
 
 /// Start casting a device screen (scrcpy-server standalone, official packet stream).
+/// Returns the forwarded local port plus the device's real display resolution
+/// (native orientation) so the frontend can map click positions to the device's
+/// actual coordinate space even when `max_size` downscales the streamed video.
 #[tauri::command]
 pub async fn cast_start(
     app: tauri::AppHandle,
     serial: String,
     max_size: Option<u32>,
-) -> Result<u16, String> {
+) -> Result<cast::CastStartInfo, String> {
     tauri::async_runtime::spawn_blocking(move || cast::start(&app, &serial, max_size.unwrap_or(0)))
         .await
         .map_err(|e| format!("cast start join error: {}", e))?

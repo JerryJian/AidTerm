@@ -710,7 +710,7 @@ fn spawn_reader(
 }
 
 /// Start casting a device: push the jar, forward a port, launch the server.
-pub fn start(app: &AppHandle, serial: &str, max_size: u32) -> Result<u16, String> {
+pub fn start(app: &AppHandle, serial: &str, max_size: u32) -> Result<CastStartInfo, String> {
     let state = app.state::<CastState>();
     let mut sessions = state.sessions.lock().unwrap();
     {
@@ -721,12 +721,20 @@ pub fn start(app: &AppHandle, serial: &str, max_size: u32) -> Result<u16, String
             // stream has ended we must reap and restart (even if `killed`
             // wasn't explicitly set by stop()).
             if !s.killed.load(Ordering::Relaxed) && !s.stream_ended.load(Ordering::Relaxed) {
-                return Ok(s.local_port);
+                // Re-query the real screen size so the frontend's input
+                // mapping stays correct after a reconnect.
+                let (w, h) = screen_size(app, serial).unzip();
+                return Ok(CastStartInfo { port: s.local_port, width: w, height: h });
             }
         }
     }
     // Reap any leftover session (killed, or stream ended).
     sessions.remove(serial);
+
+    // Query the real display resolution up front (cheap, one adb call) so the
+    // frontend can map click positions to the device's actual coordinate space
+    // even when max_size downscales the streamed video.
+    let (real_w, real_h) = screen_size(app, serial).unzip();
 
     let jar = scrcpy_jar(app)?;
     let local_port = pick_local_port();
@@ -940,7 +948,7 @@ pub fn start(app: &AppHandle, serial: &str, max_size: u32) -> Result<u16, String
     LOG_CONFIG.store(false, Ordering::Relaxed);
     spawn_reader(reader_stream, first_chunk, slot, killed, stream_ended);
     sessions.insert(serial.to_string(), session);
-    Ok(local_port)
+    Ok(CastStartInfo { port: local_port, width: real_w, height: real_h })
 }
 
 pub fn stop(app: &AppHandle, serial: &str) {
@@ -1029,6 +1037,65 @@ pub fn input(app: &AppHandle, serial: &str, cmd: &str) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// Result of `cast_start`: the forwarded local port plus the device's real
+/// display resolution (native orientation, usually portrait).
+///
+/// `adb shell input tap` operates in the device's REAL screen coordinate space,
+/// but the streamed video is downscaled by scrcpy's `max_size`. The frontend
+/// must therefore map click positions to the real resolution, not the video
+/// resolution — otherwise taps land in the top-left quadrant of the screen.
+/// `width`/`height` are `None` when `wm size` could not be parsed (the frontend
+/// then falls back to the video size, which is only correct without scaling).
+#[derive(serde::Serialize)]
+pub struct CastStartInfo {
+    pub port: u16,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+}
+
+/// Parse `adb shell wm size` output, e.g.:
+///   Physical size: 1080x2400
+///   Override size: 1440x3200
+/// Prefers Override (the effective resolution the input subsystem uses) over
+/// Physical. Returns the size in the device's native orientation.
+fn parse_wm_size(text: &str) -> Option<(u32, u32)> {
+    let mut physical: Option<(u32, u32)> = None;
+    let mut override_sz: Option<(u32, u32)> = None;
+    for line in text.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("Physical size:") {
+            physical = parse_size_pair(rest);
+        } else if let Some(rest) = line.strip_prefix("Override size:") {
+            override_sz = parse_size_pair(rest);
+        }
+    }
+    override_sz.or(physical)
+}
+
+fn parse_size_pair(s: &str) -> Option<(u32, u32)> {
+    let (w, h) = s.trim().split_once('x')?;
+    let w: u32 = w.trim().parse().ok()?;
+    let h: u32 = h.trim().parse().ok()?;
+    if w == 0 || h == 0 {
+        return None;
+    }
+    Some((w, h))
+}
+
+/// Query the device's real display resolution via `adb shell wm size`.
+fn screen_size(app: &AppHandle, serial: &str) -> Option<(u32, u32)> {
+    let out = adb_cmd(app)
+        .ok()?
+        .args(["-s", serial, "shell", "wm", "size"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    parse_wm_size(&text)
 }
 
 fn pick_local_port() -> u16 {
@@ -1581,5 +1648,34 @@ mod tests {
         slot.buf.push_back(Frame { seq: 5, key: false, data: vec![5], config: None });
         assert!(serve_next(&mut slot, true).is_none(), "no keyframe → None (deltas discarded)");
         assert!(slot.buf.is_empty(), "non-key frames drained");
+    }
+
+    /// `wm size` parsing: prefer Override (the effective resolution the input
+    /// subsystem uses) over Physical, and tolerate extra whitespace. This is
+    /// the value that feeds the frontend's click→device coordinate mapping, so
+    /// a parse regression would silently break pointer alignment.
+    #[test]
+    fn parse_wm_size_prefers_override_over_physical() {
+        let out = "Physical size: 1080x2400\nOverride size: 1440x3200\n";
+        assert_eq!(parse_wm_size(out), Some((1440, 3200)));
+    }
+
+    #[test]
+    fn parse_wm_size_falls_back_to_physical() {
+        let out = "Physical size: 1080x2400\n";
+        assert_eq!(parse_wm_size(out), Some((1080, 2400)));
+    }
+
+    #[test]
+    fn parse_wm_size_tolerates_extra_whitespace() {
+        let out = "Physical size:   720x1280 \n";
+        assert_eq!(parse_wm_size(out), Some((720, 1280)));
+    }
+
+    #[test]
+    fn parse_wm_size_returns_none_on_garbage() {
+        assert_eq!(parse_wm_size("not a wm size output"), None);
+        assert_eq!(parse_wm_size("Physical size: 0x0"), None);
+        assert_eq!(parse_wm_size("Physical size: abc"), None);
     }
 }
