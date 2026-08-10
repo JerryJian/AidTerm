@@ -781,6 +781,7 @@ pub fn start(app: &AppHandle, serial: &str, max_size: u32) -> Result<u16, String
         "audio=false".into(),
         "control=false".into(),
         "cleanup=false".into(),
+        "max_fps=30".into(),
     ];
     if max_size > 0 {
         args.push(format!("max_size={max_size}"));
@@ -1423,7 +1424,7 @@ mod tests {
             .args([
                 "app_process", "/", "com.genymobile.scrcpy.Server", SCRCPY_VERSION,
                 "tunnel_forward=true", "audio=false", "control=false", "cleanup=false",
-                "max_size=1280",
+                "max_size=1280", "max_fps=30",
                 &format!("scid={scid:08x}"),
             ])
             .stdout(Stdio::piped())

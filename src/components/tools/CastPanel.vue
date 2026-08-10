@@ -39,7 +39,6 @@ let downX = 0
 let downY = 0
 let downTime = 0
 let downActive = false
-let renderedCount = 0
 
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64)
@@ -68,8 +67,6 @@ function drawFrame(frame: VideoFrame) {
   }
   ctx.drawImage(frame, 0, 0, canvas.width, canvas.height)
   frame.close()
-  renderedCount++
-  diag.value = `已渲染 ${renderedCount} 帧 ${devWidth.value}x${devHeight.value}`
 }
 
 // Scale the canvas to fit inside the phone screen area. The canvas keeps the
@@ -177,7 +174,6 @@ async function decodeChunk(seq: number, key: boolean, b64: string, configB64: st
       currentAvccB64 = effectiveConfig
       waitingForKey = false
       console.log('[cast] reconfigured with', avccCodecString(avcc), 'at seq', seq, needDecoder ? '(new decoder)' : '(avcC change)')
-      diag.value = needDecoder ? '已收到关键帧，重建解码器' : '分辨率/参数集变化，重新配置'
     } catch (e) {
       console.warn('[cast] configure with description failed', e)
       diag.value = '配置失败: ' + String((e as Error)?.message ?? e)
@@ -345,7 +341,6 @@ function stopCasting() {
   }
   closeDecoder()
   waitingForKey = true
-  renderedCount = 0
   diag.value = ''
 }
 
