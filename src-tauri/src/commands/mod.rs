@@ -135,7 +135,7 @@ pub async fn adb_occupied_devices(app: tauri::AppHandle) -> Result<Vec<String>, 
         .map_err(|e| format!("adb occupied devices join error: {}", e))?)
 }
 
-/// Start casting a device screen (scrcpy-server standalone, raw H.264 stream).
+/// Start casting a device screen (scrcpy-server standalone, official packet stream).
 #[tauri::command]
 pub async fn cast_start(
     app: tauri::AppHandle,
@@ -153,17 +153,18 @@ pub fn cast_stop(app: tauri::AppHandle, serial: String) {
     cast::stop(&app, &serial)
 }
 
-/// Poll the latest decoded frame: `(seq, key, frame_b64, config_b64?)`.
-/// When `need_key` is set and the latest frame is a delta, the most recent
-/// cached IDR frame is returned instead (`key=true`) so the frontend can
-/// (re)configure the decoder without waiting for the next I-frame.
+/// Poll the next undelivered frame in decode order: `(seq, key, frame_b64,
+/// config_b64?)`. Frames are buffered per GOP and handed out FIFO so the
+/// frontend never misses a reference frame. When `need_key` is set, rewind to
+/// the most recent keyframe and replay the GOP from there (decoder recovery).
 #[tauri::command]
 pub fn cast_frame(
     app: tauri::AppHandle,
     serial: String,
     need_key: Option<bool>,
+    seen_seq: Option<u64>,
 ) -> Option<(u64, bool, String, Option<String>)> {
-    cast::frame(&app, &serial, need_key)
+    cast::frame(&app, &serial, need_key, seen_seq)
 }
 
 /// Inject a touch/key event: `adb shell input <cmd>` (tap/swipe/keyevent).

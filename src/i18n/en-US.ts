@@ -167,6 +167,13 @@ export default {
     failed: 'Cast failed: {msg}',
     disconnected: 'Cast ended',
     hint_tap: 'Click to tap, drag to swipe, wheel to scroll',
+    power: 'Power',
+    volume_up: 'Volume Up',
+    volume_down: 'Volume Down',
+    nav_back: 'Back',
+    nav_home: 'Home',
+    nav_recent: 'Recents',
+    reconnecting: 'Reconnecting...',
   },
   status: {
     tabs_count: '{count} tab(s)',

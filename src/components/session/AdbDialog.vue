@@ -77,11 +77,6 @@ onMounted(() => {
       </div>
       <div class="dialog-body">
         <div v-if="error" class="adb-error">{{ error }}</div>
-        <div class="port-select-row">
-          <button class="refresh-btn" @click="refreshDevices" :disabled="refreshing">
-            {{ refreshing ? '...' : '↻' }} {{ t('adb_dialog.refresh') }}
-          </button>
-        </div>
         <div v-if="occupied.length" class="occupied-hint">
           {{ t('adb_dialog.occupied') }} {{ occupied.join(', ') }}
         </div>
@@ -112,6 +107,9 @@ onMounted(() => {
         </div>
         <div class="caveat-hint">{{ t('adb_dialog.caveat') }}</div>
         <div class="dialog-actions">
+          <button class="refresh-btn" @click="refreshDevices" :disabled="refreshing">
+            {{ refreshing ? '...' : '↻' }} {{ t('adb_dialog.refresh') }}
+          </button>
           <button type="button" class="btn btn-cancel" @click="emit('close')">{{ t('adb_dialog.cancel') }}</button>
           <button type="button" class="btn btn-connect" :disabled="!selected || selected.state !== 'device'" @click="onSubmit">
             {{ t('adb_dialog.connect') }}
@@ -193,12 +191,8 @@ onMounted(() => {
   word-break: break-all;
 }
 
-.port-select-row {
-  display: flex;
-  gap: 6px;
-}
-
 .refresh-btn {
+  margin-right: auto;
   padding: 6px 12px;
   background: var(--bg-surface0);
   border: 1px solid var(--bg-surface1);

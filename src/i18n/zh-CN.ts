@@ -167,6 +167,13 @@ export default {
     failed: '投屏失败：{msg}',
     disconnected: '投屏已结束',
     hint_tap: '单击=点按，拖动=滑动，滚轮=滚动',
+    power: '电源键',
+    volume_up: '音量加',
+    volume_down: '音量减',
+    nav_back: '返回',
+    nav_home: '主页',
+    nav_recent: '最近任务',
+    reconnecting: '正在重连...',
   },
   status: {
     tabs_count: '{count} 个标签页',
