@@ -31,7 +31,6 @@ const supported = !isElectron && typeof window !== 'undefined' && 'VideoDecoder'
 let decoder: VideoDecoder | null = null
 let waitingForKey = true
 let currentAvccB64: string | null = null
-let ctx: CanvasRenderingContext2D | null = null
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let lastSeq = 0
 let pollsSinceNewFrame = 0
@@ -53,12 +52,25 @@ function drawFrame(frame: VideoFrame) {
     frame.close()
     return
   }
-  if (!ctx) ctx = canvas.getContext('2d')
+  // Always get the context from the current canvas element. Vue may recreate
+  // the canvas element when `running` toggles (v-if/v-else), so the cached
+  // ctx from a previous canvas would silently draw to a detached element.
+  const ctx = canvas.getContext('2d')
   if (!ctx) {
     frame.close()
     return
   }
-  if (devWidth.value !== frame.displayWidth || devHeight.value !== frame.displayHeight) {
+  // Defence-in-depth: apply the correct pixel size whenever the canvas
+  // element was freshly created (browser-default 300x150) OR the device
+  // actually changed resolution. A stale devWidth/Height from a previous
+  // session is reset in stopCasting(), but we check the canvas pixel size
+  // directly too so even a missed reset cannot cause blurry output.
+  const needResize =
+    devWidth.value !== frame.displayWidth ||
+    devHeight.value !== frame.displayHeight ||
+    canvas.width !== frame.displayWidth ||
+    canvas.height !== frame.displayHeight
+  if (needResize) {
     devWidth.value = frame.displayWidth
     devHeight.value = frame.displayHeight
     canvas.width = frame.displayWidth
@@ -159,8 +171,27 @@ async function decodeChunk(seq: number, key: boolean, b64: string, configB64: st
   const avccChanged = effectiveConfig !== null && effectiveConfig !== currentAvccB64
   const needReconfig = needDecoder || avccChanged
   if (needReconfig) {
+    // Config packet (key=false) with new avcC: configure the decoder now so
+    // the upcoming keyframe can be decoded. WebCodecs requires configure()
+    // before any decode(), and configure() does not need a keyframe.
     if (!key) {
-      if (needDecoder) diag.value = `跳过非关键帧，等待关键帧 (seq ${seq})`
+      if (!effectiveConfig) {
+        diag.value = `跳过非关键帧，等待关键帧 (seq ${seq})`
+        return false
+      }
+      if (needDecoder) newDecoder()
+      const avcc = base64ToBytes(effectiveConfig)
+      try {
+        decoder!.configure({ codec: avccCodecString(avcc), description: avcc })
+        currentAvccB64 = effectiveConfig
+        console.log('[cast] pre-configured with', avccCodecString(avcc), 'at seq', seq, '(config packet, waiting for keyframe)')
+      } catch (e) {
+        console.warn('[cast] configure with description failed', e)
+        diag.value = '配置失败: ' + String((e as Error)?.message ?? e)
+        closeDecoder()
+        return false
+      }
+      // Do NOT clear waitingForKey — we still need a keyframe to decode
       return false
     }
     if (!effectiveConfig) {
@@ -311,6 +342,8 @@ async function startCasting() {
   reconnecting.value = false
   retryCount = 0
   try {
+    // Ensure any previous session is fully stopped before starting a new one
+    await invoke('cast_stop', { serial: serial.value }).catch(() => {})
     const port = await invoke<number>('cast_start', { serial: serial.value, maxSize: 1280 })
     console.log('[cast] cast_start returned port', port)
     setupDecoder()
@@ -341,7 +374,26 @@ function stopCasting() {
   }
   closeDecoder()
   waitingForKey = true
+  currentAvccB64 = null
   diag.value = ''
+  // Reset device dimensions so the next fresh start always re-applies the
+  // correct canvas.width/canvas.height from the first incoming frame. Without
+  // this a restart at the *same* resolution skips the size-mismatch branch
+  // (because devWidth/Height still equal the frame values) and leaves the
+  // newly-created canvas at its browser-default 300x150 — the frame then
+  // gets downscaled into a tiny canvas, which looks very blurry once CSS
+  // stretches it back to phone size.
+  devWidth.value = 0
+  devHeight.value = 0
+  lastSeq = 0
+  pollsSinceNewFrame = 0
+  downX = 0
+  downY = 0
+  downTime = 0
+  downActive = false
+  // Canvas element is about to be destroyed by Vue's v-if toggle (running
+  // changed to false), so clearRect is unnecessary; we just drop the ref.
+  canvasRef.value = null
 }
 
 function canvasPos(e: PointerEvent | WheelEvent): { x: number; y: number } | null {

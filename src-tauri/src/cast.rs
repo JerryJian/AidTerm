@@ -716,12 +716,16 @@ pub fn start(app: &AppHandle, serial: &str, max_size: u32) -> Result<u16, String
     {
         let s = sessions.get(serial).cloned();
         if let Some(s) = s {
-            if !s.killed.load(Ordering::Relaxed) {
+            // If session is alive AND stream is still active, reuse it.
+            // `stream_ended` is set when the reader thread exits, so if the
+            // stream has ended we must reap and restart (even if `killed`
+            // wasn't explicitly set by stop()).
+            if !s.killed.load(Ordering::Relaxed) && !s.stream_ended.load(Ordering::Relaxed) {
                 return Ok(s.local_port);
             }
         }
     }
-    // Reap any killed leftover session (its scrcpy process is already stopped).
+    // Reap any leftover session (killed, or stream ended).
     sessions.remove(serial);
 
     let jar = scrcpy_jar(app)?;
