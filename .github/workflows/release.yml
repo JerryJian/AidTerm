@@ -199,13 +199,18 @@ jobs:
             libudev-dev
           npx electron-builder install-app-deps
 
-      # Fetch the platform-matched adb so the Electron package ships it (Cast /
-      # scrcpy is Tauri-only, so it is not fetched here). The Linux container
-      # gets `unzip` from the native-modules step above; linux-arm64 skips adb
-      # and falls back to PATH since Google ships no official arm64 platform-tools.
+      # Fetch the platform-matched adb and the platform-neutral scrcpy-server
+      # jar so the Electron package ships both (Electron cast.ts is a faithful
+      # Node port of the Tauri cast.rs and also bundles scrcpy). The Linux
+      # container gets `unzip` from the native-modules step above; linux-arm64
+      # skips adb and falls back to PATH since Google ships no official arm64
+      # platform-tools.
       - name: Fetch adb
         if: matrix.target != 'linux-arm64'
         run: npm run fetch-adb
+
+      - name: Fetch scrcpy-server
+        run: npm run fetch-scrcpy
 
       - name: Build Electron app (Linux)
         if: runner.os == 'Linux'
