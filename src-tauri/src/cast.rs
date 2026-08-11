@@ -1144,7 +1144,7 @@ mod tests {
         // dummy byte (already consumed by the probe in real flow)
         out.push(0x00);
         // device meta: 64 bytes, name "test" + zeros
-        out.extend_from_slice(&[b't', b'e', b's', b't']);
+        out.extend_from_slice(b"test");
         out.resize(1 + 64, 0);
         // codec id h264
         out.extend_from_slice(&CODEC_ID_H264.to_be_bytes());
@@ -1189,7 +1189,6 @@ mod tests {
         assert_eq!(*frame, expected_idr, "frame data is the raw media packet (no config prefix)");
         // the single NAL in the frame is the IDR slice (type 5)
         let off = 0usize;
-        let len = u32::from_be_bytes(frame[off..off + 4].try_into().unwrap()) as usize;
         assert_eq!(frame[off + 4] & 0x1F, 5, "first (and only) NAL is an IDR slice");
     }
 
@@ -1408,7 +1407,7 @@ mod tests {
             crate::adb::ADB_PORT
         };
         let jar = std::env::var("AIDTERM_SCRCPY")
-            .map(|p| std::path::PathBuf::from(p))
+            .map(std::path::PathBuf::from)
             .unwrap_or_else(|_| std::path::PathBuf::from("../bin/scrcpy-server.jar"));
         assert!(jar.is_file(), "jar missing: {}", jar.display());
 
@@ -1445,7 +1444,11 @@ mod tests {
         run(&["forward", &format!("tcp:{port}"), &la]);
         // 3. launch server (same params as start(): no raw_stream, meta on)
         let mut child = Command::new(&adb)
-            .args(["-P", port, "-s", &serial, "shell"])
+            .arg("-P")
+            .arg(port.to_string())
+            .arg("-s")
+            .arg(&serial)
+            .arg("shell")
             .arg(format!("CLASSPATH={REMOTE_JAR}"))
             .args([
                 "app_process", "/", "com.genymobile.scrcpy.Server", SCRCPY_VERSION,
@@ -1468,24 +1471,21 @@ mod tests {
         let mut eofs = 0u32;
         while std::time::Instant::now() < deadline {
             attempts += 1;
-            match TcpStream::connect(("127.0.0.1", port)) {
-                Ok(s) => {
-                    if s.set_read_timeout(Some(Duration::from_millis(500))).is_err() { drop(s); continue; }
-                    let mut r = s.try_clone().unwrap();
-                    match r.read(&mut probe) {
-                        Ok(0) => { eofs += 1; drop(s); }
-                        Ok(n) => { first_chunk = probe[..n].to_vec(); stream = Some(s); break; }
-                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => { stream = Some(s); break; }
-                        Err(_) => { drop(s); }
-                    }
+            if let Ok(s) = TcpStream::connect(("127.0.0.1", port)) {
+                if s.set_read_timeout(Some(Duration::from_millis(500))).is_err() { drop(s); continue; }
+                let mut r = s.try_clone().unwrap();
+                match r.read(&mut probe) {
+                    Ok(0) => { eofs += 1; drop(s); }
+                    Ok(n) => { first_chunk = probe[..n].to_vec(); stream = Some(s); break; }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => { stream = Some(s); break; }
+                    Err(_) => { drop(s); }
                 }
-                Err(_) => {}
             }
             thread::sleep(Duration::from_millis(100));
         }
         let s = match stream {
             Some(s) => s,
-            None => { println!("[test] NEVER LIVE attempts={attempts} eofs={eofs}"); let _ = child.kill(); let _ = run(&["forward", "--remove", &format!("tcp:{port}")]); panic!("no live stream"); }
+            None => { println!("[test] NEVER LIVE attempts={attempts} eofs={eofs}"); let _ = child.kill(); let _ = child.wait(); let _ = run(&["forward", "--remove", &format!("tcp:{port}")]); panic!("no live stream"); }
         };
         println!("[test] LIVE attempts={attempts} eofs={eofs} first_chunk={} bytes: {}", first_chunk.len(), hex_prefix(&first_chunk));
 
@@ -1525,6 +1525,7 @@ mod tests {
         }
         println!("[test] final seq={last_seq} (expect > 0)");
         let _ = child.kill();
+        let _ = child.wait();
         let _ = run(&["forward", "--remove", &format!("tcp:{port}")]);
         // Dump the server's logcat: the decisive evidence for a capture/encoder
         // reset loop ("Capture/encoding error: ...", "DisplayMonitor ...").
