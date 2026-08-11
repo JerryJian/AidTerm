@@ -260,19 +260,68 @@ async fn chat_openai(messages: Vec<ChatMessage>, config: &AiConfig) -> Result<Ai
 }
 
 async fn fetch_openai_models(base_url: &str, api_key: &str) -> Result<Vec<String>, String> {
-    use async_openai::Client;
-    use async_openai::config::OpenAIConfig;
+    // Fetch `GET {base}/models` with reqwest and parse it manually instead of
+    // going through async-openai's typed `Model`. Providers ship two shapes:
+    // the legacy `{"id", "object", "created", "owned_by"}` and the newer
+    // `{"id", "type", "display_name", "created_at"}` (2025+) — async-openai's
+    // Model requires the legacy fields, so the new format makes the whole
+    // request fail. Both shapes carry a plain string `id`, so we collect ids
+    // straight from the JSON, tolerating `data` / `models` / bare-array bodies.
+    let base = base_url.trim_end_matches('/');
+    let url = format!("{base}/models");
 
-    let openai_config = OpenAIConfig::new()
-        .with_api_base(base_url.trim_end_matches('/'))
-        .with_api_key(api_key);
-    let client = Client::with_config(openai_config);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
 
-    let response = client.models().list()
+    let resp = client
+        .get(&url)
+        .bearer_auth(api_key)
+        .send()
         .await
-        .map_err(|e| format!("Failed to fetch models: {}", e))?;
+        .map_err(|e| format!("请求模型列表失败: {e}"))?;
 
-    Ok(response.data.into_iter().map(|m| m.id).collect())
+    let status = resp.status();
+    let text = resp.text().await.map_err(|e| format!("读取模型列表响应失败: {e}"))?;
+
+    if !status.is_success() {
+        return Err(format!("模型列表接口返回 HTTP {status}: {}", snippet(&text)));
+    }
+
+    let json: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("模型列表响应不是合法 JSON: {e}"))?;
+
+    let items = json
+        .get("data")
+        .or_else(|| json.get("models"))
+        .or_else(|| json.get("result"))
+        .and_then(|v| v.as_array())
+        .or_else(|| json.as_array());
+
+    let ids: Vec<String> = items
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m.get("id").and_then(|id| id.as_str()).map(String::from))
+                .filter(|id| !id.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if ids.is_empty() {
+        return Err(format!("模型列表为空，未在响应中找到模型 id：{}", snippet(&text)));
+    }
+    Ok(ids)
+}
+
+/// First 200 characters (char-boundary safe) of a raw response for diagnostics.
+fn snippet(s: &str) -> String {
+    let head: String = s.chars().take(200).collect();
+    if s.chars().count() > 200 {
+        format!("{head}…")
+    } else {
+        head
+    }
 }
 
 // --- Ollama (ollama-rs) ---

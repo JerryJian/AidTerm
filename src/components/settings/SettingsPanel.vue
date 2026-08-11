@@ -144,6 +144,7 @@ async function toggleFullscreen() {
               {{ ai.loadingModels ? '...' : '🔄' }}
             </button>
           </div>
+          <span v-if="ai.modelError" class="field-desc model-error">{{ ai.modelError }}</span>
         </div>
 
       </div>
@@ -451,5 +452,9 @@ async function toggleFullscreen() {
 }
 .model-select-row .model-select {
   flex: 1;
+}
+.model-error {
+  color: var(--danger);
+  word-break: break-all;
 }
 </style>

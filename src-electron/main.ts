@@ -43,6 +43,13 @@ function loadNativeModules(): void {
   try { SerialPortClass = require('serialport').SerialPort } catch (e) { console.warn('[electron] serialport not available:', e) }
 }
 
+/// First 200 characters of a raw response, for error diagnostics (no cut in
+/// the middle of a UTF-8 sequence).
+function snippet(s: string): string {
+  const head = s.slice(0, 200)
+  return head.length < s.length ? `${head}…` : head
+}
+
 let mainWindow: BrowserWindow | null = null
 const isDev = !app.isPackaged
 
@@ -1634,12 +1641,37 @@ function registerIpcHandlers(): void {
       if (provider === 'ollama') {
         baseURL = `${baseURL}/v1`
       }
-
-      const OpenAI = (await import('openai')).default
-      const client = new OpenAI({ apiKey, baseURL })
-      const list = await client.models.list()
-      return list.data.map((m) => m.id)
-    } catch { return [] }
+      // Plain fetch + tolerant parse instead of the openai SDK: the SDK's typed
+      // Model requires the legacy fields (created/object/owned_by), so providers
+      // serving the newer {id, type, display_name, created_at} shape (2025+)
+      // make the SDK deserialization fail and yield an empty list. Both shapes
+      // carry a string `id`, so collect ids from data/models/bare-array bodies.
+      const resp = await fetch(`${baseURL}/models`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(20000),
+      })
+      const text = await resp.text()
+      if (!resp.ok) {
+        throw new Error(`模型列表接口返回 HTTP ${resp.status}: ${snippet(text)}`)
+      }
+      const json = JSON.parse(text)
+      const items = Array.isArray(json)
+        ? json
+        : (json.data ?? json.models ?? json.result) ?? []
+      const ids = Array.isArray(items)
+        ? items.map((m: any) => m?.id).filter((id: unknown) => typeof id === 'string' && id.length > 0)
+        : []
+      if (ids.length === 0) {
+        throw new Error(`模型列表为空，未在响应中找到模型 id：${snippet(text)}`)
+      }
+      return ids
+    } catch (e) {
+      throw new Error((e as Error).message)
+    }
   })
 
   // ══════════════════════════════════════════════════════

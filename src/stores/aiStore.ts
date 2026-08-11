@@ -52,6 +52,7 @@ export const useAiStore = defineStore('ai', () => {
   const autoMode = ref(false)
   const modelList = ref<string[]>([])
   const loadingModels = ref(false)
+  const modelError = ref<string | null>(null)
 
   function loadConfig(): AiConfig {
     try {
@@ -126,6 +127,7 @@ export const useAiStore = defineStore('ai', () => {
 
   async function fetchModels() {
     loadingModels.value = true
+    modelError.value = null
     modelList.value = []
     try {
       modelList.value = await invoke<string[]>('fetch_ai_models', {
@@ -134,6 +136,7 @@ export const useAiStore = defineStore('ai', () => {
         apiKey: config.value.api_key,
       })
     } catch (e: unknown) {
+      modelError.value = String((e as Error)?.message ?? e)
       console.error('Failed to fetch models:', e)
     } finally {
       loadingModels.value = false
@@ -293,6 +296,7 @@ export const useAiStore = defineStore('ai', () => {
     autoMode,
     modelList,
     loadingModels,
+    modelError,
     providerList,
     currentProviderId,
     updateConfig,
