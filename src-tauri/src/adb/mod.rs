@@ -9,13 +9,18 @@ use tauri::{AppHandle, Manager};
 
 use crate::sftp::FileEntry;
 
-/// Fixed, app-wide ADB server port, isolated from the user's default 5037.
+/// Isolated ADB server port, used only by the adb binary bundled with AidTerm.
 ///
-/// AidTerm NEVER touches the user's adb server. Every adb subprocess call is
-/// forced onto this port with `-P 5038`, so a version mismatch between the
-/// bundled adb and the running server can only ever kill AidTerm's own
-/// isolated server, never the one the user may have started for other tools.
+/// The bundled adb may differ in version from the user's system server, so it
+/// runs on its own 5038 server: a version mismatch can only ever kill
+/// AidTerm's isolated server, never the user's default 5037 instance.
 pub const ADB_PORT: &str = "5038";
+
+/// The default ADB server port used by external/system adb binaries
+/// (`AIDTERM_ADB` override or adb found on PATH). Such an adb matches the
+/// user's environment, so we talk to the default 5037 server and see the same
+/// devices as the user's other adb tools.
+pub const ADB_DEFAULT_PORT: &str = "5037";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AdbDevice {
@@ -26,15 +31,16 @@ pub struct AdbDevice {
     pub transport_id: Option<String>,
 }
 
-/// Resolve the adb binary to use, in priority order:
-///   1. `AIDTERM_ADB` env var (explicit override, dev / power users)
-///   2. Bundled resource `bin/adb(.exe)` shipped inside the app
-///   3. adb found on PATH (fallback)
-pub fn adb_path(app: &AppHandle) -> Result<PathBuf, String> {
+/// Resolve the adb binary to use plus the server port it should talk to, in
+/// priority order:
+///   1. `AIDTERM_ADB` env var (explicit override, dev / power users) -> default 5037
+///   2. Bundled resource `bin/adb(.exe)` shipped inside the app -> isolated 5038
+///   3. adb found on PATH (fallback) -> default 5037
+pub fn adb_path(app: &AppHandle) -> Result<(PathBuf, &'static str), String> {
     if let Ok(p) = std::env::var("AIDTERM_ADB") {
         let p = PathBuf::from(p);
         if p.is_file() {
-            return Ok(p);
+            return Ok((p, ADB_DEFAULT_PORT));
         }
         log::warn!("[adb] AIDTERM_ADB set but not a file, ignoring: {}", p.display());
     }
@@ -43,12 +49,12 @@ pub fn adb_path(app: &AppHandle) -> Result<PathBuf, String> {
     if let Ok(resource_dir) = app.path().resource_dir() {
         let bundled = resource_dir.join("bin").join(exe_name);
         if bundled.is_file() {
-            return Ok(bundled);
+            return Ok((bundled, ADB_PORT));
         }
     }
 
     if let Some(p) = find_in_path(exe_name) {
-        return Ok(p);
+        return Ok((p, ADB_DEFAULT_PORT));
     }
 
     Err("adb not found. Set AIDTERM_ADB to a platform-tools adb path, or add adb to PATH.".to_string())
@@ -62,20 +68,23 @@ fn find_in_path(exe_name: &str) -> Option<PathBuf> {
     })
 }
 
-/// Build an adb Command pinned to the isolated 5038 server.
+/// Build an adb Command pinned to the server port chosen for the resolved
+/// binary: bundled adb -> isolated 5038, external/system adb -> default 5037.
 #[cfg(target_os = "windows")]
 fn adb_command(app: &AppHandle) -> Result<Command, String> {
     use std::os::windows::process::CommandExt;
-    let mut cmd = Command::new(adb_path(app)?);
-    cmd.arg("-P").arg(ADB_PORT);
+    let (bin, port) = adb_path(app)?;
+    let mut cmd = Command::new(bin);
+    cmd.arg("-P").arg(port);
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     Ok(cmd)
 }
 
 #[cfg(not(target_os = "windows"))]
 fn adb_command(app: &AppHandle) -> Result<Command, String> {
-    let mut cmd = Command::new(adb_path(app)?);
-    cmd.arg("-P").arg(ADB_PORT);
+    let (bin, port) = adb_path(app)?;
+    let mut cmd = Command::new(bin);
+    cmd.arg("-P").arg(port);
     Ok(cmd)
 }
 
@@ -90,8 +99,9 @@ fn run_adb(app: &AppHandle, args: &[&str]) -> Result<(String, String, bool), Str
     Ok((stdout, stderr, output.status.success()))
 }
 
-/// Make sure an adb server is running on the isolated 5038 port.
-/// `adb devices` transparently starts the server when missing.
+/// Make sure an adb server is running on the resolved port (5038 for the
+/// bundled adb, 5037 for external/system adb). `adb devices` transparently
+/// starts the server when missing.
 pub fn ensure_server(app: &AppHandle) -> Result<(), String> {
     let (stdout, stderr, ok) = run_adb(app, &["devices"])?;
     if !ok {
@@ -100,8 +110,14 @@ pub fn ensure_server(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Kill the isolated 5038 adb server. The user's own 5037 server is never touched.
+/// Kill the adb server AidTerm is using. Only the bundled adb's isolated 5038
+/// server is ever stopped; with an external/system adb (5037) this is a no-op
+/// because that server belongs to the user and may be used by other tools.
 pub fn kill_server(app: &AppHandle) -> Result<(), String> {
+    if adb_path(app)?.1 == ADB_DEFAULT_PORT {
+        log::info!("[adb] external/system adb (5037), skipping kill-server");
+        return Ok(());
+    }
     let (_, stderr, ok) = run_adb(app, &["kill-server"])?;
     if !ok {
         return Err(format!("adb kill-server failed: {}", stderr));
@@ -109,7 +125,8 @@ pub fn kill_server(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// List attached devices via `adb -P 5038 devices -l`.
+/// List attached devices via `adb -P <port> devices -l` (port depends on the
+/// resolved binary: 5038 bundled / 5037 external).
 /// Ensure the server is running first so a freshly connected phone shows up.
 /// Emulators are visible automatically (the server discovers local emulator
 /// transports on its own), so no extra port scanning is needed.
@@ -125,11 +142,12 @@ pub fn list_devices(app: &AppHandle) -> Result<Vec<AdbDevice>, String> {
 /// USB devices held by the user's own adb server (default port 5037).
 ///
 /// A physical USB device can only be claimed by one adb server at a time, so
-/// anything already grabbed by the user's 5037 server will never show up on our
-/// isolated 5038 server. We query the user's server strictly read-only over the
-/// raw adb wire protocol (never via the adb binary, whose client-version check
-/// would kill + restart the user's server on mismatch) and return the serials
-/// we cannot see.
+/// when AidTerm runs its own isolated 5038 server (bundled adb) anything
+/// already grabbed by the user's 5037 server will never show up there. We
+/// query the user's server strictly read-only over the raw adb wire protocol
+/// (never via the adb binary, whose client-version check would kill + restart
+/// the user's server on mismatch) and return the serials we cannot see. With an
+/// external/system adb both sides use 5037, so this naturally reports nothing.
 pub fn occupied_devices(app: &AppHandle) -> Vec<String> {
     let own: HashSet<String> = list_devices(app)
         .unwrap_or_default()
@@ -234,7 +252,8 @@ fn parse_devices(output: &str) -> Vec<AdbDevice> {
 // ══════════════════════════════════════════════════════
 //  ADB file operations (Android file browser)
 //
-//  All calls stay pinned to the isolated 5038 server via `-P 5038`.
+//  All calls stay pinned to the resolved server port via `-P <port>`
+//  (5038 for the bundled adb, 5037 for external/system adb).
 //  Paths coming from the device are quoted with `shq` before they go through
 //  the on-device shell; `pull`/`push` take paths as plain argv entries so they
 //  need no quoting.

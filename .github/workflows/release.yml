@@ -75,10 +75,15 @@ jobs:
             libayatana-appindicator3-dev \
             xdg-utils
 
-      - name: Fetch runtime binaries (adb + scrcpy-server)
-        run: |
-          npm run fetch-adb
-          npm run fetch-scrcpy
+      # Google publishes only x86_64 Linux platform-tools, so the aarch64
+      # target skips bundling adb and falls back to PATH (bundling the x86_64
+      # binary into an arm64 package would break at runtime).
+      - name: Fetch adb
+        if: matrix.target != 'aarch64-unknown-linux-gnu'
+        run: npm run fetch-adb
+
+      - name: Fetch scrcpy-server
+        run: npm run fetch-scrcpy
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v1
@@ -186,12 +191,21 @@ jobs:
           $SUDO apt-get install -y --no-install-recommends \
             build-essential \
             python3 \
+            unzip \
             libx11-dev \
             libxtst-dev \
             libpng-dev \
             libffi-dev \
             libudev-dev
           npx electron-builder install-app-deps
+
+      # Fetch the platform-matched adb so the Electron package ships it (Cast /
+      # scrcpy is Tauri-only, so it is not fetched here). The Linux container
+      # gets `unzip` from the native-modules step above; linux-arm64 skips adb
+      # and falls back to PATH since Google ships no official arm64 platform-tools.
+      - name: Fetch adb
+        if: matrix.target != 'linux-arm64'
+        run: npm run fetch-adb
 
       - name: Build Electron app (Linux)
         if: runner.os == 'Linux'

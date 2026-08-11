@@ -24,7 +24,7 @@ use std::io::Read;
 use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -32,8 +32,6 @@ use std::time::{Duration, Instant};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use tauri::{AppHandle, Manager};
-
-use crate::adb::ADB_PORT;
 
 /// Must match the scrcpy-server jar version (the server refuses mismatches).
 pub const SCRCPY_VERSION: &str = "4.1";
@@ -44,7 +42,6 @@ const REMOTE_JAR: &str = "/data/local/tmp/scrcpy-server.jar";
 static LOG_DEVICE: AtomicBool = AtomicBool::new(false);
 static LOG_SESSION: AtomicBool = AtomicBool::new(false);
 static LOG_CONFIG: AtomicBool = AtomicBool::new(false);
-static POLL_COUNT: AtomicU64 = AtomicU64::new(0);
 
 // Official packet protocol constants (scrcpy v4.1, app/demuxer.c + Streamer.java).
 const PACKET_HEADER_SIZE: usize = 12;
@@ -61,19 +58,6 @@ fn hex_prefix(b: &[u8]) -> String {
         .map(|x| format!("{x:02X}"))
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-/// Multi-line hex dump (16 bytes per line with an offset column) for raw
-/// stream diagnostics.
-fn raw_hex(b: &[u8]) -> String {
-    let mut s = String::new();
-    for (i, chunk) in b.chunks(16).enumerate() {
-        let mut line = format!("{:04X} ", i * 16);
-        line.push_str(&chunk.iter().map(|x| format!("{x:02X} ")).collect::<String>());
-        s.push_str(&line);
-        s.push('\n');
-    }
-    s
 }
 
 #[derive(Default)]
@@ -159,16 +143,18 @@ pub fn scrcpy_jar(app: &AppHandle) -> Result<PathBuf, String> {
 #[cfg(target_os = "windows")]
 fn adb_cmd(app: &AppHandle) -> Result<Command, String> {
     use std::os::windows::process::CommandExt;
-    let mut cmd = Command::new(crate::adb::adb_path(app)?);
-    cmd.arg("-P").arg(ADB_PORT);
+    let (bin, port) = crate::adb::adb_path(app)?;
+    let mut cmd = Command::new(bin);
+    cmd.arg("-P").arg(port);
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     Ok(cmd)
 }
 
 #[cfg(not(target_os = "windows"))]
 fn adb_cmd(app: &AppHandle) -> Result<Command, String> {
-    let mut cmd = Command::new(crate::adb::adb_path(app)?);
-    cmd.arg("-P").arg(ADB_PORT);
+    let (bin, port) = crate::adb::adb_path(app)?;
+    let mut cmd = Command::new(bin);
+    cmd.arg("-P").arg(port);
     Ok(cmd)
 }
 
@@ -551,12 +537,9 @@ fn demux(demux: &mut Demuxer, st: &mut StreamState, slot: &Mutex<FrameSlot>) -> 
     }
 }
 
-fn emit(frame: &[u8], key: bool, pts: u64, config: Option<Vec<u8>>, slot: &Mutex<FrameSlot>) {
+fn emit(frame: &[u8], key: bool, _pts: u64, config: Option<Vec<u8>>, slot: &Mutex<FrameSlot>) {
     let mut s = slot.lock().unwrap();
     s.seq += 1;
-    if s.seq == 1 {
-        log::info!("[cast] first frame emitted, {} bytes (pts {pts})", frame.len());
-    }
     let seq = s.seq;
     s.key = key;
     s.config = config.clone();
@@ -567,17 +550,6 @@ fn emit(frame: &[u8], key: bool, pts: u64, config: Option<Vec<u8>>, slot: &Mutex
     // reference chain anyway.
     while s.buf.len() > 300 {
         s.buf.pop_front();
-    }
-    if seq.is_multiple_of(100) {
-        log::info!(
-            "[cast] frame seq={} key={} pts={} bytes={} config={} buf={}",
-            s.seq,
-            key,
-            pts,
-            frame.len(),
-            s.config.is_some(),
-            s.buf.len()
-        );
     }
 }
 
@@ -601,13 +573,11 @@ fn spawn_reader(
         let mut demuxer = Demuxer::new(initial);
         let mut state = StreamState::default();
         let mut tmp = [0u8; 32768];
-        let mut first_read = true;
         let mut reads: u64 = 0;
         let mut bytes: u64 = 0;
         let mut errors: u64 = 0;
         let mut timeouts: u64 = 0;
         let mut ended_logged = false;
-        log::info!("[cast] reader started");
         loop {
             if killed.load(Ordering::Relaxed) {
                 break;
@@ -641,25 +611,7 @@ fn spawn_reader(
                     reads += 1;
                     bytes += n as u64;
                     timeouts = 0;
-                    if first_read {
-                        log::info!(
-                            "[cast] reader first read: {n} bytes, head: {}",
-                            hex_prefix(&tmp[..n.min(16)])
-                        );
-                        first_read = false;
-                    }
                     demuxer.feed(&tmp[..n]);
-                    // Raw stream dump with CUMULATIVE offsets (stream starts at
-                    // offset 0 = dummy byte from the probe): a parser
-                    // misalignment is visible byte-for-byte.
-                    if bytes <= 4096 {
-                        log::info!(
-                            "[cast] RAW at {}+{} (cumulative {bytes}):\n{}",
-                            bytes - n as u64,
-                            n,
-                            raw_hex(&tmp[..n])
-                        );
-                    }
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock
                     || e.kind() == std::io::ErrorKind::TimedOut => {
@@ -1001,10 +953,6 @@ pub fn frame(
     let s = sessions.get(serial)?;
     let mut f = s.frame.lock().unwrap();
     let stream_ended = s.stream_ended.load(Ordering::Relaxed);
-    let n = POLL_COUNT.fetch_add(1, Ordering::Relaxed);
-    if n.is_multiple_of(100) {
-        log::info!("[cast] frame() poll #{n}, seq={} buf={} ended={}", f.seq, f.buf.len(), stream_ended);
-    }
     if let Some(frame) = serve_next(&mut f, need_key.unwrap_or(false)) {
         return Some((
             frame.seq,
@@ -1452,12 +1400,19 @@ mod tests {
         if !std::path::Path::new(&adb).is_file() {
             panic!("adb not found at {adb} (set AIDTERM_ADB)");
         }
+        // Mirror adb_path()'s port selection: AIDTERM_ADB (external) -> 5037,
+        // bundled binary (repo bin/) -> isolated 5038.
+        let port = if std::env::var_os("AIDTERM_ADB").is_some() {
+            crate::adb::ADB_DEFAULT_PORT
+        } else {
+            crate::adb::ADB_PORT
+        };
         let jar = std::env::var("AIDTERM_SCRCPY")
             .map(|p| std::path::PathBuf::from(p))
             .unwrap_or_else(|_| std::path::PathBuf::from("../bin/scrcpy-server.jar"));
         assert!(jar.is_file(), "jar missing: {}", jar.display());
 
-        let out = Command::new(&adb).args(["-P", ADB_PORT, "devices"]).output().expect("adb devices");
+        let out = Command::new(&adb).args(["-P", port, "devices"]).output().expect("adb devices");
         let text = String::from_utf8_lossy(&out.stdout);
         let serial = std::env::var("AIDTERM_TEST_SERIAL").unwrap_or_else(|_| {
             text.lines()
@@ -1469,7 +1424,7 @@ mod tests {
         println!("[test] device: {serial}");
 
         let run = |args: &[&str]| -> String {
-            let o = Command::new(&adb).args(["-P", ADB_PORT, "-s", &serial]).args(args).output().unwrap();
+            let o = Command::new(&adb).args(["-P", port, "-s", &serial]).args(args).output().unwrap();
             String::from_utf8_lossy(&o.stdout).into_owned()
         };
         // cleanup stale
@@ -1490,7 +1445,7 @@ mod tests {
         run(&["forward", &format!("tcp:{port}"), &la]);
         // 3. launch server (same params as start(): no raw_stream, meta on)
         let mut child = Command::new(&adb)
-            .args(["-P", ADB_PORT, "-s", &serial, "shell"])
+            .args(["-P", port, "-s", &serial, "shell"])
             .arg(format!("CLASSPATH={REMOTE_JAR}"))
             .args([
                 "app_process", "/", "com.genymobile.scrcpy.Server", SCRCPY_VERSION,

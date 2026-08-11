@@ -72,20 +72,30 @@ function emitToRenderer(event: string, payload: Record<string, unknown>): void {
 // ══════════════════════════════════════════════════════
 //  ADB helpers
 //
-//  AidTerm NEVER touches the user's adb server. Every adb call is forced onto
-//  the isolated `-P 5038` port, so a version mismatch in the bundled adb can
-//  only ever kill AidTerm's own server, never the user's 5037 instance.
+//  Port selection follows the adb source:
+//    - Bundled adb (resources/bin) may differ in version from the user's system
+//      server, so it runs on the isolated `-P 5038` server: a mismatch can only
+//      ever kill AidTerm's own server, never the user's 5037 instance.
+//    - External/system adb (AIDTERM_ADB or PATH) matches the user's environment
+//      and talks to the default `-P 5037` server, so the user sees the same
+//      devices as their other adb tools.
 // ══════════════════════════════════════════════════════
 const ADB_PORT = '5038'
+const ADB_DEFAULT_PORT = '5037'
 
-function resolveAdbPath(): string {
+interface AdbResolution {
+  path: string
+  port: string
+}
+
+function resolveAdb(): AdbResolution {
   const envOverride = process.env.AIDTERM_ADB
-  if (envOverride && fs.existsSync(envOverride)) return envOverride
+  if (envOverride && fs.existsSync(envOverride)) return { path: envOverride, port: ADB_DEFAULT_PORT }
   const exeName = process.platform === 'win32' ? 'adb.exe' : 'adb'
   const bundled = path.join(process.resourcesPath, 'bin', exeName)
-  if (fs.existsSync(bundled)) return bundled
+  if (fs.existsSync(bundled)) return { path: bundled, port: ADB_PORT }
   // Fall back to PATH resolution by the OS; execFile will surface ENOENT if missing.
-  return exeName
+  return { path: exeName, port: ADB_DEFAULT_PORT }
 }
 
 /** Map a WSL POSIX path onto the `\\wsl$` UNC namespace for a distro. */
@@ -112,8 +122,8 @@ function formatLocalMtime(ms: number): string {
 function runAdb(args: string[]): Promise<string> {
   const { execFile } = require('child_process') as typeof import('child_process')
   return new Promise<string>((resolve, reject) => {
-    const adb = resolveAdbPath()
-    execFile(adb, args, { timeout: 15000 }, (err: Error | null, stdout: string | Buffer) => {
+    const { path: adb, port } = resolveAdb()
+    execFile(adb, ['-P', port, ...args], { timeout: 15000 }, (err: Error | null, stdout: string | Buffer) => {
       if (err) reject(new Error(err.message))
       else resolve(stdout.toString())
     })
@@ -902,15 +912,15 @@ function registerIpcHandlers(): void {
   })
 
   // ══════════════════════════════════════════════════════
-  //  ADB (isolated 5038 server)
+  //  ADB (port: 5038 for bundled adb, 5037 for external/system adb)
   // ══════════════════════════════════════════════════════
   function connectAdb(serial: string, rows: number, cols: number): string {
     if (!ptyModule) throw new Error('node-pty not installed')
 
     const id = crypto.randomUUID()
-    const adb = resolveAdbPath()
+    const { path: adb, port } = resolveAdb()
 
-    const term = ptyModule.spawn(adb, ['-P', ADB_PORT, '-s', serial, 'shell'], {
+    const term = ptyModule.spawn(adb, ['-P', port, '-s', serial, 'shell'], {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,
@@ -990,7 +1000,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('adb_list_devices', async (): Promise<AdbDevice[]> => {
     try {
-      const out = await runAdb(['-P', ADB_PORT, 'devices', '-l'])
+      const out = await runAdb(['devices', '-l'])
       return parseAdbDevices(out)
     } catch (e) {
       console.warn('[electron] adb devices failed:', e)
@@ -1000,19 +1010,24 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('adb_kill_server', async (): Promise<void> => {
     try {
-      await runAdb(['-P', ADB_PORT, 'kill-server'])
+      const { port } = resolveAdb()
+      // Only the bundled adb's isolated 5038 server is ever stopped; an
+      // external/system adb's 5037 server belongs to the user.
+      if (port !== ADB_PORT) return
+      await runAdb(['kill-server'])
     } catch (e) {
       console.warn('[electron] adb kill-server failed:', e)
     }
   })
 
-  // USB devices held by the user's own 5037 server never show up on our isolated
-  // 5038 server. Report them so the UI can explain why a device is missing.
+  // USB devices held by the user's own 5037 server never show up on AidTerm's
+  // isolated 5038 server (bundled adb mode). Report them so the UI can explain
+  // why a device is missing.
   ipcMain.handle('adb_occupied_devices', async (): Promise<string[]> => {
     try {
       const own = new Set<string>()
       try {
-        const out = await runAdb(['-P', ADB_PORT, 'devices', '-l'])
+        const out = await runAdb(['devices', '-l'])
         parseAdbDevices(out).forEach(d => own.add(d.serial))
       } catch { /* fall through with empty own list */ }
 

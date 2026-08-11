@@ -416,7 +416,7 @@ export default {
     exit_fullscreen: 'Exit Fullscreen',
     guake_mode: 'Guake Mode',
     adb_auto_kill: 'Stop ADB server after last ADB tab closes',
-    adb_auto_kill_desc: 'AidTerm uses an isolated ADB server on port 5038, never the system one on 5037.',
+    adb_auto_kill_desc: 'The bundled adb runs on an isolated server on port 5038; system/external adb uses the default server on port 5037.',
     ai_provider: 'Provider',
     ai_api_config: 'API Configuration',
     ai_status: 'Status',

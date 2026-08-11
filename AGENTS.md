@@ -3,7 +3,7 @@
 ## 项目概述
 使用 **Tauri 2.x** + **Vue 3 (Composition API + TypeScript)** + **Rust** 后端构建跨平台终端模拟器，另带 **Electron 双后端**（`src-electron/`，基于 node-pty / ssh2 / serialport，前端 `src/api/index.ts` 自动检测并统一调用）。
 
-> **双后端差异**：Electron 端端口转发仅 Local、代理为裸 TCP 直连（无 HTTP CONNECT / SOCKS5 握手）、Zmodem 与 Deep Link 为占位、`write_text_file` 缺失（终端文本导出会失败）；Tauri 端以上均完整（Remote/Dynamic 转发、HTTP/SOCKS5/JumpHost、Deep Link、zmodem 检测）。ADB 在双后端均完整（5038 隔离 + 模拟器自动发现 + 5037 占用只读检测）。
+> **双后端差异**：Electron 端端口转发仅 Local、代理为裸 TCP 直连（无 HTTP CONNECT / SOCKS5 握手）、Zmodem 与 Deep Link 为占位、`write_text_file` 缺失（终端文本导出会失败）；Tauri 端以上均完整（Remote/Dynamic 转发、HTTP/SOCKS5/JumpHost、Deep Link、zmodem 检测）。ADB 在双后端均完整（端口按 adb 来源切换：内置 adb→5038 隔离、外部/系统 adb→5037 默认，+ 模拟器自动发现 + 5037 占用只读检测）。
 
 当前版本：0.3.0。下方复选框与 Phase 表反映**代码实际状态**（2026-08 核对）。
 
@@ -19,8 +19,8 @@
 - [x] **Serial (串口)** — 波特率、数据位、停止位、奇偶校验配置
 - [x] **本地 Shell** — Windows (`cmd`, `powershell`)、Linux/macOS (`bash`, `zsh`)，自动探测
 - [x] **SFTP** — 远程文件浏览、上传、下载、删除、重命名
-- [x] **ADB** — Android 设备交互 shell（独立 5038 server，绝不触碰 5037；模拟器由 server 自动发现；5037 占用用裸 adb 协议只读检测，不重启用户 server；adb 二进制可用 `npm run fetch-adb` 内置打包，`AIDTERM_ADB`/PATH 兜底）
-- [x] **ADB 文件浏览** — 复用 SFTP 面板（`fileStore` 按 `kind: 'sftp'|'adb'` 分发，tool_tab 复用 'sftp'），目录列表/上传(`adb push`)/下载(`adb pull`)/新建/删除/重命名/远程编辑(`adb cat` + 临时文件 push) 全部走 `-P 5038 -s <serial>`；设备端路径经 `shq` 单引号转义后进 `adb shell`，ls 解析兼容 toybox/GNU 日期格式并剥离符号链接目标
+- [x] **ADB** — Android 设备交互 shell（端口按 adb 来源切换：程序自带 adb 用独立 5038 server，外部/系统 adb（`AIDTERM_ADB`/PATH）用默认 5037；模拟器由 server 自动发现；5037 占用用裸 adb 协议只读检测，不重启用户 server；adb 二进制可用 `npm run fetch-adb` 内置打包，`AIDTERM_ADB`/PATH 兜底）
+- [x] **ADB 文件浏览** — 复用 SFTP 面板（`fileStore` 按 `kind: 'sftp'|'adb'` 分发，tool_tab 复用 'sftp'），目录列表/上传(`adb push`)/下载(`adb pull`)/新建/删除/重命名/远程编辑(`adb cat` + 临时文件 push) 全部走 `-P <port> -s <serial>`（内置 adb→5038、外部/系统 adb→5037）；设备端路径经 `shq` 单引号转义后进 `adb shell`，ls 解析兼容 toybox/GNU 日期格式并剥离符号链接目标
 - [x] **ADB 投屏 (Cast)** — 右侧面板 tab（仅 Tauri）：scrcpy-server 独立版按官方 v4.1 协议跑（send_device_meta/send_stream_meta/send_frame_meta 全默认开），Rust `cast.rs` 忠实翻译官方 demuxer + packet_merger（dummy byte → 64B 设备名 → 4B codec id → 12B session header → 12B 帧头循环），config 包并入下一个媒体包并解析为 avcC，流保持 avc 格式直推前端 WebCodecs；触摸(`tap/swipe`)/滚轮/键盘经 `adb shell input` 注入；`scrcpy-server.jar` 用 `npm run fetch-scrcpy` 内置打包（版本须匹配 `SCRCPY_VERSION`），`AIDTERM_SCRCPY` 兜底
 - [ ] **SCP** — 快速文件传输
 - [ ] **Zmodem** — 后端接收检测已接线（SSH 流中发 `zmodem-start/end`），保存/接收循环为死代码待接线，前端交互/发送待做

@@ -108,7 +108,8 @@ pub async fn serial_list_ports() -> Result<Vec<serial::SerialPortInfo>, String> 
     serial::list_available_ports()
 }
 
-/// List devices from the isolated 5038 adb server.
+/// List devices from the resolved adb server (bundled adb -> isolated 5038,
+/// external/system adb -> default 5037).
 /// Uses spawn_blocking so a slow first server start never blocks the UI.
 #[tauri::command]
 pub async fn adb_list_devices(app: tauri::AppHandle) -> Result<Vec<adb::AdbDevice>, String> {
@@ -117,7 +118,9 @@ pub async fn adb_list_devices(app: tauri::AppHandle) -> Result<Vec<adb::AdbDevic
         .map_err(|e| format!("adb list devices join error: {}", e))?
 }
 
-/// Kill the isolated 5038 adb server. Called when the last adb session closes.
+/// Kill the bundled adb's isolated 5038 server. No-op when an external/system
+/// adb is in use, so the user's own 5037 server is never touched. Called when
+/// the last adb session closes.
 #[tauri::command]
 pub async fn adb_kill_server(app: tauri::AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || adb::kill_server(&app))
@@ -126,8 +129,9 @@ pub async fn adb_kill_server(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 /// USB devices held by the user's own 5037 server and therefore invisible to
-/// our isolated 5038 server. The check is strictly read-only (raw wire
-/// protocol), so the user's adb server is never killed or restarted.
+/// AidTerm's isolated 5038 server when using the bundled adb. The check is
+/// strictly read-only (raw wire protocol), so the user's adb server is never
+/// killed or restarted.
 #[tauri::command]
 pub async fn adb_occupied_devices(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     Ok(tauri::async_runtime::spawn_blocking(move || adb::occupied_devices(&app))

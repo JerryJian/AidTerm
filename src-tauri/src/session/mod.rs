@@ -168,10 +168,11 @@ impl SessionManager {
             ),
             ConnectionConfig::Adb { serial } => {
                 adb::ensure_server(&app_handle)?;
-                let adb_bin = adb::adb_path(&app_handle)?.to_string_lossy().to_string();
+                let (adb_bin, adb_port) = adb::adb_path(&app_handle)?;
+                let adb_bin = adb_bin.to_string_lossy().to_string();
                 let args = vec![
                     "-P".to_string(),
-                    adb::ADB_PORT.to_string(),
+                    adb_port.to_string(),
                     "-s".to_string(),
                     serial,
                     "shell".to_string(),

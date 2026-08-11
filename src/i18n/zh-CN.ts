@@ -416,7 +416,7 @@ export default {
     exit_fullscreen: '退出全屏',
     guake_mode: 'Guake 模式',
     adb_auto_kill: '最后一个 ADB 标签关闭后停止 ADB 服务',
-    adb_auto_kill_desc: 'AidTerm 使用独立的 5038 端口 ADB 服务，绝不触碰系统的 5037 服务。',
+    adb_auto_kill_desc: '使用程序自带 adb 时运行在独立的 5038 端口服务；使用系统/外部 adb 时直接使用默认的 5037 服务。',
     ai_provider: '提供商',
     ai_api_config: 'API 配置',
     ai_status: '状态',
