@@ -474,6 +474,47 @@ export function useAiConversation(
     return stripDangerTag(text)
   }
 
+  // The OpenAI API rejects any request that has an assistant tool_call without
+  // a matching tool message ("No tool output found for function call ...") or
+  // a tool message without a preceding assistant tool_call. Cancelled/failed
+  // commands and multi-round tool flows can leave such an unbalanced list, so
+  // re-pair it before sending: strip tool_calls that were never answered and
+  // drop tool messages that have no pending call.
+  function normalizeToolMessages(msgs: AiMessage[]): AiMessage[] {
+    const out: AiMessage[] = []
+    let openAssistant: AiMessage | null = null
+    let openIds = new Set<string>()
+
+    const closeOpen = () => {
+      if (openAssistant && openIds.size > 0 && openAssistant.tool_calls) {
+        openAssistant.tool_calls = openAssistant.tool_calls.filter(tc => !openIds.has(tc.id))
+        if (openAssistant.tool_calls.length === 0) delete openAssistant.tool_calls
+      }
+      openAssistant = null
+      openIds = new Set()
+    }
+
+    for (const m of msgs) {
+      if (m.role === 'assistant') {
+        closeOpen()
+        out.push(m)
+        openAssistant = m
+        openIds = new Set((m.tool_calls ?? []).map(tc => tc.id))
+      } else if (m.role === 'tool') {
+        const id = m.tool_call_id ?? ''
+        if (openIds.has(id)) {
+          out.push(m)
+          openIds.delete(id)
+        }
+      } else {
+        closeOpen()
+        out.push(m)
+      }
+    }
+    closeOpen()
+    return out
+  }
+
   function buildHistoryMessages(maxTurns: number = 3): AiMessage[] {
     const userIndices: number[] = []
     for (let i = 0; i < conversationMessages.length; i++) {
@@ -530,7 +571,7 @@ export function useAiConversation(
       }
     }
 
-    return result
+    return normalizeToolMessages(result)
   }
 
   async function continueConversation() {
@@ -670,13 +711,14 @@ export function useAiConversation(
   }
 
   function onCancelCommand() {
+    const toolId = pendingToolId.value
     showConfirm.value = false
     conversationGen++
     cancelled.value = true
     pendingCommand.value = ''
     pendingToolId.value = ''
 
-    addConversationMessage({ role: 'error', content: '已取消命令执行' })
+    addConversationMessage({ role: 'error', content: '已取消命令执行', toolCallId: toolId || undefined })
     binding.value?.writeToBackend?.('\x03')
     endConversation()
   }
@@ -693,6 +735,7 @@ export function useAiConversation(
   }
 
   function cancelConversation() {
+    const toolId = pendingToolId.value
     conversationGen++
     cancelled.value = true
     showConfirm.value = false
@@ -702,7 +745,7 @@ export function useAiConversation(
     removeLastThinking()
     endConversation()
     ai.cancelChat(aiSessionId)
-    addConversationMessage({ role: 'error', content: '已取消本次问答' })
+    addConversationMessage({ role: 'error', content: '已取消本次问答', toolCallId: toolId || undefined })
   }
 
   function submitInput(text: string) {
