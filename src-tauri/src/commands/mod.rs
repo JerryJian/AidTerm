@@ -108,6 +108,13 @@ pub async fn serial_list_ports() -> Result<Vec<serial::SerialPortInfo>, String> 
     serial::list_available_ports()
 }
 
+/// Probe for an adb binary (bundled / AIDTERM_ADB / PATH) so the connect
+/// dialog can explain why the device list is empty and how to install adb.
+#[tauri::command]
+pub fn adb_status(app: tauri::AppHandle) -> adb::AdbStatus {
+    adb::status(&app)
+}
+
 /// List devices from the resolved adb server (bundled adb -> isolated 5038,
 /// external/system adb -> default 5037).
 /// Uses spawn_blocking so a slow first server start never blocks the UI.

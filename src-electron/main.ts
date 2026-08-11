@@ -15,7 +15,7 @@ import type {
   FileEntry, FileProgress, SerialPortInfo,
   SpawnTerminalArgs, WriteTerminalArgs, ResizeTerminalArgs, KillTerminalArgs,
   SshConnectArgs, TelnetConnectArgs, SerialConnectArgs,
-  AdbConnectArgs, AdbDevice,
+  AdbConnectArgs, AdbDevice, AdbStatus,
   ConnectionConfig, ConnectionHandle, ConnectionCreateArgs,
   FileOpArgs, FileConnectArgs, FileListDirArgs, FileTransferArgs, FileRemoveArgs,
   FileRenameArgs, FileMkdirArgs, FileCreateArgs, FileReadArgs, FileWriteArgs,
@@ -91,19 +91,43 @@ function emitToRenderer(event: string, payload: Record<string, unknown>): void {
 const ADB_PORT = '5038'
 const ADB_DEFAULT_PORT = '5037'
 
+type AdbSource = 'env' | 'bundled' | 'path' | 'missing'
+
 interface AdbResolution {
   path: string
   port: string
+  source: AdbSource
+}
+
+function findInPath(exeName: string): string | null {
+  const pathVar = process.env.PATH || ''
+  for (const dir of pathVar.split(path.delimiter)) {
+    const candidate = path.join(dir, exeName)
+    if (fs.existsSync(candidate)) return candidate
+  }
+  return null
 }
 
 function resolveAdb(): AdbResolution {
   const envOverride = process.env.AIDTERM_ADB
-  if (envOverride && fs.existsSync(envOverride)) return { path: envOverride, port: ADB_DEFAULT_PORT }
+  if (envOverride && fs.existsSync(envOverride)) return { path: envOverride, port: ADB_DEFAULT_PORT, source: 'env' }
   const exeName = process.platform === 'win32' ? 'adb.exe' : 'adb'
   const bundled = path.join(process.resourcesPath, 'bin', exeName)
-  if (fs.existsSync(bundled)) return { path: bundled, port: ADB_PORT }
-  // Fall back to PATH resolution by the OS; execFile will surface ENOENT if missing.
-  return { path: exeName, port: ADB_DEFAULT_PORT }
+  if (fs.existsSync(bundled)) return { path: bundled, port: ADB_PORT, source: 'bundled' }
+  const fromPath = findInPath(exeName)
+  if (fromPath) return { path: fromPath, port: ADB_DEFAULT_PORT, source: 'path' }
+  // execFile will surface ENOENT when the fallback path is attempted.
+  return { path: exeName, port: ADB_DEFAULT_PORT, source: 'missing' }
+}
+
+function adbStatus(): AdbStatus {
+  const { path: p, port, source } = resolveAdb()
+  return {
+    available: source !== 'missing',
+    source,
+    path: source !== 'missing' ? p : null,
+    port: source !== 'missing' ? port : null,
+  }
 }
 
 /** Map a WSL POSIX path onto the `\\wsl$` UNC namespace for a distro. */
@@ -1006,6 +1030,8 @@ function registerIpcHandlers(): void {
       }
     }
   })
+
+  ipcMain.handle('adb_status', (): AdbStatus => adbStatus())
 
   ipcMain.handle('adb_list_devices', async (): Promise<AdbDevice[]> => {
     try {

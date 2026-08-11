@@ -45,6 +45,15 @@ export interface AdbDevice {
   transport_id: string | null
 }
 
+/** Result of probing for an adb binary: bundled resource, AIDTERM_ADB env
+ *  override, adb on PATH, or none (e.g. arm64 builds ship no bundled adb). */
+export interface AdbStatus {
+  available: boolean
+  source: 'env' | 'bundled' | 'path' | 'missing'
+  path: string | null
+  port: string | null
+}
+
 export interface AdbConnectionInfo {
   serial: string
   model?: string

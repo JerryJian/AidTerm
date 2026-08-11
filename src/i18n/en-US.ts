@@ -102,6 +102,13 @@ export default {
     occupied: 'Held by another ADB server (port 5037). Stop that server to use these devices here:',
     connect: 'Connect Shell',
     cancel: 'Cancel',
+    missing_title: 'adb not found',
+    missing_desc: 'This build ships no bundled adb (there is no official prebuilt platform-tools for Linux arm64), and no adb was found on the system PATH.',
+    missing_install_title: 'Install Android platform-tools:',
+    missing_install_linux: '# Debian / Ubuntu\nsudo apt install adb\n# Fedora\nsudo dnf install android-tools\n# Arch\nsudo pacman -S android-tools',
+    missing_install_mac: 'brew install --cask android-platform-tools',
+    missing_install_win: '# Download and unzip platform-tools, then add the folder to PATH\nhttps://developer.android.com/tools/releases/platform-tools',
+    missing_env: 'Or set the AIDTERM_ADB environment variable to the full path of an adb executable and restart the app.',
   },
   session_panel: {
     title: 'Session Manager',

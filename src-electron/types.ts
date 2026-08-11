@@ -162,6 +162,13 @@ export interface AdbDevice {
   transport_id: string | null
 }
 
+export interface AdbStatus {
+  available: boolean
+  source: 'env' | 'bundled' | 'path' | 'missing'
+  path: string | null
+  port: string | null
+}
+
 export interface AdbConnectArgs {
   serial: string
   rows: number

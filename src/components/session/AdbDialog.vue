@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@/api'
 import { useI18n } from 'vue-i18n'
-import type { AdbDevice } from '../../types'
+import type { AdbDevice, AdbStatus } from '../../types'
 
 const { t } = useI18n()
 
@@ -13,9 +13,14 @@ const emit = defineEmits<{
 
 const devices = ref<AdbDevice[]>([])
 const occupied = ref<string[]>([])
+const status = ref<AdbStatus | null>(null)
 const selectedSerial = ref('')
 const refreshing = ref(false)
 const error = ref('')
+
+const IS_WINDOWS = /windows/i.test(navigator.userAgent)
+const IS_MAC = /mac os|macintosh/i.test(navigator.userAgent)
+const IS_LINUX = !IS_WINDOWS && !IS_MAC
 
 const connectedDevices = computed(() => devices.value.filter(d => d.state === 'device'))
 
@@ -25,6 +30,13 @@ async function refreshDevices() {
   refreshing.value = true
   error.value = ''
   try {
+    const st = await invoke<AdbStatus>('adb_status')
+    status.value = st
+    if (!st.available) {
+      devices.value = []
+      occupied.value = []
+      return
+    }
     const [devs, occ] = await Promise.all([
       invoke<AdbDevice[]>('adb_list_devices'),
       invoke<string[]>('adb_occupied_devices'),
@@ -77,10 +89,19 @@ onMounted(() => {
       </div>
       <div class="dialog-body">
         <div v-if="error" class="adb-error">{{ error }}</div>
+        <div v-if="status && !status.available" class="adb-missing">
+          <div class="adb-missing-title">⚠️ {{ t('adb_dialog.missing_title') }}</div>
+          <div class="adb-missing-desc">{{ t('adb_dialog.missing_desc') }}</div>
+          <div class="adb-missing-install">{{ t('adb_dialog.missing_install_title') }}</div>
+          <pre v-if="IS_LINUX" class="adb-missing-cmd">{{ t('adb_dialog.missing_install_linux') }}</pre>
+          <pre v-else-if="IS_MAC" class="adb-missing-cmd">{{ t('adb_dialog.missing_install_mac') }}</pre>
+          <pre v-else-if="IS_WINDOWS" class="adb-missing-cmd">{{ t('adb_dialog.missing_install_win') }}</pre>
+          <div class="adb-missing-env">{{ t('adb_dialog.missing_env') }}</div>
+        </div>
         <div v-if="occupied.length" class="occupied-hint">
           {{ t('adb_dialog.occupied') }} {{ occupied.join(', ') }}
         </div>
-        <div v-if="devices.length === 0 && !refreshing" class="empty-hint">
+        <div v-if="devices.length === 0 && !refreshing && status?.available" class="empty-hint">
           {{ t('adb_dialog.no_devices') }}
         </div>
         <div class="device-list">
@@ -188,6 +209,47 @@ onMounted(() => {
   border-radius: 4px;
   color: var(--warning);
   font-size: 12px;
+  word-break: break-all;
+}
+
+.adb-missing {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.adb-missing-title {
+  font-weight: 600;
+  color: var(--warning);
+}
+
+.adb-missing-desc,
+.adb-missing-install,
+.adb-missing-env {
+  color: var(--text-sub0);
+  line-height: 1.6;
+}
+
+.adb-missing-install {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.adb-missing-cmd {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--bg-mantle);
+  border: 1px solid var(--bg-surface1);
+  border-radius: 4px;
+  font-family: var(--mono-font, ui-monospace, SFMono-Regular, Consolas, monospace);
+  font-size: 11px;
+  color: var(--text);
+  white-space: pre-wrap;
   word-break: break-all;
 }
 

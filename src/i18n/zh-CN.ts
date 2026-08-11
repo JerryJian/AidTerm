@@ -102,6 +102,13 @@ export default {
     occupied: '已被系统 ADB 服务 (5037) 占用，请先停止占用后重试：',
     connect: '连接 Shell',
     cancel: '取消',
+    missing_title: '未检测到 adb',
+    missing_desc: '当前安装包未内置 adb（Linux arm64 等平台官方没有预编译的 platform-tools），系统 PATH 中也未找到 adb。',
+    missing_install_title: '安装 Android platform-tools：',
+    missing_install_linux: '# Debian / Ubuntu\nsudo apt install adb\n# Fedora\nsudo dnf install android-tools\n# Arch\nsudo pacman -S android-tools',
+    missing_install_mac: 'brew install --cask android-platform-tools',
+    missing_install_win: '# 下载并解压 platform-tools 后，把目录加入 PATH\nhttps://developer.android.com/tools/releases/platform-tools',
+    missing_env: '或将 adb 可执行文件的完整路径填入环境变量 AIDTERM_ADB，重启应用后即可使用。',
   },
   session_panel: {
     title: '会话管理',

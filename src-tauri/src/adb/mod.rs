@@ -31,16 +31,49 @@ pub struct AdbDevice {
     pub transport_id: Option<String>,
 }
 
-/// Resolve the adb binary to use plus the server port it should talk to, in
-/// priority order:
+/// Where the resolved adb binary came from. Only "bundled" uses the isolated
+/// 5038 server; every external binary talks to the default 5037 server.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdbSource {
+    Env,
+    Bundled,
+    Path,
+}
+
+impl AdbSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AdbSource::Env => "env",
+            AdbSource::Bundled => "bundled",
+            AdbSource::Path => "path",
+        }
+    }
+}
+
+/// Probe result surfaced to the ADB connect dialog so the UI can explain why
+/// no device list is shown and how to install/point at an adb binary.
+#[derive(Debug, Clone, Serialize)]
+pub struct AdbStatus {
+    pub available: bool,
+    /// "env" | "bundled" | "path" | "missing"
+    pub source: &'static str,
+    pub path: Option<String>,
+    /// Server port the resolved adb talks to ("5038" bundled / "5037" external).
+    pub port: Option<String>,
+}
+
+/// Resolve the adb binary plus the server port it should talk to, in priority
+/// order:
 ///   1. `AIDTERM_ADB` env var (explicit override, dev / power users) -> default 5037
 ///   2. Bundled resource `bin/adb(.exe)` shipped inside the app -> isolated 5038
 ///   3. adb found on PATH (fallback) -> default 5037
-pub fn adb_path(app: &AppHandle) -> Result<(PathBuf, &'static str), String> {
+/// Returns `None` when no adb is available (e.g. arm64 packages ship no
+/// bundled adb and the system has none installed).
+fn resolve_full(app: &AppHandle) -> Option<(PathBuf, &'static str, AdbSource)> {
     if let Ok(p) = std::env::var("AIDTERM_ADB") {
         let p = PathBuf::from(p);
         if p.is_file() {
-            return Ok((p, ADB_DEFAULT_PORT));
+            return Some((p, ADB_DEFAULT_PORT, AdbSource::Env));
         }
         log::warn!("[adb] AIDTERM_ADB set but not a file, ignoring: {}", p.display());
     }
@@ -49,15 +82,39 @@ pub fn adb_path(app: &AppHandle) -> Result<(PathBuf, &'static str), String> {
     if let Ok(resource_dir) = app.path().resource_dir() {
         let bundled = resource_dir.join("bin").join(exe_name);
         if bundled.is_file() {
-            return Ok((bundled, ADB_PORT));
+            return Some((bundled, ADB_PORT, AdbSource::Bundled));
         }
     }
 
     if let Some(p) = find_in_path(exe_name) {
-        return Ok((p, ADB_DEFAULT_PORT));
+        return Some((p, ADB_DEFAULT_PORT, AdbSource::Path));
     }
 
-    Err("adb not found. Set AIDTERM_ADB to a platform-tools adb path, or add adb to PATH.".to_string())
+    None
+}
+
+pub fn adb_path(app: &AppHandle) -> Result<(PathBuf, &'static str), String> {
+    resolve_full(app)
+        .map(|(p, port, _)| (p, port))
+        .ok_or_else(|| "adb not found. Set AIDTERM_ADB to a platform-tools adb path, or add adb to PATH.".to_string())
+}
+
+/// Probe adb availability for the connect dialog (see `AdbStatus`).
+pub fn status(app: &AppHandle) -> AdbStatus {
+    match resolve_full(app) {
+        Some((path, port, src)) => AdbStatus {
+            available: true,
+            source: src.as_str(),
+            path: Some(path.display().to_string()),
+            port: Some(port.to_string()),
+        },
+        None => AdbStatus {
+            available: false,
+            source: "missing",
+            path: None,
+            port: None,
+        },
+    }
 }
 
 fn find_in_path(exe_name: &str) -> Option<PathBuf> {

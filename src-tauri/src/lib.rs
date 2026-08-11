@@ -57,6 +57,7 @@ pub fn run() {
             commands::wsl_list_distros,
             commands::serial_list_ports,
             commands::adb_list_devices,
+            commands::adb_status,
             commands::adb_kill_server,
             commands::adb_occupied_devices,
             commands::cast_start,
