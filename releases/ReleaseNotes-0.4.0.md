@@ -37,6 +37,8 @@
 - 投屏停止后内部状态未完全重置，导致再次启动画面模糊
 - `wsl.exe -l -q` 输出无 BOM UTF-16LE 时发行版列表解析错误
 - cast.rs 编译警告
+- AI 模型列表拉取失败（列表为空）：`/models` 接口兼容 2025+ 新版 `data` 格式（`id/type/display_name`），双后端手动容错解析；失败时在设置面板红字显示接口错误原因
+- AI 多轮问答报 `400 No tool output found for function call`：对话历史发送前规范化 tool_call/tool 配对，未得到输出的调用自动剔除、孤立 tool 消息丢弃；已取消/失败的命令以 tool 结果告知模型，避免历史携带悬空 tool_call
 
 ---
 
