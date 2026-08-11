@@ -17,7 +17,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const SCRCPY_VERSION = process.argv[2] || '4.1'
-const dir = path.dirname(fileURLToPath(import.meta.url))
+const binDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin')
 const url = `https://github.com/Genymobile/scrcpy/releases/download/v${SCRCPY_VERSION}/scrcpy-win64-v${SCRCPY_VERSION}.zip`
 
 const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`
@@ -41,8 +41,8 @@ try {
   const src = findJar(extractDir)
   if (!src) throw new Error(`scrcpy-server not found in archive: ${extractDir}`)
 
-  mkdirSync(dir, { recursive: true })
-  const dest = path.join(dir, 'scrcpy-server.jar')
+  mkdirSync(binDir, { recursive: true })
+  const dest = path.join(binDir, 'scrcpy-server.jar')
   rmSync(dest, { force: true })
   copyFileSync(src, dest)
   console.log(`scrcpy-server v${SCRCPY_VERSION} installed at ${dest}`)

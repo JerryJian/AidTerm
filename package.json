@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint src/",
     "format": "prettier --write \"src/**/*.{ts,vue,css}\"",
-    "fetch-adb": "node bin/fetch-adb.mjs",
-    "fetch-scrcpy": "node bin/fetch-scrcpy.mjs",
+    "fetch-adb": "node scripts/fetch-adb.mjs",
+    "fetch-scrcpy": "node scripts/fetch-scrcpy.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
