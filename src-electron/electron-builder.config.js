@@ -27,7 +27,7 @@ module.exports = () => {
       {
         from: '../bin',
         to: 'bin',
-        filter: ['**/*', '!**/*.mjs', '!**/README.txt', '!**/.gitkeep']
+        filter: ['**/*', '!**/*.mjs', '!**/README.txt']
       }
     ],
     linux: {

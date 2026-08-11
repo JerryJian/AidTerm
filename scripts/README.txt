@@ -28,5 +28,5 @@ These download scripts live in `scripts/` (build-time only, NOT bundled).
 `bin/` contains only runtime files, so it can be copied into packages as-is;
 only the `*.mjs`/`README.txt` files used to live here are excluded by keeping
 them in `scripts/`. The binaries are not committed to git (see .gitignore);
-`.gitkeep` keeps the directory present for release packaging even when adb is
-absent.
+the directory is created by the fetch scripts themselves at build time (CI runs
+`npm run fetch-adb` / `npm run fetch-scrcpy` before packaging).
