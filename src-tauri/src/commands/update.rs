@@ -152,10 +152,7 @@ pub fn get_installer_type_command() -> String {
 
 #[tauri::command]
 pub async fn check_for_update(app: AppHandle) -> Result<UpdateInfo, String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = crate::sysproxy::build_proxied_client(Some(std::time::Duration::from_secs(20)))?;
     let resp = client
         .get(LATEST_API)
         .header("User-Agent", format!("AidTerm/{}", current_version(&app)))
@@ -187,9 +184,7 @@ pub async fn check_for_update(app: AppHandle) -> Result<UpdateInfo, String> {
 
 #[tauri::command]
 pub async fn download_update(app: AppHandle, url: String) -> Result<String, String> {
-    let client = reqwest::Client::builder()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = crate::sysproxy::build_proxied_client(None)?;
     let resp = client
         .get(&url)
         .header("User-Agent", format!("AidTerm/{}", current_version(&app)))

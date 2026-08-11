@@ -12,6 +12,7 @@ mod serial;
 mod session;
 mod session_store;
 mod sftp;
+mod sysproxy;
 mod tunnel;
 mod zmodem;
 

@@ -119,7 +119,8 @@ async fn chat_openai(messages: Vec<ChatMessage>, config: &AiConfig) -> Result<Ai
     let openai_config = OpenAIConfig::new()
         .with_api_base(config.base_url.trim_end_matches('/'))
         .with_api_key(&config.api_key);
-    let client = Client::with_config(openai_config);
+    let client = Client::with_config(openai_config)
+        .with_http_client(crate::sysproxy::build_proxied_client(None)?);
 
     let mut api_messages: Vec<ChatCompletionRequestMessage> = Vec::new();
     for m in &messages {
@@ -270,10 +271,7 @@ async fn fetch_openai_models(base_url: &str, api_key: &str) -> Result<Vec<String
     let base = base_url.trim_end_matches('/');
     let url = format!("{base}/models");
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+    let client = crate::sysproxy::build_proxied_client(Some(std::time::Duration::from_secs(20)))?;
 
     let resp = client
         .get(&url)
