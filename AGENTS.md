@@ -5,7 +5,7 @@
 
 > **双后端差异**：Electron 端端口转发仅 Local、代理为裸 TCP 直连（无 HTTP CONNECT / SOCKS5 握手）、Zmodem 与 Deep Link 为占位、`write_text_file` 缺失（终端文本导出会失败）；Tauri 端以上均完整（Remote/Dynamic 转发、HTTP/SOCKS5/JumpHost、Deep Link、zmodem 检测）。ADB 在双后端均完整（端口按 adb 来源切换：内置 adb→5038 隔离、外部/系统 adb→5037 默认，+ 模拟器自动发现 + 5037 占用只读检测）。ADB 投屏（Cast）在双后端均完整（Electron `cast.ts` 为 `cast.rs` 的忠实 Node 移植，前端经统一 `cast_*` IPC 调用）。
 
-当前版本：0.3.0。下方复选框与 Phase 表反映**代码实际状态**（2026-08 核对）。
+当前版本：0.4.0。下方复选框与 Phase 表反映**代码实际状态**（2026-08 核对）。
 
 > **版本管理**：版本号手动维护在两个构建入口 —— Tauri `src-tauri/Cargo.toml`（`tauri.conf.json` 不再写 version，回退 Cargo.toml）与 Electron `src-electron/package.json`；`Cargo.lock` 与两个 `package-lock.json` 由 cargo/npm 自动维护。前端 UI（TitleBar/About）版本号一律经 IPC `get_app_version` 获取（api 层已缓存），无硬编码。发布时改上述两处 + 写 `releases/ReleaseNotes-<版本>.md` + 打 `vX.Y.Z` 标签。
 
