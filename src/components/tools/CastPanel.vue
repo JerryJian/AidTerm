@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { invoke, isElectron } from '../../api'
+import { invoke, castOpenPush, castPushSupported } from '../../api'
+import type { CastPushFrame } from '../../api'
 import type { TerminalTab } from '../../types'
 
 const props = defineProps<{ tabId: string; tab: TerminalTab }>()
@@ -27,12 +28,17 @@ let retryCount = 0
 let manualStop = false
 
 const serial = computed(() => props.tab.adbInfo?.serial ?? '')
-const supported = !isElectron && typeof window !== 'undefined' && 'VideoDecoder' in window
+const supported = typeof window !== 'undefined' && 'VideoDecoder' in window
+// Electron pushes demuxed frames over a MessageChannel as ArrayBuffers; Tauri
+// keeps the `cast_frame` poll path. The decoder core is shared (decodeChunk
+// takes bytes either way).
+const usePush = castPushSupported
 
 let decoder: VideoDecoder | null = null
 let waitingForKey = true
-let currentAvccB64: string | null = null
+let currentAvcc: Uint8Array | null = null
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let pushUnsub: (() => void) | null = null
 let lastSeq = 0
 let pollsSinceNewFrame = 0
 let downX = 0
@@ -51,6 +57,15 @@ function base64ToBytes(b64: string): Uint8Array {
   const bytes = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
   return bytes
+}
+
+function bytesEqual(a: Uint8Array | null, b: Uint8Array | null): boolean {
+  if (a === b) return true
+  if (!a || !b || a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
 }
 
 function drawFrame(frame: VideoFrame) {
@@ -146,7 +161,7 @@ function onDecoderError(e: unknown) {
   // keyframe rebuild it (see decodeChunk: every keyframe recreates).
   console.warn('[cast] decoder error', e)
   decoder = null
-  currentAvccB64 = null
+  currentAvcc = null
   waitingForKey = true
   diag.value = '解码出错，等待下一关键帧自愈'
 }
@@ -159,7 +174,7 @@ function closeDecoder() {
     // already closed (a codec error auto-closes it)
   }
   decoder = null
-  currentAvccB64 = null
+  currentAvcc = null
 }
 
 function setupDecoder() {
@@ -175,22 +190,23 @@ function avccCodecString(avcc: Uint8Array): string {
 function newDecoder(): VideoDecoder {
   decoder = new VideoDecoder({ output: drawFrame, error: onDecoderError })
   waitingForKey = true
-  currentAvccB64 = null
+  currentAvcc = null
   return decoder
 }
 
 // WebCodecs requires the FIRST chunk after configure() to be a key frame, and
 // the reference chain must be complete: a delta can only be decoded if every
 // earlier frame of its GOP was fed too. The backend buffers each GOP and hands
-// frames out FIFO, so we feed EVERY frame in order and never skip — otherwise
-// a later delta references a frame we dropped and the decoder breaks.
+// frames out FIFO (poll) or pushes them in order (MessageChannel), so we feed
+// EVERY frame in order and never skip — otherwise a later delta references a
+// frame we dropped and the decoder breaks.
 // Returns true when the frame was handed to the decoder (so the caller should
 // advance lastSeq); false when it was deliberately skipped (caller must NOT
 // advance, or the backend would think the chain is complete).
-async function decodeChunk(seq: number, key: boolean, b64: string, configB64: string | null): Promise<boolean> {
+async function decodeChunk(seq: number, key: boolean, frameData: Uint8Array, configBytes: Uint8Array | null): Promise<boolean> {
   const needDecoder = !decoder || decoder.state === 'closed'
-  const effectiveConfig = configB64 ?? currentAvccB64
-  const avccChanged = effectiveConfig !== null && effectiveConfig !== currentAvccB64
+  const effectiveConfig = configBytes ?? currentAvcc
+  const avccChanged = effectiveConfig !== null && !bytesEqual(effectiveConfig, currentAvcc)
   const needReconfig = needDecoder || avccChanged
   if (needReconfig) {
     // Config packet (key=false) with new avcC: configure the decoder now so
@@ -202,10 +218,10 @@ async function decodeChunk(seq: number, key: boolean, b64: string, configB64: st
         return false
       }
       if (needDecoder) newDecoder()
-      const avcc = base64ToBytes(effectiveConfig)
+      const avcc = effectiveConfig
       try {
         decoder!.configure({ codec: avccCodecString(avcc), description: avcc })
-        currentAvccB64 = effectiveConfig
+        currentAvcc = avcc
         console.log('[cast] pre-configured with', avccCodecString(avcc), 'at seq', seq, '(config packet, waiting for keyframe)')
       } catch (e) {
         console.warn('[cast] configure with description failed', e)
@@ -221,10 +237,10 @@ async function decodeChunk(seq: number, key: boolean, b64: string, configB64: st
       return false
     }
     if (needDecoder) newDecoder()
-    const avcc = base64ToBytes(effectiveConfig)
+    const avcc = effectiveConfig
     try {
       decoder!.configure({ codec: avccCodecString(avcc), description: avcc })
-      currentAvccB64 = effectiveConfig
+      currentAvcc = avcc
       waitingForKey = false
       console.log('[cast] reconfigured with', avccCodecString(avcc), 'at seq', seq, needDecoder ? '(new decoder)' : '(avcC change)')
     } catch (e) {
@@ -247,7 +263,7 @@ async function decodeChunk(seq: number, key: boolean, b64: string, configB64: st
   const chunk = new EncodedVideoChunk({
     type: key ? 'key' : 'delta',
     timestamp: seq * 40_000,
-    data: base64ToBytes(b64),
+    data: frameData,
   })
   try {
     decoder!.decode(chunk)
@@ -275,59 +291,7 @@ async function pollFrame() {
     res = null
   }
   if (!res) {
-    if (!manualStop && retryCount < MAX_RETRIES) {
-      running.value = false
-      reconnecting.value = true
-      retryCount++
-      diag.value = `连接断开，正在重连 (${retryCount}/${MAX_RETRIES})...`
-      console.warn('[cast] stream disconnected, reconnecting attempt', retryCount)
-      // Stop the old poll timer before reconnecting
-      if (pollTimer) {
-        clearInterval(pollTimer)
-        pollTimer = null
-      }
-      closeDecoder()
-      waitingForKey = true
-      // Attempt reconnection with backoff
-      const delay = Math.min(1000 * retryCount, 5000)
-      setTimeout(async () => {
-        if (!reconnecting.value || manualStop) return
-        try {
-          await invoke('cast_stop', { serial: serial.value }).catch(() => {})
-          const info = await invoke<{ port: number; width: number | null; height: number | null }>(
-            'cast_start',
-            { serial: serial.value, maxSize: 1280 },
-          )
-          realWidth = info.width ?? 0
-          realHeight = info.height ?? 0
-          console.log('[cast] reconnected, port', info.port)
-          reconnecting.value = false
-          setupDecoder()
-          lastSeq = 0
-          pollsSinceNewFrame = 0
-          running.value = true
-          pollTimer = setInterval(pollFrame, 40)
-          void nextTick(fitCanvas)
-          diag.value = `已重连 (${retryCount} 次)`
-          retryCount = 0
-        } catch (e) {
-          console.warn('[cast] reconnect failed', e)
-          if (retryCount >= MAX_RETRIES) {
-            reconnecting.value = false
-            stopCasting()
-            error.value = t('cast_panel.disconnected')
-          } else {
-            // Schedule another attempt
-            pollTimer = setInterval(pollFrame, 40)
-          }
-        }
-      }, delay)
-      return
-    }
-    // Max retries exhausted or manual stop
-    reconnecting.value = false
-    stopCasting()
-    error.value = t('cast_panel.disconnected')
+    void onStreamDisconnected()
     return
   }
   const [seq, key, b64, config] = res
@@ -343,7 +307,7 @@ async function pollFrame() {
   }
   pollsSinceNewFrame = 0
   console.log('[cast] frame', seq, 'key', key, 'bytes', b64.length, 'config', !!config)
-  const fed = await decodeChunk(seq, key, b64, config)
+  const fed = await decodeChunk(seq, key, base64ToBytes(b64), config ? base64ToBytes(config) : null)
   if (fed) {
     lastSeq = seq
   } else {
@@ -352,6 +316,95 @@ async function pollFrame() {
     // deltas until the next keyframe arrives.
     console.log('[cast] decode failed seq', seq, 'waitingForKey', waitingForKey)
   }
+}
+
+function clearStreamTimers() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+  if (pushUnsub) {
+    pushUnsub()
+    pushUnsub = null
+  }
+}
+
+/// Start consuming frames: a MessageChannel push channel on Electron, or the
+/// `cast_frame` poll timer on Tauri. `startCasting`/reconnect call this once
+/// `cast_start` has succeeded.
+function startStreamLoop() {
+  if (usePush) {
+    pushUnsub = castOpenPush(serial.value, (msg: CastPushFrame) => {
+      if (msg.type === 'disconnect') {
+        void onStreamDisconnected()
+        return
+      }
+      const frameData = msg.data ? new Uint8Array(msg.data) : new Uint8Array(0)
+      const config = msg.config ? new Uint8Array(msg.config) : null
+      void decodeChunk(msg.seq ?? 0, msg.key ?? false, frameData, config)
+    })
+    if (pushUnsub) return
+  }
+  pollTimer = setInterval(pollFrame, 40)
+}
+
+/// Stream died (push 'disconnect' or a null `cast_frame` poll). Reconnect with
+/// backoff, or give up after MAX_RETRIES.
+async function onStreamDisconnected() {
+  if (manualStop) return
+  if (retryCount < MAX_RETRIES) {
+    running.value = false
+    reconnecting.value = true
+    retryCount++
+    diag.value = `连接断开，正在重连 (${retryCount}/${MAX_RETRIES})...`
+    console.warn('[cast] stream disconnected, reconnecting attempt', retryCount)
+    clearStreamTimers()
+    closeDecoder()
+    waitingForKey = true
+    // Attempt reconnection with backoff
+    const delay = Math.min(1000 * retryCount, 5000)
+    setTimeout(async () => {
+      if (!reconnecting.value || manualStop) return
+      try {
+        await invoke('cast_stop', { serial: serial.value }).catch(() => {})
+        const info = await invoke<{ port: number; width: number | null; height: number | null }>(
+          'cast_start',
+          { serial: serial.value, maxSize: 1280 },
+        )
+        realWidth = info.width ?? 0
+        realHeight = info.height ?? 0
+        console.log('[cast] reconnected, port', info.port)
+        reconnecting.value = false
+        setupDecoder()
+        lastSeq = 0
+        pollsSinceNewFrame = 0
+        running.value = true
+        startStreamLoop()
+        void nextTick(fitCanvas)
+        diag.value = `已重连 (${retryCount} 次)`
+        retryCount = 0
+      } catch (e) {
+        console.warn('[cast] reconnect failed', e)
+        if (retryCount >= MAX_RETRIES) {
+          reconnecting.value = false
+          stopCasting()
+          error.value = t('cast_panel.disconnected')
+        } else {
+          // Retry on a timer (poll mode would detect the dead stream on the
+          // next poll, but push mode gets no messages without a live session).
+          setTimeout(() => {
+            if (!reconnecting.value || manualStop) return
+            void onStreamDisconnected()
+          }, Math.min(1000 * (retryCount + 1), 5000))
+        }
+      }
+    }, delay)
+    return
+  }
+  // Max retries exhausted or manual stop
+  reconnecting.value = false
+  stopCasting()
+  error.value = t('cast_panel.disconnected')
 }
 
 async function startCasting() {
@@ -382,7 +435,7 @@ async function startCasting() {
     lastSeq = 0
     pollsSinceNewFrame = 0
     running.value = true
-    pollTimer = setInterval(pollFrame, 40)
+    startStreamLoop()
     void nextTick(fitCanvas)
   } catch (e) {
     error.value = t('cast_panel.failed', { msg: String(e) })
@@ -396,17 +449,14 @@ function stopCasting() {
   manualStop = true
   reconnecting.value = false
   retryCount = 0
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
+  clearStreamTimers()
   running.value = false
   if (serial.value) {
     invoke('cast_stop', { serial: serial.value }).catch(() => {})
   }
   closeDecoder()
   waitingForKey = true
-  currentAvccB64 = null
+  currentAvcc = null
   diag.value = ''
   // Reset device dimensions so the next fresh start always re-applies the
   // correct canvas.width/canvas.height from the first incoming frame. Without

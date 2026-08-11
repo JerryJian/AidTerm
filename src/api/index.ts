@@ -10,6 +10,33 @@ import type { DialogOptions } from './types'
 
 export const isElectron = !!(window as unknown as { electronAPI?: unknown }).electronAPI
 
+/**
+ * Frame pushed from the Electron main process over the cast MessageChannel.
+ * `data`/`config` arrive as ArrayBuffers (never base64). Tauri keeps the
+ * `cast_frame` poll path, so this type only applies on Electron.
+ */
+export interface CastPushFrame {
+  type: 'frame' | 'disconnect'
+  seq?: number
+  key?: boolean
+  data?: ArrayBuffer
+  config?: ArrayBuffer | null
+}
+
+export const castPushSupported = isElectron
+
+/**
+ * Open a push channel for a cast frame stream (Electron only). `onMessage`
+ * receives each demuxed frame as a `CastPushFrame`; returns an unsubscribe that
+ * closes the channel, or `null` on Tauri where `cast_frame` polling is used.
+ */
+export function castOpenPush(serial: string, onMessage: (msg: CastPushFrame) => void): (() => void) | null {
+  if (!isElectron) return null
+  const el = (window as unknown as { electronAPI?: { castOpenPush?: (s: string, cb: (m: unknown) => void) => () => void } }).electronAPI
+  if (!el?.castOpenPush) return null
+  return el.castOpenPush(serial, (m) => onMessage(m as CastPushFrame))
+}
+
 type ApiModule = typeof import('./tauri') | typeof import('./electron')
 
 let modPromise: Promise<ApiModule>

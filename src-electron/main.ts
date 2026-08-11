@@ -1,10 +1,11 @@
-import { app, BrowserWindow, ipcMain, dialog, clipboard } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, clipboard, MessageChannelMain } from 'electron'
 import * as path from 'path'
 const pathModule = path
 import * as os from 'os'
 import * as fs from 'fs'
 import * as net from 'net'
 import * as crypto from 'crypto'
+import * as cast from './cast'
 import type { Client as Ssh2Client, ClientChannel, ConnectConfig as SshConnectConfig } from 'ssh2'
 import type SftpClient from 'ssh2-sftp-client'
 import type {
@@ -286,6 +287,7 @@ function createWindow(): void {
   mainWindow.on('resize', () => emitToRenderer('window:resized', {}))
   mainWindow.on('closed', () => {
     cleanupAllSessions()
+    cast.closeAllPushes()
     mainWindow = null
   })
 
@@ -993,7 +995,7 @@ function registerIpcHandlers(): void {
       }
       case 'adb': {
         const id = connectAdb(config.serial, rows, cols)
-        return { id, capabilities: ['file'] }
+        return { id, capabilities: ['file', 'cast'] }
       }
     }
   })
@@ -1018,6 +1020,72 @@ function registerIpcHandlers(): void {
     } catch (e) {
       console.warn('[electron] adb kill-server failed:', e)
     }
+  })
+
+  // ══════════════════════════════════════════════════════
+  //  Screen casting (scrcpy-server standalone) — Node port of cast.rs
+  //  Mirrors the Tauri `cast_start`/`cast_frame`/`cast_stop`/`cast_input` IPC.
+  // ══════════════════════════════════════════════════════
+  ipcMain.handle(
+    'cast_start',
+    async (_, args: { serial: string; maxSize?: number }): Promise<{ port: number; width: number | null; height: number | null }> => {
+      const { path: adb, port } = resolveAdb()
+      return cast.start(adb, port, args.serial, args.maxSize ?? 0)
+    }
+  )
+
+  ipcMain.handle(
+    'cast_frame',
+    (_, args: { serial: string; needKey?: boolean; seenSeq?: number }): [number, boolean, string, string | null] | null => {
+      return cast.frame(args.serial, args.needKey ?? false)
+    }
+  )
+
+  ipcMain.handle('cast_stop', (_, args: { serial: string }): void => {
+    cast.stop(args.serial)
+  })
+
+  ipcMain.handle('cast_input', async (_, args: { serial: string; cmd: string }): Promise<void> => {
+    const { path: adb, port } = resolveAdb()
+    await cast.input(adb, port, args.serial, args.cmd)
+  })
+
+  // Push channel for the frame stream: the renderer opens a MessageChannel,
+  // `cast.openPush` registers the main-side port as the sink, and every demuxed
+  // frame is posted to the channel as a binary ArrayBuffer (no base64). The
+  // frontend reads frames straight off the port instead of polling `cast_frame`.
+  //
+  // Note: Electron's MessagePortMain only transfers ports, not ArrayBuffers
+  // (electron/electron#34905), so each frame is structured-cloned by the port —
+  // still one copy, far cheaper than base64 string round-trips.
+  ipcMain.on('cast_stream_port', (event, args: { serial: string }): void => {
+    const { port1, port2 } = new MessageChannelMain()
+    const serial = args.serial
+    let closed = false
+    const sink: import('./cast').PushSink = {
+      post: (msg) => {
+        if (closed) return
+        try {
+          port1.postMessage(msg)
+        } catch {
+          closed = true
+        }
+      },
+      close: () => {
+        closed = true
+        try {
+          port1.close()
+        } catch {
+          /* already closed */
+        }
+      },
+    }
+    cast.openPush(serial, sink)
+    event.sender.postMessage(`cast-stream-port:${serial}`, null, [port2])
+  })
+
+  ipcMain.on('cast_stream_close', (_event, args: { serial: string }): void => {
+    cast.closePush(args.serial)
   })
 
   // USB devices held by the user's own 5037 server never show up on AidTerm's

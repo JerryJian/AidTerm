@@ -26,6 +26,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 
+  /**
+   * Open a MessageChannel push channel for a cast frame stream. The main
+   * process creates a MessageChannelMain, registers the main-side port as the
+   * cast sink, and transfers port2 here. Every demuxed frame arrives on the
+   * port as a `{ type: 'frame', seq, key, data: ArrayBuffer, config }` (or a
+   * `{ type: 'disconnect' }` on stream end) and is forwarded to `onMessage`.
+   * Returns an unsubscribe function that closes the channel.
+   */
+  castOpenPush(serial: string, onMessage: (msg: any) => void) {
+    const channel = `cast-stream-port:${serial}`
+    let port: MessagePort | null = null
+    const handler = (event: any) => {
+      const [p] = (event.ports as MessagePort[]) ?? []
+      if (!p) return
+      ipcRenderer.removeListener(channel, handler)
+      port = p
+      p.onmessage = (e: MessageEvent) => onMessage(e.data)
+      p.start()
+    }
+    ipcRenderer.on(channel, handler)
+    ipcRenderer.send('cast_stream_port', { serial })
+    return () => {
+      ipcRenderer.removeListener(channel, handler)
+      if (port) {
+        port.onmessage = null
+        port.close()
+      }
+      ipcRenderer.send('cast_stream_close', { serial })
+    }
+  },
+
   // ── Dialog ──
   openDialog: (opts: any) => ipcRenderer.invoke('dialog:open', opts),
   saveDialog: (opts: any) => ipcRenderer.invoke('dialog:save', opts),
