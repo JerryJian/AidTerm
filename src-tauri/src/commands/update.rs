@@ -237,12 +237,10 @@ pub fn install_update(app: AppHandle, path: String) -> Result<(), String> {
             std::process::Command::new("msiexec")
                 .arg("/i")
                 .arg(&p)
-                .arg("/qn")
                 .spawn()
                 .map_err(|e| e.to_string())?;
         } else {
             std::process::Command::new(&p)
-                .arg("/S")
                 .spawn()
                 .map_err(|e| e.to_string())?;
         }

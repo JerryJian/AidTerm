@@ -1864,7 +1864,7 @@ function registerIpcHandlers(): void {
     const { spawn } = require('child_process') as typeof import('child_process')
     const p = args.path
     if (process.platform === 'win32') {
-      spawn(p, ['/S'], { detached: true, stdio: 'ignore' }).unref()
+      spawn(p, [], { detached: true, stdio: 'ignore' }).unref()
       setTimeout(() => app.exit(0), 1200)
     } else if (process.platform === 'darwin') {
       spawn('open', [p], { detached: true, stdio: 'ignore' }).unref()
