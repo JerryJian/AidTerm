@@ -26,8 +26,9 @@ AidTerm is a cross-platform terminal emulator built with **Tauri 2 + Vue 3 + Rus
 - Telnet
 - Serial (baud rate, data bits, stop bits, parity)
 - Local shell (cmd, PowerShell, bash, zsh — auto-detected)
-- SFTP file browser: upload, download, delete, rename
+- SFTP file browser: upload, download, delete, rename, drag & drop
 - Remote file editing with a built-in editor
+- Android devices via ADB (shell, file browser, screen casting)
 
 ### Terminal
 - Full-featured [xterm.js](https://xtermjs.org/) terminal emulation
@@ -36,6 +37,10 @@ AidTerm is a cross-platform terminal emulator built with **Tauri 2 + Vue 3 + Rus
 - Search (forward / backward)
 - Copy-on-select, paste, unlimited scrollback (configurable up to 1,000,000 lines)
 - Dark / light themes, window transparency, background images
+
+### ADB & Cast
+- ADB file browser — push / pull / rename / delete / remote edit (built-in adb; emulator auto-discovery)
+- Screen casting (scrcpy protocol) with touch, swipe, scroll & keyboard input
 
 ### Session & Productivity
 - Session store with groups & recently used
@@ -61,6 +66,8 @@ AidTerm is a cross-platform terminal emulator built with **Tauri 2 + Vue 3 + Rus
 - i18n (Chinese / English)
 - Lock screen, fullscreen (F11)
 - `ssh://` deep link
+- CLI arguments — `--ssh user@host` pre-fills the connect dialog
+- Dual backend — Tauri (recommended) & Electron for legacy Linux
 
 ## Screenshots
 
@@ -152,13 +159,7 @@ src-tauri/              # Tauri Rust backend
 
 ## Contributing
 
-Contributions of all kinds are welcome — report a bug, request a feature, or submit a pull request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feat/your-feature`)
-3. Commit your changes (`git commit -m 'feat: add something'`)
-4. Push to the branch (`git push origin feat/your-feature`)
-5. Open a pull request
+This repository does not accept pull requests. If you find a bug or have a feature request, please open an [issue](https://github.com/JerryJian/AidTerm/issues) instead.
 
 ## License
 
