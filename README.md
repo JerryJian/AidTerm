@@ -64,7 +64,7 @@ AidTerm is a cross-platform terminal emulator built with **Tauri 2 + Vue 3 + Rus
 
 ## Screenshots
 
-_Coming soon — please add screenshots of the main window, sessions, SFTP and the AI panel._
+![Main window](docs/images/main-window.png)
 
 ## Download
 
