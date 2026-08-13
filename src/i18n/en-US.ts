@@ -154,6 +154,7 @@ export default {
   },
   tool_panel: {
     ai: 'AI Assistant',
+    history: 'Command History',
     sftp: 'Files',
     adb_files: 'Device Files',
     tunnel: 'Tunnel',
@@ -370,6 +371,15 @@ export default {
     no_triggers: 'No triggers',
     save: 'Save',
     cancel: 'Cancel',
+  },
+  history: {
+    title: 'Command History',
+    search: 'Search commands...',
+    clear: 'Clear',
+    execute: 'Execute',
+    delete: 'Delete',
+    empty: 'No command history yet. Commands run in the terminal are recorded automatically.',
+    no_match: 'No matching commands',
   },
   batch: {
     title: 'Batch Input',

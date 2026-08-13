@@ -9,6 +9,7 @@ import { invoke, listen } from '@/api'
 import { useTerminal } from '../../hooks/useTerminal'
 import { stashTerminal, takeTerminal } from '../../hooks/terminalRegistry'
 import { useTerminalStore } from '../../stores/terminal'
+import { useCommandHistoryStore } from '../../stores/commandHistoryStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { getOrCreateAiConversation, registerLeafBinding, unregisterLeafBinding } from '../../hooks/terminalAiRegistry'
@@ -45,6 +46,7 @@ const store = useTerminalStore()
 const aiStore = useAiStore()
 const themeStore = useThemeStore()
 const settings = useSettingsStore()
+const commandHistoryStore = useCommandHistoryStore()
 
 const disconnected = ref(false)
 const reconnecting = ref(false)
@@ -77,6 +79,7 @@ const { createSession, wslConnect, sshConnect, telnetConnect, serialConnect, adb
 const aiBinding: AiTerminalBinding = {
   getTerminal: () => terminal,
   writeToBackend: writeInput,
+  recordCommand: command => commandHistoryStore.recordCommand(currentTabId.value ?? '', command),
   rawOnOutput: onOutput,
 }
 
@@ -113,7 +116,107 @@ function getXtermTheme() {
 
 function handleTerminalData(data: string) {
   if (disconnected.value || reconnecting.value) return
+  handleUserInput(data)
+}
+
+/**
+ * Forward user input (keystrokes, pasted text) to the backend while keeping the
+ * command-history line editor in sync. Commands submitted with Enter are only
+ * recorded when the terminal currently sits on a shell prompt, so passwords,
+ * editor / full-screen keys and startup input stay out of the history.
+ *
+ * The recorded text is taken from the actual displayed line when it is longer
+ * than what the user typed (Tab completion / history recall rewrite the line
+ * via the shell, which onData never sees); otherwise the typed text is used.
+ */
+function handleUserInput(data: string) {
+  const tabId = currentTabId.value ?? ''
+  const { commands, recalled } = commandHistoryStore.feedInput(tabId, data, snapshotPromptText)
+  if (isAtShellPrompt()) {
+    for (const cmd of commands) {
+      const resolved = resolveDisplayedCommand()
+      commandHistoryStore.recordCommand(tabId, resolved.length > cmd.length ? resolved : cmd)
+    }
+    if (recalled) {
+      const resolved = resolveDisplayedCommand()
+      if (resolved) commandHistoryStore.recordCommand(tabId, resolved)
+    }
+  }
   writeInput(data)
+}
+
+/** Snapshot the prompt prefix under the cursor (called when an input line starts). */
+function snapshotPromptText(): string {
+  try {
+    if (!terminal) return ''
+    const buf = terminal.buffer.active
+    const line = buf.getLine(buf.baseY + buf.cursorY)
+    if (!line) return ''
+    return line.translateToString(false, 0, buf.cursorX)
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Resolve the command currently displayed on the terminal buffer line, using
+ * the prompt prefix snapshotted for this input line. Handles wrapped lines and
+ * right-side prompts by walking up to the prompt row and slicing the last row
+ * up to the cursor. Returns '' when the prompt is unknown.
+ */
+function resolveDisplayedCommand(): string {
+  try {
+    const tabId = currentTabId.value ?? ''
+    const prompt = commandHistoryStore.promptFor(tabId)
+    if (!prompt) return ''
+    const buf = terminal?.buffer.active
+    if (!buf) return ''
+    const cursorY = buf.baseY + buf.cursorY
+    let top = cursorY
+    while (top > 0) {
+      const line = buf.getLine(top)
+      if (line && line.translateToString().startsWith(prompt)) break
+      top--
+    }
+    let full = ''
+    for (let i = top; i < cursorY; i++) {
+      const line = buf.getLine(i)
+      if (line) full += line.translateToString()
+    }
+    const last = buf.getLine(cursorY)
+    if (last) full += last.translateToString(false, 0, buf.cursorX)
+    return full.slice(prompt.length).trim()
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * True when the terminal's current screen line is a shell prompt line.
+ *
+ * Checks the xterm buffer line under the cursor and the continuation rows
+ * above it (wrapped commands) for a prompt marker. This keeps passwords,
+ * editor/full-screen keys and startup text out of the command history.
+ */
+function isAtShellPrompt(): boolean {
+  try {
+    if (!terminal) return false
+    const buf = terminal.buffer.active
+    const y = buf.baseY + buf.cursorY
+    if (y < 0) return false
+    for (let row = y; row >= Math.max(0, y - 8); row--) {
+      const line = buf.getLine(row)
+      if (!line) continue
+      const text = line.translateToString()
+      if (/[$#>%❯]/.test(text)) return true
+      // Rows above the cursor must be continuations (leading whitespace) for a
+      // wrapped command; anything else ends the walk.
+      if (row !== y && !/^\s/.test(text)) break
+    }
+    return false
+  } catch {
+    return false
+  }
 }
 
 function doFit(): boolean {
@@ -312,6 +415,7 @@ async function startSession() {
 
     store.updateSessionId(currentTabId.value ?? '', handle.id)
     store.updateSessionCapabilities(currentTabId.value ?? '', handle.capabilities)
+    commandHistoryStore.resetInput(currentTabId.value ?? '')
     disconnected.value = false
     store.updateSessionStatus(currentTabId.value ?? '', 'connected')
 
@@ -366,6 +470,7 @@ onMounted(() => {
 
   const tabId = currentTabId.value
   if (tabId) {
+    if (props.tab) commandHistoryStore.bindPane(tabId, props.tab)
     registerLeafBinding(tabId, aiBinding)
     getOrCreateAiConversation(props.tab?.aiSessionId ?? tabId)
   }
@@ -430,6 +535,7 @@ onUnmounted(() => {
       if (unlisten) unlisten()
       unlisteners.forEach(fn => fn())
       terminal.dispose()
+      commandHistoryStore.disposeTab(currentTabId.value ?? '')
     }
   }
   if (fallbackTimer) clearTimeout(fallbackTimer)
@@ -524,9 +630,9 @@ async function readClipboard(): Promise<string> {
 async function pasteOrSend() {
   const text = await readClipboard()
   if (text) {
-    writeInput(text)
+    handleUserInput(text)
   } else {
-    writeInput('\x16')
+    handleUserInput('\x16')
   }
 }
 
@@ -539,7 +645,7 @@ function doCopy() {
 async function doPaste() {
   closeContextMenu()
   const text = await readClipboard()
-  if (text) writeInput(text)
+  if (text) handleUserInput(text)
 }
 
 function doSelectAll() {

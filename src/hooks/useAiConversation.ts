@@ -232,6 +232,7 @@ function isDangerousByHeuristic(cmd: string): boolean {
 export interface AiTerminalBinding {
   getTerminal: () => Terminal | null
   writeToBackend?: (data: string) => void
+  recordCommand?: (command: string) => void
   rawOnOutput?: (cb: (data: string) => void) => Promise<(() => void) | null | undefined>
 }
 
@@ -362,6 +363,7 @@ export function useAiConversation(
         if (un) unsub = un
       })
 
+      b.recordCommand?.(cmd)
       b.writeToBackend!(cmd + '\r')
 
       const check = () => {

@@ -154,6 +154,7 @@ export default {
   },
   tool_panel: {
     ai: 'AI 助手',
+    history: '命令历史',
     sftp: '文件管理',
     adb_files: '设备文件',
     tunnel: '隧道',
@@ -370,6 +371,15 @@ export default {
     no_triggers: '暂无触发器',
     save: '保存',
     cancel: '取消',
+  },
+  history: {
+    title: '命令历史',
+    search: '搜索命令...',
+    clear: '清空',
+    execute: '执行',
+    delete: '删除',
+    empty: '暂无命令历史，终端中执行的命令会自动记录',
+    no_match: '无匹配的命令',
   },
   batch: {
     title: '批量输入',

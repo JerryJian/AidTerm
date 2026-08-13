@@ -8,6 +8,7 @@ import AiSidebar from '../ai/AiSidebar.vue'
 import CastPanel from './CastPanel.vue'
 import FilePanel from '../file/FilePanel.vue'
 import TunnelPanel from '../tunnel/TunnelPanel.vue'
+import CommandHistoryPanel from '../history/CommandHistoryPanel.vue'
 import type { FileKind, ToolTab } from '../../types'
 
 const emit = defineEmits<{
@@ -26,6 +27,7 @@ const toolTabs = computed<{ id: ToolTab; icon: string; title: string }[]>(() => 
   const list: { id: ToolTab; icon: string; title: string }[] = []
   const tab = activeTab.value
   list.push({ id: 'ai', icon: '\u{1F916}', title: t('tool_panel.ai') })
+  list.push({ id: 'history', icon: '\u{1F552}', title: t('tool_panel.history') })
   if (store.hasCapability(tab, 'file')) {
     list.push({ id: 'file', icon: '\u{1F4C2}', title: store.tabSessionType(tab) === 'adb' ? t('tool_panel.adb_files') : t('tool_panel.sftp') })
   }
@@ -78,18 +80,19 @@ function closeSidebar() {
     <div class="right-divider" @mousedown="onDividerDown" />
     <div class="right-sidebar">
       <div class="right-tabs">
-        <button
-          v-for="tt in toolTabs"
-          :key="tt.id"
-          class="st-tab"
-          :class="{ active: activeTool === tt.id }"
-          :title="tt.title"
-          @click="store.setActiveToolTab(activeTab!.id, tt.id)"
-        >
-          <span class="tt-icon">{{ tt.icon }}</span>
-          <span class="tt-title">{{ tt.title }}</span>
-        </button>
-        <div class="st-spacer" />
+        <div class="tab-scroll">
+          <button
+            v-for="tt in toolTabs"
+            :key="tt.id"
+            class="st-tab"
+            :class="{ active: activeTool === tt.id }"
+            :title="tt.title"
+            @click="store.setActiveToolTab(activeTab!.id, tt.id)"
+          >
+            <span class="tt-icon">{{ tt.icon }}</span>
+            <span v-if="activeTool === tt.id" class="tt-title">{{ tt.title }}</span>
+          </button>
+        </div>
         <button class="st-tab close-btn" :title="t('titlebar.close')" @click="closeSidebar">&#x2715;</button>
       </div>
       <div class="right-body">
@@ -97,6 +100,10 @@ function closeSidebar() {
           v-if="activeTool === 'ai'"
           :ai-conv="aiConv"
           :tab-title="activeTab?.title ?? ''"
+        />
+        <CommandHistoryPanel
+          v-if="activeTab"
+          v-show="activeTool === 'history'"
         />
         <FilePanel
           v-if="activeTab"
@@ -162,11 +169,21 @@ function closeSidebar() {
 .right-tabs {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   padding: 4px 6px;
   border-bottom: 1px solid var(--bg-surface0);
   background: var(--bg-base);
   flex-shrink: 0;
+}
+
+.tab-scroll {
+  display: flex;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .st-tab {
@@ -181,6 +198,7 @@ function closeSidebar() {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 0 0 auto;
 }
 
 .tt-title {
@@ -198,12 +216,9 @@ function closeSidebar() {
   color: var(--accent);
 }
 
-.st-spacer {
-  flex: 1;
-}
-
 .close-btn {
   font-size: 12px;
+  flex: 0 0 auto;
 }
 
 .right-body {

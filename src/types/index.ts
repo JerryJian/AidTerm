@@ -95,7 +95,14 @@ export interface UpdateInfo {
   installer_type: string
 }
 
-export type ToolTab = 'ai' | 'file' | 'tunnel' | 'cast'
+export type ToolTab = 'ai' | 'history' | 'file' | 'tunnel' | 'cast'
+
+/** A command recorded from terminal output, keyed per terminal pane (tab id). */
+export interface CommandHistoryEntry {
+  id: string
+  command: string
+  timestamp: number
+}
 
 export type FileKind = 'sftp' | 'adb' | 'local' | 'wsl'
 
