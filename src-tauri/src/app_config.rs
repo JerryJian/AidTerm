@@ -12,7 +12,7 @@ struct AppConfig {
 }
 
 fn default_single_instance() -> bool {
-    true
+    false
 }
 
 fn data_dir() -> Option<PathBuf> {
@@ -53,8 +53,8 @@ pub fn single_instance_enabled() -> bool {
     match config_path() {
         Some(path) => read_config(&path)
             .map(|config| config.single_instance)
-            .unwrap_or(true),
-        None => true,
+            .unwrap_or(false),
+        None => false,
     }
 }
 

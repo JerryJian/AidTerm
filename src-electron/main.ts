@@ -624,9 +624,9 @@ function singleInstanceConfigPath(): string {
 function readSingleInstanceSetting(): boolean {
   try {
     const data = JSON.parse(fs.readFileSync(singleInstanceConfigPath(), 'utf8'))
-    return data.single_instance !== false
+    return data.single_instance === true
   } catch {
-    return true
+    return false
   }
 }
 
