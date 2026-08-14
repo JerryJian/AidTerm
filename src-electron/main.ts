@@ -757,11 +757,16 @@ function registerIpcHandlers(): void {
     const termEnv: NodeJS.ProcessEnv = { ...process.env, TERM: 'xterm-256color' }
     if (!process.env.LANG && !process.env.LC_ALL && !process.env.LC_CTYPE) termEnv.LANG = 'C.UTF-8'
 
+    const cwd = opts.cwd?.trim() || process.cwd()
+    if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
+      throw new Error(`Working directory does not exist: ${cwd}`)
+    }
+
     const term = ptyModule.spawn(shellCmd, opts.args || [], {
       name: 'xterm-256color',
       cols: opts.cols || 80,
       rows: opts.rows || 24,
-      cwd: opts.cwd || process.env.HOME || process.env.USERPROFILE || '.',
+      cwd,
       env: termEnv,
     })
 
@@ -957,6 +962,7 @@ function registerIpcHandlers(): void {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,
+      cwd: process.cwd(),
       env: { ...process.env, TERM: 'xterm-256color' },
     })
 
@@ -985,12 +991,14 @@ function registerIpcHandlers(): void {
         return { id, capabilities: [] }
       }
       case 'wsl': {
+        const args: string[] = []
+        if (config.distro) args.push('-d', config.distro)
+        if (config.working_dir?.trim()) args.push('--cd', config.working_dir.trim())
         const id = spawnLocalPty({
           rows,
           cols,
           shell: 'wsl.exe',
-          args: config.distro ? ['-d', config.distro] : [],
-          cwd: config.working_dir ?? null,
+          args,
         })
         return { id, capabilities: [] }
       }

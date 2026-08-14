@@ -122,9 +122,12 @@ impl SessionManager {
                 if !cfg!(target_os = "windows") {
                     return Err("WSL is only available on Windows".to_string());
                 }
-                let args = distro.map(|d| vec!["-d".to_string(), d]).unwrap_or_default();
+                let mut args = distro.map(|d| vec!["-d".to_string(), d]).unwrap_or_default();
+                if let Some(working_dir) = working_dir.filter(|dir| !dir.trim().is_empty()) {
+                    args.extend(["--cd".to_string(), working_dir]);
+                }
                 Box::new(
-                    local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some("wsl.exe".to_string()), working_dir, args, CAP_NONE)?,
+                    local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some("wsl.exe".to_string()), None, args, CAP_NONE)?,
                 )
             }
             ConnectionConfig::Ssh {

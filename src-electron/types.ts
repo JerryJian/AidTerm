@@ -403,6 +403,11 @@ export interface SavedSession {
   stop_bits: number | null
   parity: string | null
   flow_control: string | null
+  command?: string | null
+  working_dir?: string | null
+  icon?: string | null
+  built_in?: boolean
+  hidden?: boolean
 }
 
 export interface SavedSessionGroup {

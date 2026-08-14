@@ -90,6 +90,7 @@ export default {
     distro: 'Distribution',
     distro_placeholder: 'Select distribution (leave empty for default)',
     working_dir: 'Working directory (optional)',
+    working_dir_placeholder: 'e.g. /home/user; empty inherits the parent directory',
     refresh: 'Refresh',
     connect: 'Connect',
     cancel: 'Cancel',

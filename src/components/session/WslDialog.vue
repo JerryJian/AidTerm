@@ -40,7 +40,7 @@ onMounted(() => {
 function onSubmit() {
   emit('connect', {
     distro: distro.value || undefined,
-    workingDir: workingDir.value || undefined,
+    workingDir: workingDir.value.trim() || undefined,
   })
 }
 </script>
@@ -67,7 +67,7 @@ function onSubmit() {
         </label>
         <label class="field">
           <span class="field-label">{{ t('wsl_dialog.working_dir') }}</span>
-          <input v-model="workingDir" class="input" type="text" />
+          <input v-model="workingDir" class="input" type="text" :placeholder="t('wsl_dialog.working_dir_placeholder')" />
         </label>
         <div class="dialog-actions">
           <button type="button" class="btn btn-cancel" @click="emit('close')">{{ t('wsl_dialog.cancel') }}</button>

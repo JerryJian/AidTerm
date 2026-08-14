@@ -118,13 +118,20 @@ impl LocalSession {
             }
         });
 
+        let working_dir = match working_dir.filter(|dir| !dir.trim().is_empty()) {
+            Some(dir) => std::path::PathBuf::from(dir),
+            None => std::env::current_dir()
+                .map_err(|e| format!("Failed to resolve parent working directory: {}", e))?,
+        };
+        if !working_dir.is_dir() {
+            return Err(format!("Working directory does not exist: {}", working_dir.display()));
+        }
+
         let mut cmd_builder = portable_pty::CommandBuilder::new(cmd);
         if !args.is_empty() {
             cmd_builder.args(args);
         }
-        if let Some(ref wd) = working_dir {
-            cmd_builder.cwd(wd);
-        }
+        cmd_builder.cwd(&working_dir);
         cmd_builder.env("TERM", "xterm-256color");
         // Ensure UTF-8 locale so shells handle multi-byte characters correctly
         if ["LANG", "LC_ALL", "LC_CTYPE"].iter().all(|k| std::env::var(k).is_err()) {

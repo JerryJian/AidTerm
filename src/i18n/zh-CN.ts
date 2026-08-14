@@ -90,6 +90,7 @@ export default {
     distro: '发行版',
     distro_placeholder: '选择发行版（留空使用默认发行版）',
     working_dir: '工作目录（可选）',
+    working_dir_placeholder: '如 /home/user；留空继承父进程目录',
     refresh: '刷新',
     connect: '连接',
     cancel: '取消',
