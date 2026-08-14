@@ -120,6 +120,10 @@ impl LocalSession {
 
         let working_dir = match working_dir.filter(|dir| !dir.trim().is_empty()) {
             Some(dir) => std::path::PathBuf::from(dir),
+            // No explicit directory: inherit the process working directory. The
+            // app points this at `--cwd` (right-click menu) or the user's home
+            // (double-click) at startup, so tabs opened without an explicit
+            // directory land in the right place.
             None => std::env::current_dir()
                 .map_err(|e| format!("Failed to resolve parent working directory: {}", e))?,
         };

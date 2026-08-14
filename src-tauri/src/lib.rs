@@ -102,6 +102,7 @@ pub fn run() {
             commands::proxy_save,
             commands::proxy_delete,
             commands::cli_args,
+            commands::set_working_directory,
             commands::get_system_info,
             commands::get_remote_system_info,
             commands::key_list,

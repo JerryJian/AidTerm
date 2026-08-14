@@ -691,7 +691,25 @@ pub async fn get_remote_system_info(
 
 #[tauri::command]
 pub fn cli_args() -> Vec<String> {
-    std::env::args().skip(1).collect()
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    // Point the process working directory at the requested folder so tabs opened
+    // without an explicit directory land there: `--cwd` when given (right-click
+    // menu), otherwise the user's home (e.g. double-clicked from Explorer).
+    let target = args
+        .iter()
+        .position(|a| a == "--cwd")
+        .and_then(|i| args.get(i + 1))
+        .cloned()
+        .unwrap_or_else(|| crate::file_fs::home_dir().to_string_lossy().into_owned());
+    if let Err(e) = std::env::set_current_dir(&target) {
+        log::warn!("[cli] failed to set working directory to {}: {}", target, e);
+    }
+    args
+}
+
+#[tauri::command]
+pub fn set_working_directory(dir: String) -> Result<(), String> {
+    std::env::set_current_dir(&dir).map_err(|e| format!("Failed to set working directory: {}", e))
 }
 
 #[tauri::command]

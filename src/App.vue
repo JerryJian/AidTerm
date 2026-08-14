@@ -400,7 +400,10 @@ function openCliArgs(args: string[]) {
       i++
     } else if (args[i] === '--cwd' && i + 1 < args.length) {
       const workingDir = args[i + 1]
-      if (workingDir) store.addTab('local', undefined, undefined, undefined, undefined, workingDir)
+      if (workingDir) {
+        store.addTab('local', undefined, undefined, undefined, undefined, workingDir)
+        invoke('set_working_directory', { dir: workingDir }).catch(() => {})
+      }
       i++
     }
   }

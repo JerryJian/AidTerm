@@ -897,6 +897,9 @@ function registerIpcHandlers(): void {
     const termEnv: NodeJS.ProcessEnv = { ...process.env, TERM: 'xterm-256color' }
     if (!process.env.LANG && !process.env.LC_ALL && !process.env.LC_CTYPE) termEnv.LANG = 'C.UTF-8'
 
+    // No explicit directory: inherit the process working directory. The app
+    // points this at `--cwd` (right-click menu) or the user's home (double-click)
+    // at startup, so tabs opened without an explicit directory land in the right place.
     const cwd = opts.cwd?.trim() || process.cwd()
     if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
       throw new Error(`Working directory does not exist: ${cwd}`)
@@ -1940,7 +1943,17 @@ function registerIpcHandlers(): void {
     // Packaged builds put the executable path in argv[0]; dev mode has
     // [electron, main.js, ...]. Also drop macOS Finder's -psn_0_xxx arg.
     const args = process.argv.slice(app.isPackaged ? 1 : 2)
-    return args.filter((a) => !a.startsWith('-psn_0_'))
+    const clean = args.filter((a) => !a.startsWith('-psn_0_'))
+    // Point the process working directory at the requested folder so tabs opened
+    // without an explicit directory land there: --cwd when given (right-click
+    // menu), otherwise the user's home (e.g. double-clicked from Explorer).
+    const cwdIndex = clean.indexOf('--cwd')
+    const target = cwdIndex !== -1 ? clean[cwdIndex + 1] : os.homedir()
+    try { process.chdir(target) } catch { /* ignore */ }
+    return clean
+  })
+  ipcMain.handle('set_working_directory', (_event, args: { dir: string }) => {
+    process.chdir(args.dir)
   })
   ipcMain.handle('shell_context_menu_get_enabled', () => shellContextMenuEnabled())
   ipcMain.handle('shell_context_menu_set_enabled', (_, args: ToggleSettingArgs) => {
