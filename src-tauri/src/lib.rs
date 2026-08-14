@@ -1,5 +1,6 @@
 mod ai;
 mod adb;
+mod app_config;
 mod cast;
 mod commands;
 mod crypto;
@@ -21,16 +22,28 @@ use ai::AiState;
 use keychain::KeychainManager;
 use known_hosts::KnownHostsManager;
 use session::SessionManager;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).try_init();
-    tauri::Builder::default()
+    let single_instance = app_config::single_instance_enabled();
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_deep_link::init());
+    if single_instance {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            let args: Vec<String> = argv.iter().skip(1).cloned().collect();
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.emit("cli-args", args);
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }));
+    }
+    builder
         .setup(|app| {
             // All platforms: use custom Vue titlebar (decorations:false in tauri.conf.json)
 
@@ -106,6 +119,8 @@ pub fn run() {
             commands::ai_clear_history,
             commands::fetch_ai_models,
             commands::get_platform,
+            app_config::get_single_instance,
+            app_config::set_single_instance,
             shell_integration::shell_context_menu_get_enabled,
             shell_integration::shell_context_menu_set_enabled,
             shell_integration::path_environment_get_enabled,

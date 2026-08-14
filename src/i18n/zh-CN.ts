@@ -439,6 +439,8 @@ export default {
     shell_context_menu_desc: '添加到目录、目录空白处和桌面空白处的右键菜单。',
     path_environment: '将 aidterm 添加到环境变量 PATH',
     path_environment_desc: '允许在终端中直接使用 aidterm 命令；新开的终端生效。',
+    single_instance: '单例模式',
+    single_instance_desc: '只允许运行一个 AidTerm 实例，再次启动时聚焦已有窗口；更改后重启生效。',
     ai_provider: '提供商',
     ai_api_config: 'API 配置',
     ai_status: '状态',

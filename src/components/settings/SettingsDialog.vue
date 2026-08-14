@@ -88,10 +88,14 @@ const shellContextMenuError = ref('')
 const pathEnvironmentEnabled = ref(false)
 const pathEnvironmentLoading = ref(false)
 const pathEnvironmentError = ref('')
+const singleInstanceEnabled = ref(false)
+const singleInstanceLoading = ref(false)
+const singleInstanceError = ref('')
 
 onMounted(async () => {
   try {
     isWindows.value = await invoke<string>('get_platform') === 'windows'
+    singleInstanceEnabled.value = await invoke<boolean>('get_single_instance')
     if (isWindows.value) {
       shellContextMenuEnabled.value = await invoke<boolean>('shell_context_menu_get_enabled')
       pathEnvironmentEnabled.value = await invoke<boolean>('path_environment_get_enabled')
@@ -133,6 +137,20 @@ async function setPathEnvironment(enabled: boolean) {
 
 function togglePathEnvironment(e: Event) {
   return setPathEnvironment((e.target as HTMLInputElement).checked)
+}
+
+async function toggleSingleInstance(e: Event) {
+  const enabled = (e.target as HTMLInputElement).checked
+  singleInstanceLoading.value = true
+  singleInstanceError.value = ''
+  try {
+    await invoke('set_single_instance', { enabled })
+    singleInstanceEnabled.value = enabled
+  } catch (error) {
+    singleInstanceError.value = String(error)
+  } finally {
+    singleInstanceLoading.value = false
+  }
 }
 
 async function onLanguageChange(e: Event) {
@@ -236,6 +254,23 @@ async function toggleFullscreen() {
                 :checked="pathEnvironmentEnabled"
                 :disabled="pathEnvironmentLoading"
                 @change="togglePathEnvironment"
+                class="toggle-input"
+              />
+              <span class="toggle-switch" />
+            </label>
+          </div>
+          <div class="setting-row">
+            <div class="toggle-text">
+              <label>{{ t('settings.single_instance') }}</label>
+              <span class="field-desc">{{ t('settings.single_instance_desc') }}</span>
+              <span v-if="singleInstanceError" class="field-desc setting-error">{{ singleInstanceError }}</span>
+            </div>
+            <label class="toggle-label switch-only">
+              <input
+                type="checkbox"
+                :checked="singleInstanceEnabled"
+                :disabled="singleInstanceLoading"
+                @change="toggleSingleInstance"
                 class="toggle-input"
               />
               <span class="toggle-switch" />

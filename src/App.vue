@@ -134,10 +134,6 @@ const bgStyle = computed(() => {
 
 useTriggerWatcher()
 
-if (store.tabs.length === 0) {
-  store.addTab('local')
-}
-
 watch(
   () => store.tabs.map(t => t.aiSessionId),
   (ids) => pruneAiConversations(ids.filter((id): id is string => !!id)),
@@ -366,51 +362,54 @@ async function handleDeepLink(payload: string) {
   }
 }
 
+function openCliArgs(args: string[]) {
+  if (!args || args.length === 0) return
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--ssh' && i + 1 < args.length) {
+      const val = args[i + 1]
+      if (val.includes('@')) {
+        const at = val.lastIndexOf('@')
+        const user = val.slice(0, at)
+        let hostPort = val.slice(at + 1)
+        let host: string
+        let port = 22
+        if (hostPort.startsWith('[')) {
+          const close = hostPort.indexOf(']')
+          host = close === -1 ? hostPort : hostPort.slice(1, close)
+          const rest = close === -1 ? '' : hostPort.slice(close + 1)
+          if (rest.startsWith(':')) port = parseInt(rest.slice(1), 10) || 22
+        } else {
+          const colonIdx = hostPort.lastIndexOf(':')
+          if (colonIdx > 0) {
+            host = hostPort.slice(0, colonIdx)
+            port = parseInt(hostPort.slice(colonIdx + 1), 10) || 22
+          } else {
+            host = hostPort
+          }
+        }
+        sshDialogPrefill.value = {
+          host,
+          port,
+          username: user || 'root',
+        }
+        ui.sshDialog = true
+      } else {
+        sshDialogPrefill.value = { host: val, port: 22, username: 'root' }
+        ui.sshDialog = true
+      }
+      i++
+    } else if (args[i] === '--cwd' && i + 1 < args.length) {
+      const workingDir = args[i + 1]
+      if (workingDir) store.addTab('local', undefined, undefined, undefined, undefined, workingDir)
+      i++
+    }
+  }
+}
+
 async function handleCliArgs() {
   try {
     const args = await invoke<string[]>('cli_args')
-    if (args && args.length > 0) {
-      for (let i = 0; i < args.length; i++) {
-        if (args[i] === '--ssh' && i + 1 < args.length) {
-          const val = args[i + 1]
-          if (val.includes('@')) {
-            const at = val.lastIndexOf('@')
-            const user = val.slice(0, at)
-            let hostPort = val.slice(at + 1)
-            let host: string
-            let port = 22
-            if (hostPort.startsWith('[')) {
-              const close = hostPort.indexOf(']')
-              host = close === -1 ? hostPort : hostPort.slice(1, close)
-              const rest = close === -1 ? '' : hostPort.slice(close + 1)
-              if (rest.startsWith(':')) port = parseInt(rest.slice(1), 10) || 22
-            } else {
-              const colonIdx = hostPort.lastIndexOf(':')
-              if (colonIdx > 0) {
-                host = hostPort.slice(0, colonIdx)
-                port = parseInt(hostPort.slice(colonIdx + 1), 10) || 22
-              } else {
-                host = hostPort
-              }
-            }
-            sshDialogPrefill.value = {
-              host,
-              port,
-              username: user || 'root',
-            }
-            ui.sshDialog = true
-          } else {
-            sshDialogPrefill.value = { host: val, port: 22, username: 'root' }
-            ui.sshDialog = true
-          }
-          i++
-        } else if (args[i] === '--cwd' && i + 1 < args.length) {
-          const workingDir = args[i + 1]
-          if (workingDir) store.addTab('local', undefined, undefined, undefined, undefined, workingDir)
-          i++
-        }
-      }
-    }
+    openCliArgs(args)
   } catch {
     // ignore if command not available
   }
@@ -495,6 +494,14 @@ onMounted(async () => {
 
   await initBuiltInLocalProfiles()
   await handleCliArgs()
+  if (store.tabs.length === 0) {
+    store.addTab('local')
+  }
+
+  const un4 = await listen<string[]>('cli-args', (event) => {
+    openCliArgs(event.payload)
+  })
+  unlisteners.push(un4)
 })
 
 onUnmounted(() => {

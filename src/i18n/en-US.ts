@@ -439,6 +439,8 @@ export default {
     shell_context_menu_desc: 'Adds the command to directories, directory backgrounds, and the desktop background.',
     path_environment: 'Add aidterm to PATH',
     path_environment_desc: 'Allows running aidterm directly from a terminal; new terminals pick it up.',
+    single_instance: 'Single instance',
+    single_instance_desc: 'Only one AidTerm instance may run; launching again focuses the existing window. Takes effect after restart.',
     ai_provider: 'Provider',
     ai_api_config: 'API Configuration',
     ai_status: 'Status',

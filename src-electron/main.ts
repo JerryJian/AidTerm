@@ -617,29 +617,69 @@ function removeKnownHost(host: string, keyType: string): void {
 //  Main
 // ══════════════════════════════════════════════════════════════
 
-app.whenReady().then(() => {
-  loadNativeModules()
+function singleInstanceConfigPath(): string {
+  return path.join(app.getPath('userData'), 'aidterm-config.json')
+}
 
-  appDataDir = path.join(app.getPath('userData'), 'aidterm-data')
-  keysDir = path.join(appDataDir, 'keys')
-  keyIndexPath = path.join(appDataDir, 'keys_index.json')
-  knownHostsPath = path.join(os.homedir(), '.ssh', 'known_hosts')
-  fs.mkdirSync(appDataDir, { recursive: true })
-  fs.mkdirSync(keysDir, { recursive: true })
-  loadKeyIndex()
+function readSingleInstanceSetting(): boolean {
+  try {
+    const data = JSON.parse(fs.readFileSync(singleInstanceConfigPath(), 'utf8'))
+    return data.single_instance !== false
+  } catch {
+    return true
+  }
+}
 
-  createWindow()
-  registerIpcHandlers()
+function writeSingleInstanceSetting(enabled: boolean): void {
+  const file = singleInstanceConfigPath()
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify({ single_instance: enabled }, null, 2))
+}
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+function setupApp(): void {
+  app.whenReady().then(() => {
+    loadNativeModules()
+
+    appDataDir = path.join(app.getPath('userData'), 'aidterm-data')
+    keysDir = path.join(appDataDir, 'keys')
+    keyIndexPath = path.join(appDataDir, 'keys_index.json')
+    knownHostsPath = path.join(os.homedir(), '.ssh', 'known_hosts')
+    fs.mkdirSync(appDataDir, { recursive: true })
+    fs.mkdirSync(keysDir, { recursive: true })
+    loadKeyIndex()
+
+    createWindow()
+    registerIpcHandlers()
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
   })
-})
 
-app.on('window-all-closed', () => {
-  cleanupAllSessions()
-  if (process.platform !== 'darwin') app.quit()
-})
+  app.on('window-all-closed', () => {
+    cleanupAllSessions()
+    if (process.platform !== 'darwin') app.quit()
+  })
+}
+
+if (readSingleInstanceSetting()) {
+  if (!app.requestSingleInstanceLock()) {
+    app.quit()
+  } else {
+    app.on('second-instance', (_event, argv) => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        mainWindow.show()
+        mainWindow.focus()
+      }
+      const args = argv.slice(app.isPackaged ? 1 : 2).filter((a) => !a.startsWith('-psn_0_'))
+      mainWindow?.webContents.send('cli-args', args)
+    })
+    setupApp()
+  }
+} else {
+  setupApp()
+}
 
 // ── Update helpers ──
 
@@ -1909,6 +1949,10 @@ function registerIpcHandlers(): void {
   ipcMain.handle('path_environment_get_enabled', () => pathEnvironmentEnabled())
   ipcMain.handle('path_environment_set_enabled', (_, args: ToggleSettingArgs) => {
     setPathEnvironmentEnabled(args.enabled)
+  })
+  ipcMain.handle('get_single_instance', () => readSingleInstanceSetting())
+  ipcMain.handle('set_single_instance', (_, args: ToggleSettingArgs) => {
+    writeSingleInstanceSetting(args.enabled)
   })
   ipcMain.handle('detect_shells', (): Array<{ name: string; command: string; icon: string }> => {
     const shells: Array<{ name: string; command: string; icon: string }> = []
