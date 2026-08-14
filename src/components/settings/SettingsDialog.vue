@@ -7,7 +7,7 @@ import { useThemeStore } from '../../stores/themeStore'
 import { useAiStore } from '../../stores/aiStore'
 import { useProxyStore } from '../../stores/proxyStore'
 import { useUiStore } from '../../stores/uiStore'
-import { getCurrentWindow, openDialog as open } from '@/api'
+import { getCurrentWindow, invoke, openDialog as open } from '@/api'
 import type { ProxyConfig, ProxyType } from '../../types'
 
 const { t, locale } = useI18n()
@@ -81,6 +81,59 @@ function proxyTypeLabel(t: ProxyType): string {
 }
 const showAiKey = ref(false)
 const aiKeyBuffer = ref(ai.config.api_key)
+const isWindows = ref(false)
+const shellContextMenuEnabled = ref(false)
+const shellContextMenuLoading = ref(false)
+const shellContextMenuError = ref('')
+const pathEnvironmentEnabled = ref(false)
+const pathEnvironmentLoading = ref(false)
+const pathEnvironmentError = ref('')
+
+onMounted(async () => {
+  try {
+    isWindows.value = await invoke<string>('get_platform') === 'windows'
+    if (isWindows.value) {
+      shellContextMenuEnabled.value = await invoke<boolean>('shell_context_menu_get_enabled')
+      pathEnvironmentEnabled.value = await invoke<boolean>('path_environment_get_enabled')
+    }
+  } catch (error) {
+    shellContextMenuError.value = String(error)
+  }
+})
+
+async function setShellContextMenu(enabled: boolean) {
+  shellContextMenuLoading.value = true
+  shellContextMenuError.value = ''
+  try {
+    await invoke('shell_context_menu_set_enabled', { enabled })
+    shellContextMenuEnabled.value = await invoke<boolean>('shell_context_menu_get_enabled')
+  } catch (error) {
+    shellContextMenuError.value = String(error)
+  } finally {
+    shellContextMenuLoading.value = false
+  }
+}
+
+function toggleShellContextMenu(e: Event) {
+  return setShellContextMenu((e.target as HTMLInputElement).checked)
+}
+
+async function setPathEnvironment(enabled: boolean) {
+  pathEnvironmentLoading.value = true
+  pathEnvironmentError.value = ''
+  try {
+    await invoke('path_environment_set_enabled', { enabled })
+    pathEnvironmentEnabled.value = await invoke<boolean>('path_environment_get_enabled')
+  } catch (error) {
+    pathEnvironmentError.value = String(error)
+  } finally {
+    pathEnvironmentLoading.value = false
+  }
+}
+
+function togglePathEnvironment(e: Event) {
+  return setPathEnvironment((e.target as HTMLInputElement).checked)
+}
 
 async function onLanguageChange(e: Event) {
   const lang = (e.target as HTMLSelectElement).value
@@ -140,8 +193,11 @@ async function toggleFullscreen() {
             <button class="action-btn" @click="toggleFullscreen">{{ t('settings.fullscreen') }} (F11)</button>
           </div>
           <div class="setting-row">
-            <label class="toggle-label">
-              <span>{{ t('settings.adb_auto_kill') }}</span>
+            <div class="toggle-text">
+              <label>{{ t('settings.adb_auto_kill') }}</label>
+              <span class="field-desc">{{ t('settings.adb_auto_kill_desc') }}</span>
+            </div>
+            <label class="toggle-label switch-only">
               <input
                 type="checkbox"
                 :checked="settings.adbAutoKill"
@@ -151,7 +207,40 @@ async function toggleFullscreen() {
               <span class="toggle-switch" />
             </label>
           </div>
-          <span class="field-desc">{{ t('settings.adb_auto_kill_desc') }}</span>
+          <div v-if="isWindows" class="setting-row">
+            <div class="toggle-text">
+              <label>{{ t('settings.shell_context_menu') }}</label>
+              <span class="field-desc">{{ t('settings.shell_context_menu_desc') }}</span>
+              <span v-if="shellContextMenuError" class="field-desc setting-error">{{ shellContextMenuError }}</span>
+            </div>
+            <label class="toggle-label switch-only">
+              <input
+                type="checkbox"
+                :checked="shellContextMenuEnabled"
+                :disabled="shellContextMenuLoading"
+                @change="toggleShellContextMenu"
+                class="toggle-input"
+              />
+              <span class="toggle-switch" />
+            </label>
+          </div>
+          <div v-if="isWindows" class="setting-row">
+            <div class="toggle-text">
+              <label>{{ t('settings.path_environment') }}</label>
+              <span class="field-desc">{{ t('settings.path_environment_desc') }}</span>
+              <span v-if="pathEnvironmentError" class="field-desc setting-error">{{ pathEnvironmentError }}</span>
+            </div>
+            <label class="toggle-label switch-only">
+              <input
+                type="checkbox"
+                :checked="pathEnvironmentEnabled"
+                :disabled="pathEnvironmentLoading"
+                @change="togglePathEnvironment"
+                class="toggle-input"
+              />
+              <span class="toggle-switch" />
+            </label>
+          </div>
         </div>
 
         <div class="section">
@@ -256,8 +345,11 @@ async function toggleFullscreen() {
         <div class="section">
           <h3>⚙️ {{ t('ai.auto_execute_section') }}</h3>
           <div class="setting-row">
-            <label class="toggle-label">
-              <span>{{ t('ai.auto_execute') }}</span>
+            <div class="toggle-text">
+              <label>{{ t('ai.auto_execute') }}</label>
+              <span class="field-desc">{{ t('ai.auto_execute_desc') }}</span>
+            </div>
+            <label class="toggle-label switch-only">
               <input
                 type="checkbox"
                 :checked="ai.config.auto_execute || false"
@@ -267,7 +359,6 @@ async function toggleFullscreen() {
               <span class="toggle-switch" />
             </label>
           </div>
-          <span class="field-desc">{{ t('ai.auto_execute_desc') }}</span>
         </div>
         <div class="section">
           <h3>{{ t('ai.status') }}</h3>
@@ -471,6 +562,10 @@ async function toggleFullscreen() {
   accent-color: var(--accent);
 }
 
+.field-desc.setting-error {
+  color: var(--danger);
+}
+
 .row-actions {
   display: flex;
   gap: 4px;
@@ -662,6 +757,17 @@ async function toggleFullscreen() {
   color: var(--text-sub0);
 }
 
+.toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-text label {
+  font-size: 13px;
+  color: var(--text);
+}
+
 .toggle-label {
   display: flex;
   align-items: center;
@@ -670,6 +776,11 @@ async function toggleFullscreen() {
   font-size: 13px;
   color: var(--text);
   width: 100%;
+}
+
+.toggle-label.switch-only {
+  width: auto;
+  flex-shrink: 0;
 }
 
 .toggle-input {

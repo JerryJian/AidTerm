@@ -403,6 +403,11 @@ async function handleCliArgs() {
             sshDialogPrefill.value = { host: val, port: 22, username: 'root' }
             ui.sshDialog = true
           }
+          i++
+        } else if (args[i] === '--cwd' && i + 1 < args.length) {
+          const workingDir = args[i + 1]
+          if (workingDir) store.addTab('local', undefined, undefined, undefined, undefined, workingDir)
+          i++
         }
       }
     }

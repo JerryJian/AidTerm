@@ -13,6 +13,10 @@ export interface ClipboardWriteArgs {
   text: string
 }
 
+export interface ToggleSettingArgs {
+  enabled: boolean
+}
+
 export interface SpawnTerminalArgs {
   rows: number
   cols: number

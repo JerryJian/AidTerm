@@ -25,7 +25,7 @@ import type {
   FetchAiModelsArgs, GetRemoteSystemInfoArgs,
   SaveSessionStoreArgs, KeyGenerateRsaArgs, KeyGenerateEd25519Args,
   KeyDeleteArgs, KeyImportArgs, KnownHostsAddArgs, KnownHostsRemoveArgs,
-  WindowSetFullscreenArgs, ClipboardWriteArgs,
+  WindowSetFullscreenArgs, ClipboardWriteArgs, ToggleSettingArgs,
   OpenDialogOpts, SaveDialogOpts, DialogFilter,
   TunnelType,
 } from './types'
@@ -465,6 +465,106 @@ function runCmd(cmd: string, args: string[]): string {
     throw new Error(`${cmd} failed (exit ${res.status}): ${detail}`)
   }
   return (res.stdout || '').toString()
+}
+
+const SHELL_CONTEXT_MENU_LABEL = '在 AidTerm 中打开'
+const SHELL_CONTEXT_MENU_KEYS: Array<[string, string]> = [
+  ['HKCU\\Software\\Classes\\Directory\\shell\\AidTerm', '%1'],
+  ['HKCU\\Software\\Classes\\Directory\\Background\\shell\\AidTerm', '%V'],
+  ['HKCU\\Software\\Classes\\DesktopBackground\\Shell\\AidTerm', '%V'],
+]
+
+function shellContextMenuCommand(target: string): string {
+  const parts = [`"${process.execPath}"`]
+  if (!app.isPackaged) parts.push(`"${path.resolve(process.argv[1])}"`)
+  parts.push(`--cwd "${target}"`)
+  return parts.join(' ')
+}
+
+function runRegistry(args: string[], allowMissing = false): string {
+  const { spawnSync } = require('child_process') as typeof import('child_process')
+  const result = spawnSync('reg.exe', args, { encoding: 'utf8', windowsHide: true })
+  if (result.error) throw result.error
+  if (result.status !== 0 && !allowMissing) {
+    const detail = (result.stderr || result.stdout || '').toString().trim()
+    throw new Error(`reg.exe failed (exit ${result.status}): ${detail}`)
+  }
+  return (result.stdout || '').toString()
+}
+
+function registryKeyExists(key: string): boolean {
+  const { spawnSync } = require('child_process') as typeof import('child_process')
+  const result = spawnSync('reg.exe', ['query', key], { windowsHide: true })
+  if (result.error) throw result.error
+  return result.status === 0
+}
+
+function shellContextMenuEnabled(): boolean {
+  if (process.platform !== 'win32') return false
+  return SHELL_CONTEXT_MENU_KEYS.every(([key]) => registryKeyExists(`${key}\\command`))
+}
+
+function setShellContextMenuEnabled(enabled: boolean): void {
+  if (process.platform !== 'win32') {
+    if (enabled) throw new Error('Explorer context menu is only supported on Windows')
+    return
+  }
+
+  if (!enabled) {
+    for (const [key] of SHELL_CONTEXT_MENU_KEYS) runRegistry(['delete', key, '/f'], true)
+    return
+  }
+
+  const icon = `"${process.execPath}",0`
+  try {
+    for (const [key, target] of SHELL_CONTEXT_MENU_KEYS) {
+      runRegistry(['add', key, '/ve', '/d', SHELL_CONTEXT_MENU_LABEL, '/f'])
+      runRegistry(['add', key, '/v', 'Icon', '/d', icon, '/f'])
+      runRegistry(['add', `${key}\\command`, '/ve', '/d', shellContextMenuCommand(target), '/f'])
+    }
+  } catch (error) {
+    for (const [key] of SHELL_CONTEXT_MENU_KEYS) runRegistry(['delete', key, '/f'], true)
+    throw error
+  }
+}
+
+const USER_ENVIRONMENT_KEY = 'HKCU\\Software\\Environment'
+const AIDTERM_ENVIRONMENT_KEY = 'HKCU\\Software\\AidTerm'
+
+function aidtermExecutableDirectory(): string {
+  if (!app.isPackaged) throw new Error('PATH integration is only available in packaged builds')
+  return path.dirname(app.getPath('exe'))
+}
+
+function normalizeWindowsPath(value: string): string {
+  return value.trim().replace(/[\\/]+$/, '').toLowerCase()
+}
+
+function pathEnvironmentEnabled(): boolean {
+  return process.platform === 'win32' && registryKeyExists(`${AIDTERM_ENVIRONMENT_KEY}\\EnvironmentPath`)
+}
+
+function setPathEnvironmentEnabled(enabled: boolean): void {
+  if (process.platform !== 'win32') {
+    if (enabled) throw new Error('Adding AidTerm to PATH is only supported on Windows')
+    return
+  }
+  const directory = aidtermExecutableDirectory()
+  const target = normalizeWindowsPath(directory)
+  const current = process.env.Path || process.env.PATH || ''
+  const entries = current
+    .split(';')
+    .filter((entry) => entry.trim() && normalizeWindowsPath(entry) !== target)
+  if (enabled) entries.push(directory)
+  const nextPath = entries.join(';')
+  runRegistry(['add', USER_ENVIRONMENT_KEY, '/v', 'Path', '/t', 'REG_EXPAND_SZ', '/d', nextPath, '/f'])
+  process.env.Path = nextPath
+  process.env.PATH = nextPath
+  if (enabled) {
+    runRegistry(['add', AIDTERM_ENVIRONMENT_KEY, '/v', 'EnvironmentPath', '/d', directory, '/f'])
+  } else {
+    runRegistry(['delete', AIDTERM_ENVIRONMENT_KEY, '/v', 'EnvironmentPath', '/f'], true)
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1801,6 +1901,14 @@ function registerIpcHandlers(): void {
     // [electron, main.js, ...]. Also drop macOS Finder's -psn_0_xxx arg.
     const args = process.argv.slice(app.isPackaged ? 1 : 2)
     return args.filter((a) => !a.startsWith('-psn_0_'))
+  })
+  ipcMain.handle('shell_context_menu_get_enabled', () => shellContextMenuEnabled())
+  ipcMain.handle('shell_context_menu_set_enabled', (_, args: ToggleSettingArgs) => {
+    setShellContextMenuEnabled(args.enabled)
+  })
+  ipcMain.handle('path_environment_get_enabled', () => pathEnvironmentEnabled())
+  ipcMain.handle('path_environment_set_enabled', (_, args: ToggleSettingArgs) => {
+    setPathEnvironmentEnabled(args.enabled)
   })
   ipcMain.handle('detect_shells', (): Array<{ name: string; command: string; icon: string }> => {
     const shells: Array<{ name: string; command: string; icon: string }> = []

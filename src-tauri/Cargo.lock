@@ -87,6 +87,7 @@ dependencies = [
  "tokio-socks",
  "tokio-util",
  "uuid",
+ "windows-sys 0.59.0",
  "winreg 0.52.0",
 ]
 

@@ -11,6 +11,7 @@ mod proxy;
 mod serial;
 mod session;
 mod session_store;
+mod shell_integration;
 mod sftp;
 mod sysproxy;
 mod tunnel;
@@ -105,6 +106,10 @@ pub fn run() {
             commands::ai_clear_history,
             commands::fetch_ai_models,
             commands::get_platform,
+            shell_integration::shell_context_menu_get_enabled,
+            shell_integration::shell_context_menu_set_enabled,
+            shell_integration::path_environment_get_enabled,
+            shell_integration::path_environment_set_enabled,
             commands::detect_shells,
             commands::write_text_file,
             commands::open_devtools,
