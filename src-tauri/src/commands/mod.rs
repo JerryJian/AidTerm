@@ -948,6 +948,18 @@ pub struct ShellProfile {
     pub name: String,
     pub command: String,
     pub icon: String,
+    /// Terminal kind: `wsl` opens a real WSL session, `local` a plain shell.
+    #[serde(rename = "terminal_type")]
+    pub terminal_type: &'static str,
+}
+
+impl ShellProfile {
+    fn local(name: &str, command: &str, icon: &str) -> Self {
+        ShellProfile { name: name.into(), command: command.into(), icon: icon.into(), terminal_type: "local" }
+    }
+    fn wsl() -> Self {
+        ShellProfile { name: "WSL".into(), command: "wsl.exe".into(), icon: "\u{1F427}".into(), terminal_type: "wsl" }
+    }
 }
 
 #[tauri::command]
@@ -955,38 +967,38 @@ pub fn detect_shells() -> Vec<ShellProfile> {
     let mut shells = Vec::new();
 
     if cfg!(target_os = "windows") {
-        shells.push(ShellProfile { name: "\u{547D}\u{4EE4}\u{63D0}\u{793A}\u{7B26}" .into(), command: "cmd.exe".into(), icon: "\u{1F4DF}".into() });
+        shells.push(ShellProfile::local("\u{547D}\u{4EE4}\u{63D0}\u{793A}\u{7B26}", "cmd.exe", "\u{1F4DF}"));
         if std::path::Path::new(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe").exists() {
-            shells.push(ShellProfile { name: "Windows PowerShell".into(), command: "powershell.exe".into(), icon: "\u{1F4DF}".into() });
+            shells.push(ShellProfile::local("Windows PowerShell", "powershell.exe", "\u{1F4DF}"));
         }
         if exe_in_path("pwsh.exe") {
-            shells.push(ShellProfile { name: "PowerShell".into(), command: "pwsh.exe".into(), icon: "\u{1F4DF}".into() });
+            shells.push(ShellProfile::local("PowerShell", "pwsh.exe", "\u{1F4DF}"));
         }
         if exe_in_path("wsl.exe") {
-            shells.push(ShellProfile { name: "WSL".into(), command: "wsl.exe".into(), icon: "\u{1F427}".into() });
+            shells.push(ShellProfile::wsl());
         }
         if exe_in_path("bash.exe") {
-            shells.push(ShellProfile { name: "Bash".into(), command: "bash.exe".into(), icon: "\u{1F40D}".into() });
+            shells.push(ShellProfile::local("Bash", "bash.exe", "\u{1F40D}"));
         }
     } else {
         if cfg!(target_os = "macos") {
             if exe_in_path("zsh") {
-                shells.push(ShellProfile { name: "Zsh".into(), command: "zsh".into(), icon: "\u{1F334}".into() });
+                shells.push(ShellProfile::local("Zsh", "zsh", "\u{1F334}"));
             }
         }
         if exe_in_path("bash") {
-            shells.push(ShellProfile { name: "Bash".into(), command: "bash".into(), icon: "\u{1F40D}".into() });
+            shells.push(ShellProfile::local("Bash", "bash", "\u{1F40D}"));
         }
         if exe_in_path("sh") {
-            shells.push(ShellProfile { name: "Sh".into(), command: "sh".into(), icon: "\u{1F40D}".into() });
+            shells.push(ShellProfile::local("Sh", "sh", "\u{1F40D}"));
         }
         if cfg!(not(target_os = "macos")) {
             if exe_in_path("zsh") {
-                shells.push(ShellProfile { name: "Zsh".into(), command: "zsh".into(), icon: "\u{1F334}".into() });
+                shells.push(ShellProfile::local("Zsh", "zsh", "\u{1F334}"));
             }
         }
         if exe_in_path("fish") {
-            shells.push(ShellProfile { name: "Fish".into(), command: "fish".into(), icon: "\u{1F41F}".into() });
+            shells.push(ShellProfile::local("Fish", "fish", "\u{1F41F}"));
         }
     }
 

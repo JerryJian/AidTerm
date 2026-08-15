@@ -6,7 +6,7 @@ use std::time::Instant;
 use sysinfo::{Disks, Networks, System};
 use tauri::State;
 
-use crate::session::{Capability, SessionManager};
+use crate::session::SessionManager;
 
 const MARKERS: &str = "__AID_MONITOR__";
 
@@ -265,14 +265,13 @@ pub async fn get_system_metrics(
     local_state: State<'_, LocalMonitorState>,
     session_id: String,
 ) -> Result<MonitorMetrics, String> {
-    // The monitor tool is about the connection target's system. Sessions that
-    // can `exec` (SSH) report the remote machine via exec; local/wsl sessions
-    // report the local host via sysinfo.
-    let caps = manager.capabilities(&session_id);
-    if caps.contains(&Capability::Exec.as_str()) {
-        remote_system_metrics(&manager, &remote_state, &session_id).await
-    } else {
-        local_system_metrics(&local_state, &session_id)
+    // The monitor tool is about the connection target's system. SSH and WSL
+    // report a Linux environment (remote / WSL distro) via exec; local
+    // sessions report the local host via sysinfo.
+    let stype = manager.session_type(&session_id);
+    match stype {
+        "ssh" | "wsl" => remote_system_metrics(&manager, &remote_state, &session_id).await,
+        _ => local_system_metrics(&local_state, &session_id),
     }
 }
 

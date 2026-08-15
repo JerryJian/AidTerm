@@ -87,7 +87,10 @@ pub trait Connection: Send {
     fn resize(&self, rows: u16, cols: u16) -> Result<(), String>;
     fn kill(&mut self);
 
-    /// Run a non-interactive command and capture its output (SSH only today).
+    /// Stable session kind: "local" | "wsl" | "ssh" | "telnet" | "serial" | "adb".
+    fn session_type(&self) -> &'static str;
+
+    /// Run a non-interactive command and capture its output (SSH/WSL only today).
     fn exec(&self, _cmd: &str) -> BoxFuture<'static, Result<String, String>> {
         Box::pin(async { Err("Exec not supported for this session type".to_string()) })
     }
@@ -119,7 +122,7 @@ impl SessionManager {
         let id = uuid::Uuid::new_v4().to_string();
         let session: Box<dyn Connection> = match config {
             ConnectionConfig::Local { shell, working_dir } => Box::new(
-                local::LocalSession::spawn(id.clone(), rows, cols, app_handle, shell, working_dir, Vec::new(), CAP_FILE_MONITOR)?,
+                local::LocalSession::spawn(id.clone(), rows, cols, app_handle, shell, working_dir, Vec::new(), "local", CAP_FILE_MONITOR)?,
             ),
             ConnectionConfig::Wsl { distro, working_dir } => {
                 if !cfg!(target_os = "windows") {
@@ -130,7 +133,7 @@ impl SessionManager {
                     args.extend(["--cd".to_string(), working_dir]);
                 }
                 Box::new(
-                    local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some("wsl.exe".to_string()), None, args, CAP_FILE_MONITOR)?,
+                    local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some("wsl.exe".to_string()), None, args, "wsl", CAP_FILE_MONITOR)?,
                 )
             }
             ConnectionConfig::Ssh {
@@ -183,7 +186,7 @@ impl SessionManager {
                     serial,
                     "shell".to_string(),
                 ];
-                Box::new(local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some(adb_bin), None, args, CAP_FILE_CAST)?)
+                Box::new(local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some(adb_bin), None, args, "adb", CAP_FILE_CAST)?)
             }
         };
         let mut sessions = self.sessions.lock().map_err(|e| e.to_string())?;
@@ -211,6 +214,17 @@ impl SessionManager {
             session.exec(&command)
         };
         fut.await
+    }
+
+    pub fn session_type(&self, id: &str) -> &'static str {
+        // session_type() returns a &'static str, so this does not borrow the guard.
+        match self.sessions.lock() {
+            Ok(sessions) => sessions
+                .get(id)
+                .map(|s| s.session_type())
+                .unwrap_or(""),
+            Err(_) => "",
+        }
     }
 
     pub fn kill(&self, id: &str) -> Result<(), String> {

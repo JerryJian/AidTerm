@@ -455,6 +455,10 @@ impl Connection for SshConnection {
         self.kill()
     }
 
+    fn session_type(&self) -> &'static str {
+        "ssh"
+    }
+
     fn exec(&self, cmd: &str) -> BoxFuture<'static, Result<String, String>> {
         let exec_tx = self.exec_tx.clone();
         let cmd = cmd.to_string();

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@/api'
-import type { SavedSession, SavedSessionGroup, SessionStoreData } from '../types'
+import type { SavedSession, SavedSessionGroup, SessionStoreData, ShellProfile } from '../types'
 
 function genId(): string {
   return crypto.randomUUID()
@@ -81,13 +81,14 @@ export const useSessionStore = defineStore('sessions', () => {
   function addSession(
     name: string,
     type: SavedSession['session_type'],
-    config: { host?: string; port?: number; username?: string; password?: string; privateKeyPath?: string; data_bits?: number; stop_bits?: number; parity?: string; flow_control?: string; command?: string; working_dir?: string; icon?: string; built_in?: boolean; hidden?: boolean },
+    config: { host?: string; port?: number; username?: string; password?: string; privateKeyPath?: string; data_bits?: number; stop_bits?: number; parity?: string; flow_control?: string; command?: string; working_dir?: string; icon?: string; built_in?: boolean; hidden?: boolean; terminal_type?: 'local' | 'wsl' },
     groupId?: string | null,
   ) {
     const session: SavedSession = {
       id: genId(),
       name,
       session_type: type,
+      terminal_type: config.terminal_type ?? null,
       group_id: groupId ?? null,
       host: config.host ?? null,
       port: config.port ?? null,
@@ -115,13 +116,14 @@ export const useSessionStore = defineStore('sessions', () => {
   function addSessionSilent(
     name: string,
     type: SavedSession['session_type'],
-    config: { host?: string; port?: number; username?: string; password?: string; privateKeyPath?: string; data_bits?: number; stop_bits?: number; parity?: string; flow_control?: string; command?: string; working_dir?: string; icon?: string; built_in?: boolean; hidden?: boolean },
+    config: { host?: string; port?: number; username?: string; password?: string; privateKeyPath?: string; data_bits?: number; stop_bits?: number; parity?: string; flow_control?: string; command?: string; working_dir?: string; icon?: string; built_in?: boolean; hidden?: boolean; terminal_type?: 'local' | 'wsl' },
     groupId?: string | null,
   ) {
     const session: SavedSession = {
       id: genId(),
       name,
       session_type: type,
+      terminal_type: config.terminal_type ?? null,
       group_id: groupId ?? null,
       host: config.host ?? null,
       port: config.port ?? null,
@@ -145,7 +147,7 @@ export const useSessionStore = defineStore('sessions', () => {
     return session
   }
 
-  function initBuiltInProfiles(shells: Array<{ name: string; command: string; icon: string }>) {
+  function initBuiltInProfiles(shells: ShellProfile[]) {
     const groupName = te('menu.local_shell') ? t('menu.local_shell') : 'Local Shell'
     let group = groups.value.find(g => g.built_in)
     if (!group) {
@@ -169,6 +171,10 @@ export const useSessionStore = defineStore('sessions', () => {
           session.icon = shell.icon
           changed = true
         }
+        if (session.terminal_type !== shell.terminal_type) {
+          session.terminal_type = shell.terminal_type ?? 'local'
+          changed = true
+        }
         kept.push(session)
       } else {
         kept.push(session)
@@ -180,6 +186,7 @@ export const useSessionStore = defineStore('sessions', () => {
         id: genId(),
         name: shell.name,
         session_type: 'local',
+        terminal_type: shell.terminal_type ?? 'local',
         group_id: group.id,
         host: null,
         port: null,

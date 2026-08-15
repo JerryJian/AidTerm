@@ -58,6 +58,7 @@ const isDev = !app.isPackaged
 const ptySessions = new Map<string, PtySession>()
 const sshSessions = new Map<string, SshSession>()
 const serialSessions = new Map<string, SerialSession>()
+const wslSessions = new Map<string, string>()
 const sftpConnections = new Map<string, SftpClient>()
 const sftpTransfers = new Map<string, { abort: () => void }>()
 const tunnelMap = new Map<string, TunnelState>()
@@ -144,6 +145,11 @@ function resolveLocalFsPath(kind: string, handle: string, remote: string): strin
   if (kind === 'wsl') return wslUncPath(handle, remote)
   if (!remote) return os.homedir()
   return remote
+}
+
+/** Distro for a WSL session (empty string = default distro). */
+function wslDistroForSession(sessionId: string): string {
+  return wslSessions.get(sessionId) ?? ''
 }
 
 function formatLocalMtime(ms: number): string {
@@ -878,7 +884,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('connection_kill', (_, args: KillTerminalArgs) => {
     const { sessionId } = args
     const term = ptySessions.get(sessionId)
-    if (term) { killPty(term); ptySessions.delete(sessionId); return }
+    if (term) { killPty(term); ptySessions.delete(sessionId); wslSessions.delete(sessionId); return }
     const ssh = sshSessions.get(sessionId)
     if (ssh) { try { ssh.conn.end() } catch {}; sshSessions.delete(sessionId); monitorPrev.delete(sessionId); return }
     const sp = serialSessions.get(sessionId)
@@ -1144,6 +1150,7 @@ function registerIpcHandlers(): void {
           shell: 'wsl.exe',
           args,
         })
+        wslSessions.set(id, config.distro ?? '')
         return { id, capabilities: ['file', 'monitor'] }
       }
       case 'ssh': {
@@ -1903,6 +1910,30 @@ function registerIpcHandlers(): void {
     })
   }
 
+  // WSL sessions run commands inside the WSL distro via wsl.exe (the WSL
+  // environment is a Linux system, same as SSH targets).
+  const makeWslExec = (sessionId: string) => async (cmd: string, timeoutMs = 8000): Promise<string> => {
+    const distro = wslDistroForSession(sessionId)
+    const args: string[] = []
+    if (distro) args.push('-d', distro)
+    args.push('-e', 'bash', '-lc', cmd)
+    const { execFile } = require('child_process') as typeof import('child_process')
+    return new Promise((resolve) => {
+      execFile('wsl.exe', args, { timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 }, (err: Error | null, stdout: string | Buffer, stderr: string | Buffer) => {
+        if (err) { resolve(''); return }
+        resolve(String(stdout) + String(stderr))
+      })
+    })
+  }
+
+  // Run a command on the session's target: SSH -> remote exec, WSL -> local
+  // wsl.exe exec, anything else -> empty output.
+  const makeSessionExec = (sessionId: string) => (cmd: string, timeoutMs = 8000): Promise<string> => {
+    if (sshSessions.has(sessionId)) return makeRemoteExec(sessionId)(cmd, timeoutMs)
+    if (wslSessions.has(sessionId)) return makeWslExec(sessionId)(cmd, timeoutMs)
+    return Promise.resolve('')
+  }
+
   ipcMain.handle('get_remote_system_info', async (_, args: GetRemoteSystemInfoArgs) => {
     const { sessionId } = args
     const ssh = sshSessions.get(sessionId)
@@ -1952,8 +1983,7 @@ function registerIpcHandlers(): void {
     at: number
   }>()
 
-  const collectRemoteSystemMetrics = async (sessionId: string): Promise<RemoteSystemMetrics> => {
-    const execCmd = makeRemoteExec(sessionId)
+  const collectRemoteSystemMetrics = async (sessionId: string, execCmd: (cmd: string, timeoutMs?: number) => Promise<string>): Promise<RemoteSystemMetrics> => {
 
     const MARKERS = '__AID_MONITOR__'
     const out = await execCmd(
@@ -2270,13 +2300,13 @@ function registerIpcHandlers(): void {
     }
   }
 
-  // Unified monitor entry: report the connection target's system. SSH
-  // sessions report the remote machine via exec; local/wsl sessions report
-  // the local host.
+  // Unified monitor entry: report the connection target's system. SSH and WSL
+  // report a Linux environment (remote / WSL distro) via exec; local sessions
+  // report the local host.
   ipcMain.handle('get_system_metrics', async (_, args: GetRemoteSystemMetricsArgs): Promise<RemoteSystemMetrics> => {
     const { sessionId } = args
-    if (sshSessions.has(sessionId)) {
-      return collectRemoteSystemMetrics(sessionId)
+    if (sshSessions.has(sessionId) || wslSessions.has(sessionId)) {
+      return collectRemoteSystemMetrics(sessionId, makeSessionExec(sessionId))
     }
     return collectLocalSystemMetrics()
   })
@@ -2309,8 +2339,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle('set_single_instance', (_, args: ToggleSettingArgs) => {
     writeSingleInstanceSetting(args.enabled)
   })
-  ipcMain.handle('detect_shells', (): Array<{ name: string; command: string; icon: string }> => {
-    const shells: Array<{ name: string; command: string; icon: string }> = []
+  ipcMain.handle('detect_shells', (): Array<{ name: string; command: string; icon: string; terminal_type?: 'local' | 'wsl' }> => {
+    const shells: Array<{ name: string; command: string; icon: string; terminal_type?: 'local' | 'wsl' }> = []
     const has = (exe: string) => {
       const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean)
       for (const dir of dirs) {
@@ -2320,18 +2350,18 @@ function registerIpcHandlers(): void {
       return false
     }
     if (process.platform === 'win32') {
-      shells.push({ name: '命令提示符', command: 'cmd.exe', icon: '\u{1F4DF}' })
-      if (fs.existsSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')) shells.push({ name: 'Windows PowerShell', command: 'powershell.exe', icon: '\u{1F4DF}' })
-      if (has('pwsh.exe')) shells.push({ name: 'PowerShell', command: 'pwsh.exe', icon: '\u{1F4DF}' })
-      if (has('wsl.exe')) shells.push({ name: 'WSL', command: 'wsl.exe', icon: '\u{1F427}' })
-      if (has('bash.exe')) shells.push({ name: 'Bash', command: 'bash.exe', icon: '\u{1F40D}' })
+      shells.push({ name: '命令提示符', command: 'cmd.exe', icon: '\u{1F4DF}', terminal_type: 'local' })
+      if (fs.existsSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')) shells.push({ name: 'Windows PowerShell', command: 'powershell.exe', icon: '\u{1F4DF}', terminal_type: 'local' })
+      if (has('pwsh.exe')) shells.push({ name: 'PowerShell', command: 'pwsh.exe', icon: '\u{1F4DF}', terminal_type: 'local' })
+      if (has('wsl.exe')) shells.push({ name: 'WSL', command: 'wsl.exe', icon: '\u{1F427}', terminal_type: 'wsl' })
+      if (has('bash.exe')) shells.push({ name: 'Bash', command: 'bash.exe', icon: '\u{1F40D}', terminal_type: 'local' })
       return shells
     }
-    if (process.platform === 'darwin' && has('zsh')) shells.push({ name: 'Zsh', command: 'zsh', icon: '\u{1F334}' })
-    if (has('bash')) shells.push({ name: 'Bash', command: 'bash', icon: '\u{1F40D}' })
-    if (has('sh')) shells.push({ name: 'Sh', command: 'sh', icon: '\u{1F40D}' })
-    if (process.platform !== 'darwin' && has('zsh')) shells.push({ name: 'Zsh', command: 'zsh', icon: '\u{1F334}' })
-    if (has('fish')) shells.push({ name: 'Fish', command: 'fish', icon: '\u{1F41F}' })
+    if (process.platform === 'darwin' && has('zsh')) shells.push({ name: 'Zsh', command: 'zsh', icon: '\u{1F334}', terminal_type: 'local' })
+    if (has('bash')) shells.push({ name: 'Bash', command: 'bash', icon: '\u{1F40D}', terminal_type: 'local' })
+    if (has('sh')) shells.push({ name: 'Sh', command: 'sh', icon: '\u{1F40D}', terminal_type: 'local' })
+    if (process.platform !== 'darwin' && has('zsh')) shells.push({ name: 'Zsh', command: 'zsh', icon: '\u{1F334}', terminal_type: 'local' })
+    if (has('fish')) shells.push({ name: 'Fish', command: 'fish', icon: '\u{1F41F}', terminal_type: 'local' })
     return shells
   })
 

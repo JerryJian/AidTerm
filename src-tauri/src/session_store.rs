@@ -36,6 +36,8 @@ pub struct SavedSession {
     pub built_in: bool,
     #[serde(default)]
     pub hidden: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_type: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

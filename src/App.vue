@@ -6,7 +6,7 @@ import { useSettingsStore } from './stores/settingsStore'
 import { useUiStore } from './stores/uiStore'
 import { useThemeStore } from './stores/themeStore'
 import { useUpdateStore } from './stores/updateStore'
-import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, AdbConnectionInfo, SavedSession, TerminalTab, FileKind } from './types'
+import type { SshConnectionInfo, TelnetConnectionInfo, SerialConnectionInfo, AdbConnectionInfo, SavedSession, TerminalTab, FileKind, ShellProfile } from './types'
 import { invoke, listen, getCurrentWindow, toFileUrl, saveDialog as save } from '@/api'
 import TabBar from './components/terminal/TabBar.vue'
 import TitleBar from './components/titlebar/TitleBar.vue'
@@ -217,7 +217,13 @@ function onConnectSession(session: SavedSession) {
     store.addTab('serial', undefined, undefined, undefined, info)
     sessionStore.updateLastConnected(session.id)
   } else if (session.session_type === 'local') {
-    store.addTab('local', undefined, undefined, session.command ?? undefined, undefined, session.working_dir ?? undefined, session.name)
+    if (session.terminal_type === 'wsl') {
+      store.addTab('wsl', undefined, undefined, undefined, undefined, session.working_dir ?? undefined, session.name, undefined, {
+        workingDir: session.working_dir ?? undefined,
+      })
+    } else {
+      store.addTab('local', undefined, undefined, session.command ?? undefined, undefined, session.working_dir ?? undefined, session.name)
+    }
     sessionStore.updateLastConnected(session.id)
   }
 }
@@ -421,12 +427,8 @@ async function handleCliArgs() {
 async function initBuiltInLocalProfiles() {
   if (!sessionStore.loaded) await sessionStore.load()
   try {
-    const result = await invoke<Array<{ name: string; command: string; icon: string } | string>>('detect_shells')
-    const shells = (result ?? []).map((shell) => {
-      if (typeof shell === 'string') return { name: shell, command: shell, icon: '' }
-      return { name: shell.name, command: shell.command, icon: shell.icon }
-    })
-    sessionStore.initBuiltInProfiles(shells)
+    const shells = await invoke<ShellProfile[]>('detect_shells')
+    sessionStore.initBuiltInProfiles(shells ?? [])
   } catch {
     // ignore
   }

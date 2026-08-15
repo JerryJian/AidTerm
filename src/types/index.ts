@@ -175,6 +175,9 @@ export interface SavedSession {
   id: string
   name: string
   session_type: 'ssh' | 'telnet' | 'serial' | 'local'
+  /** Terminal kind for built-in local profiles: `wsl` opens a real WSL session,
+   *  anything else opens a plain local shell. Determines the backend config type. */
+  terminal_type?: 'local' | 'wsl' | null
   group_id: string | null
   host: string | null
   port: number | null
@@ -277,6 +280,14 @@ export interface FileEntry {
 export interface SessionStoreData {
   groups: SavedSessionGroup[]
   sessions: SavedSession[]
+}
+
+/** A detected shell entry from the backend (`detect_shells`). */
+export interface ShellProfile {
+  name: string
+  command: string
+  icon: string
+  terminal_type?: 'local' | 'wsl'
 }
 
 export type TunnelType = 'Local' | 'Remote' | 'Dynamic'

@@ -186,6 +186,10 @@ impl Connection for SerialConnection {
         self.kill()
     }
 
+    fn session_type(&self) -> &'static str {
+        "serial"
+    }
+
     fn capabilities(&self) -> &'static [Capability] {
         crate::session::CAP_NONE
     }

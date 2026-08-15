@@ -2,6 +2,7 @@ use std::io::{Read, Write};
 use std::time::Duration;
 use portable_pty::{PtyPair, MasterPty, PtySize, PtySystem, ChildKiller};
 use tauri::{AppHandle, Emitter};
+use futures::future::BoxFuture;
 use crate::session::{Connection, Capability};
 
 pub struct LocalSession {
@@ -11,6 +12,10 @@ pub struct LocalSession {
     #[cfg_attr(not(unix), allow(dead_code))]
     pub pid: Option<u32>,
     pub capabilities: &'static [Capability],
+    /// "local" | "wsl" | "adb"
+    pub session_type: &'static str,
+    /// Distro argument for `wsl.exe` (WSL sessions only).
+    pub wsl_distro: Option<String>,
 }
 
 #[cfg(windows)]
@@ -100,6 +105,7 @@ impl LocalSession {
         shell: Option<String>,
         working_dir: Option<String>,
         args: Vec<String>,
+        session_type: &'static str,
         capabilities: &'static [Capability],
     ) -> Result<Self, String> {
         let native_pty = portable_pty::NativePtySystem::default();
@@ -133,7 +139,7 @@ impl LocalSession {
 
         let mut cmd_builder = portable_pty::CommandBuilder::new(cmd);
         if !args.is_empty() {
-            cmd_builder.args(args);
+            cmd_builder.args(args.clone());
         }
         cmd_builder.cwd(&working_dir);
         cmd_builder.env("TERM", "xterm-256color");
@@ -213,6 +219,13 @@ impl LocalSession {
             killer,
             pid: child_pid,
             capabilities,
+            session_type,
+            wsl_distro: if session_type == "wsl" {
+                // distro passed as `-d <distro>` in args, when present
+                args.iter().position(|a| a == "-d").and_then(|i| args.get(i + 1).cloned())
+            } else {
+                None
+            },
         })
     }
 
@@ -269,6 +282,34 @@ impl Connection for LocalSession {
 
     fn kill(&mut self) {
         self.kill()
+    }
+
+    fn session_type(&self) -> &'static str {
+        self.session_type
+    }
+
+    fn exec(&self, cmd: &str) -> BoxFuture<'static, Result<String, String>> {
+        // WSL sessions run the command inside the WSL distro via wsl.exe
+        // (the WSL environment is a Linux system, same as SSH targets).
+        if self.session_type != "wsl" {
+            return Box::pin(async { Err("Exec not supported for this session type".to_string()) });
+        }
+        let mut wargs = Vec::new();
+        if let Some(d) = &self.wsl_distro {
+            wargs.push("-d".to_string());
+            wargs.push(d.clone());
+        }
+        wargs.push("-e".to_string());
+        wargs.push("bash".to_string());
+        wargs.push("-lc".to_string());
+        wargs.push(cmd.to_string());
+        Box::pin(async move {
+            let out = std::process::Command::new("wsl.exe")
+                .args(&wargs)
+                .output()
+                .map_err(|e| format!("wsl exec failed: {}", e))?;
+            Ok(String::from_utf8_lossy(&out.stdout).to_string())
+        })
     }
 
     fn capabilities(&self) -> &'static [Capability] {

@@ -135,11 +135,7 @@ async function autoConnect() {
     } else if (ssn.type === 'wsl') {
       await store.connectWsl(props.tabId, leaf.wslInfo?.distro)
     } else if (ssn.type === 'local') {
-      if (ssn.command === 'wsl.exe') {
-        await store.connectWsl(props.tabId)
-      } else {
-        await store.connectLocal(props.tabId)
-      }
+      await store.connectLocal(props.tabId)
     } else if (ssn.type === 'ssh' && ssn.status === 'connected' && leaf.sshInfo) {
       const info = leaf.sshInfo
       host.value = info.host

@@ -117,6 +117,10 @@ impl Connection for TelnetConnection {
         self.kill()
     }
 
+    fn session_type(&self) -> &'static str {
+        "telnet"
+    }
+
     fn capabilities(&self) -> &'static [Capability] {
         crate::session::CAP_NONE
     }
