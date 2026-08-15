@@ -95,7 +95,43 @@ export interface UpdateInfo {
   installer_type: string
 }
 
-export type ToolTab = 'ai' | 'history' | 'file' | 'tunnel' | 'cast'
+export type ToolTab = 'ai' | 'history' | 'file' | 'tunnel' | 'cast' | 'monitor'
+
+export interface RemoteDiskMetric {
+  mount: string
+  total_mb: number
+  used_mb: number
+}
+
+export interface RemoteNetMetric {
+  name: string
+  rx_bps: number
+  tx_bps: number
+}
+
+export interface RemoteGpuMetric {
+  vendor: string
+  name: string
+  utilization: number
+  mem_total_mb: number
+  mem_used_mb: number
+  temperature: number
+}
+
+export interface RemoteSystemMetrics {
+  cpu_percent: number
+  cpu_cores: number
+  load_1: number
+  load_5: number
+  load_15: number
+  mem_total_mb: number
+  mem_used_mb: number
+  swap_total_mb: number
+  swap_used_mb: number
+  disks: RemoteDiskMetric[]
+  nets: RemoteNetMetric[]
+  gpus: RemoteGpuMetric[]
+}
 
 /** A command recorded from terminal output, keyed per terminal pane (tab id). */
 export interface CommandHistoryEntry {

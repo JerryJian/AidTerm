@@ -7,6 +7,7 @@ import { getAiConversation } from '../../hooks/terminalAiRegistry'
 import AiSidebar from '../ai/AiSidebar.vue'
 import CastPanel from './CastPanel.vue'
 import FilePanel from '../file/FilePanel.vue'
+import MonitorPanel from './MonitorPanel.vue'
 import TunnelPanel from '../tunnel/TunnelPanel.vue'
 import CommandHistoryPanel from '../history/CommandHistoryPanel.vue'
 import type { FileKind, ToolTab } from '../../types'
@@ -36,6 +37,9 @@ const toolTabs = computed<{ id: ToolTab; icon: string; title: string }[]>(() => 
   }
   if (store.hasCapability(tab, 'cast')) {
     list.push({ id: 'cast', icon: '\u{1F4FA}', title: t('tool_panel.cast') })
+  }
+  if (store.hasCapability(tab, 'exec')) {
+    list.push({ id: 'monitor', icon: '\u{1F4C8}', title: t('tool_panel.monitor') })
   }
   return list
 })
@@ -122,6 +126,12 @@ function closeSidebar() {
         <CastPanel
           v-if="activeTab"
           v-show="activeTool === 'cast'"
+          :tab-id="activeTab.id"
+          :tab="activeTab"
+        />
+        <MonitorPanel
+          v-if="activeTab"
+          v-show="activeTool === 'monitor'"
           :tab-id="activeTab.id"
           :tab="activeTab"
         />

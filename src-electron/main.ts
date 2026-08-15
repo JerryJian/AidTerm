@@ -22,7 +22,8 @@ import type {
   TunnelCreateArgs, TunnelRemoveArgs,
   ProxySaveArgs, ProxyDeleteArgs,
   AiChatArgs, AiExecuteArgs, AiContinueArgs, AiClearHistoryArgs,
-  FetchAiModelsArgs, GetRemoteSystemInfoArgs,
+  FetchAiModelsArgs, GetRemoteSystemInfoArgs, GetRemoteSystemMetricsArgs,
+  RemoteSystemMetrics,
   SaveSessionStoreArgs, KeyGenerateRsaArgs, KeyGenerateEd25519Args,
   KeyDeleteArgs, KeyImportArgs, KnownHostsAddArgs, KnownHostsRemoveArgs,
   WindowSetFullscreenArgs, ClipboardWriteArgs, ToggleSettingArgs,
@@ -879,7 +880,7 @@ function registerIpcHandlers(): void {
     const term = ptySessions.get(sessionId)
     if (term) { killPty(term); ptySessions.delete(sessionId); return }
     const ssh = sshSessions.get(sessionId)
-    if (ssh) { try { ssh.conn.end() } catch {}; sshSessions.delete(sessionId); return }
+    if (ssh) { try { ssh.conn.end() } catch {}; sshSessions.delete(sessionId); monitorPrev.delete(sessionId); return }
     const sp = serialSessions.get(sessionId)
     if (sp) { try { sp.port.close() } catch {}; serialSessions.delete(sessionId); return }
   })
@@ -1862,6 +1863,46 @@ function registerIpcHandlers(): void {
     shell: process.env.SHELL || process.env.ComSpec || 'sh',
   }))
 
+  const makeRemoteExec = (sessionId: string) => (cmd: string, timeoutMs = 5000): Promise<string> => {
+    const ssh = sshSessions.get(sessionId)
+    if (!ssh || !ssh.conn) return Promise.resolve('')
+    return new Promise((resolve) => {
+      if (!ssh2Module) { resolve(''); return }
+      const execConn = new ssh2Module.Client()
+      const timer = setTimeout(() => {
+        try { execConn.end() } catch {}
+        resolve('')
+      }, timeoutMs)
+
+      execConn.on('ready', () => {
+        execConn.exec(cmd, (err: Error | undefined, stream: ClientChannel) => {
+          if (err) {
+            clearTimeout(timer)
+            try { execConn.end() } catch {}
+            resolve('')
+            return
+          }
+          let output = ''
+          stream.on('data', (d: Buffer) => { output += d.toString('utf8') })
+          stream.stderr.on('data', (d: Buffer) => { output += d.toString('utf8') })
+          stream.on('close', () => {
+            clearTimeout(timer)
+            try { execConn.end() } catch {}
+            resolve(output)
+          })
+        })
+      })
+
+      execConn.on('error', () => {
+        clearTimeout(timer)
+        resolve('')
+      })
+
+      // Reuse the stored connection parameters (host, port, auth)
+      execConn.connect({ ...ssh.connectOpts })
+    })
+  }
+
   ipcMain.handle('get_remote_system_info', async (_, args: GetRemoteSystemInfoArgs) => {
     const { sessionId } = args
     const ssh = sshSessions.get(sessionId)
@@ -1870,42 +1911,7 @@ function registerIpcHandlers(): void {
     // Open a fresh exec-only connection to avoid conflicts with the
     // interactive shell channel (some servers drop the socket when
     // exec is requested alongside an open shell).
-    const execCmd = (cmd: string, timeoutMs = 5000): Promise<string> =>
-      new Promise((resolve) => {
-        if (!ssh2Module) { resolve(''); return }
-        const execConn = new ssh2Module.Client()
-        const timer = setTimeout(() => {
-          try { execConn.end() } catch {}
-          resolve('')
-        }, timeoutMs)
-
-        execConn.on('ready', () => {
-          execConn.exec(cmd, (err: Error | undefined, stream: ClientChannel) => {
-            if (err) {
-              clearTimeout(timer)
-              try { execConn.end() } catch {}
-              resolve('')
-              return
-            }
-            let output = ''
-            stream.on('data', (d: Buffer) => { output += d.toString('utf8') })
-            stream.stderr.on('data', (d: Buffer) => { output += d.toString('utf8') })
-            stream.on('close', () => {
-              clearTimeout(timer)
-              try { execConn.end() } catch {}
-              resolve(output)
-            })
-          })
-        })
-
-        execConn.on('error', () => {
-          clearTimeout(timer)
-          resolve('')
-        })
-
-        // Reuse the stored connection parameters (host, port, auth)
-        execConn.connect({ ...ssh.connectOpts })
-      })
+    const execCmd = makeRemoteExec(sessionId)
 
     const uname = await execCmd('uname -a')
     if (!uname.trim()) {
@@ -1936,6 +1942,212 @@ function registerIpcHandlers(): void {
       hostname: parts[1] || 'remote',
       kernel: parts[2] || 'remote',
       shell,
+    }
+  })
+
+  // Per-session previous sample (CPU + net counters + timestamp) for rate deltas.
+  const monitorPrev = new Map<string, {
+    cpu: [number, number] | null
+    net: Map<string, [number, number]>
+    at: number
+  }>()
+
+  ipcMain.handle('get_remote_system_metrics', async (_, args: GetRemoteSystemMetricsArgs): Promise<RemoteSystemMetrics> => {
+    const { sessionId } = args
+    const execCmd = makeRemoteExec(sessionId)
+
+    const MARKERS = '__AID_MONITOR__'
+    const out = await execCmd(
+      `printf '${MARKERS}\\n'; cat /proc/stat 2>/dev/null; ` +
+      `printf '${MARKERS}\\n'; cat /proc/meminfo 2>/dev/null; ` +
+      `printf '${MARKERS}\\n'; cat /proc/loadavg 2>/dev/null; ` +
+      `printf '${MARKERS}\\n'; df -Pk 2>/dev/null | tail -n +2; ` +
+      `printf '${MARKERS}\\n'; cat /proc/net/dev 2>/dev/null | tail -n +3; ` +
+      `printf '${MARKERS}\\n'; ` +
+      `if command -v nvidia-smi >/dev/null 2>&1; then ` +
+      `printf '__AID_GPU_NVIDIA__\\n'; ` +
+      `nvidia-smi --query-gpu=name,utilization.gpu,memory.total,memory.used,temperature.gpu --format=csv,noheader,nounits 2>/dev/null; ` +
+      `elif command -v rocm-smi >/dev/null 2>&1; then ` +
+      `printf '__AID_GPU_AMD__\\n'; ` +
+      `rocm-smi --showuse --showmeminfo vram --showtemp --json 2>/dev/null; ` +
+      `elif command -v intel_gpu_top >/dev/null 2>&1; then ` +
+      `printf '__AID_GPU_INTEL__\\n'; ` +
+      `intel_gpu_top -J -s 1000 -l 2>/dev/null | head -n 1; ` +
+      `fi`,
+      8000,
+    )
+
+    const sections = out.split(MARKERS)
+    const stat = sections[1] || ''
+    const meminfo = sections[2] || ''
+    const loadavg = sections[3] || ''
+    const dfOut = sections[4] || ''
+    const netdev = sections[5] || ''
+    const gpuSection = sections[6] || ''
+
+    // CPU: first "cpu " line -> [total, idle]
+    const parseCpu = (txt: string): [number, number] | null => {
+      const line = txt.split('\n').find((l) => l.startsWith('cpu '))
+      if (!line) return null
+      const nums = line.split(/\s+/).slice(1).map(Number)
+      if (nums.length < 8 || nums.some(Number.isNaN)) return null
+      return [nums.slice(0, 8).reduce((a, b) => a + b, 0), nums[3] + nums[4]]
+    }
+    const curCpu = parseCpu(stat)
+    const cpuCores = Math.max(1, stat.split('\n').filter((l) => /^cpu\d/.test(l)).length)
+
+    // Network: iface -> [rx, tx]
+    const parseNet = (txt: string): Map<string, [number, number]> => {
+      const out = new Map<string, [number, number]>()
+      for (const line of txt.split('\n')) {
+        const m = line.trim().match(/^(\S+):\s+(.+)$/)
+        if (!m) continue
+        const name = m[1]
+        if (!name || name === 'lo') continue
+        const fields = m[2].split(/\s+/).map(Number)
+        if (fields.length >= 16 && !fields.some(Number.isNaN)) {
+          out.set(name, [fields[0], fields[8]])
+        }
+      }
+      return out
+    }
+    const curNet = parseNet(netdev)
+
+    const now = Date.now()
+    const prev = monitorPrev.get(sessionId)
+    const dt = prev ? (now - prev.at) / 1000 : 0
+
+    let cpuPercent = 0
+    if (prev?.cpu && curCpu) {
+      const [pt, pid] = prev.cpu
+      const [t, idle] = curCpu
+      const dTotal = t - pt
+      const dIdle = idle - pid
+      if (dTotal > 0) {
+        cpuPercent = Math.min(100, Math.max(0, (1 - dIdle / dTotal) * 100))
+      }
+    }
+
+    const loads = loadavg.trim().split(/\s+/).map(Number)
+    const load1 = loads[0] || 0
+    const load5 = loads[1] || 0
+    const load15 = loads[2] || 0
+
+    const memVal = (key: string): number => {
+      const line = meminfo.split('\n').find((l) => l.startsWith(key + ':'))
+      return line ? Number(line.split(':')[1]?.trim().split(/\s+/)[0]) || 0 : 0
+    }
+    const memTotal = memVal('MemTotal')
+    const memAvail = memVal('MemAvailable')
+    const memUsed = memAvail > 0 ? memTotal - memAvail : memTotal - memVal('MemFree')
+    const swapTotal = memVal('SwapTotal')
+    const swapUsed = swapTotal - memVal('SwapFree')
+
+    const disks: RemoteSystemMetrics['disks'] = []
+    for (const line of dfOut.split('\n')) {
+      const f = line.trim().split(/\s+/)
+      if (f.length < 6) continue
+      const fstype = f[0]
+      if (['tmpfs', 'devtmpfs', 'udev', 'overlay', 'squashfs', 'shm'].includes(fstype)) continue
+      const totalKb = Number(f[1]) || 0
+      const usedKb = Number(f[2]) || 0
+      const mount = f[5]
+      if (mount.startsWith('/run') || mount.startsWith('/sys') || mount.startsWith('/dev') || mount.startsWith('/proc') || mount.includes('/snap')) continue
+      disks.push({ mount, total_mb: Math.floor(totalKb / 1024), used_mb: Math.floor(usedKb / 1024) })
+    }
+
+    const prevNet = prev?.net ?? new Map<string, [number, number]>()
+    const nets: RemoteSystemMetrics['nets'] = []
+    for (const [name, [rx, tx]] of curNet) {
+      const [prx, ptx] = prevNet.get(name) ?? [rx, tx]
+      const rxBps = dt > 0 ? Math.max(0, (rx - prx) / dt) : 0
+      const txBps = dt > 0 ? Math.max(0, (tx - ptx) / dt) : 0
+      nets.push({ name, rx_bps: rxBps, tx_bps: txBps })
+    }
+    nets.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+
+    // GPU: probe whichever vendor tool exists (nvidia-smi / rocm-smi / intel_gpu_top).
+    const gpus: RemoteSystemMetrics['gpus'] = []
+    const gpuBody = gpuSection.trim()
+    if (gpuBody.startsWith('__AID_GPU_NVIDIA__')) {
+      for (const line of gpuBody.split('\n').slice(1)) {
+        const parts = line.split(',').map((p) => p.trim())
+        if (parts.length < 5) continue
+        gpus.push({
+          vendor: 'nvidia',
+          name: parts[0],
+          utilization: Math.min(100, Math.max(0, Number(parts[1]) || 0)),
+          mem_total_mb: Number(parts[2]) || 0,
+          mem_used_mb: Number(parts[3]) || 0,
+          temperature: Number(parts[4]) || 0,
+        })
+      }
+    } else if (gpuBody.startsWith('__AID_GPU_AMD__')) {
+      const jsonText = gpuBody.split('\n').slice(1).join('\n')
+      try {
+        const parsed = JSON.parse(jsonText)
+        for (const [card, val] of Object.entries(parsed)) {
+          if (!card.startsWith('card')) continue
+          const obj = (val as Record<string, unknown>) ?? {}
+          let name = card
+          let util = 0
+          let memUsedB = 0
+          let memTotalB = 0
+          let temp = 0
+          for (const [k, v] of Object.entries(obj)) {
+            const kk = k.toLowerCase()
+            const s = String(v ?? '')
+            const num = s.split(/\s+/)[0]?.replace(/%$/, '')
+            if (kk.includes('product name')) name = s.trim()
+            else if (kk.includes('gpu use')) util = Number(num) || 0
+            else if (kk.includes('memory used')) memUsedB = Number(num) || 0
+            else if (kk.includes('memory total')) memTotalB = Number(num) || 0
+            else if (kk.includes('temperature')) temp = Number(num) || 0
+          }
+          gpus.push({
+            vendor: 'amd',
+            name,
+            utilization: Math.min(100, Math.max(0, util)),
+            mem_total_mb: Math.floor(memTotalB / (1024 * 1024)),
+            mem_used_mb: Math.floor(memUsedB / (1024 * 1024)),
+            temperature: temp,
+          })
+        }
+      } catch { /* ignore malformed rocm-smi JSON */ }
+    } else if (gpuBody.startsWith('__AID_GPU_INTEL__')) {
+      const jsonText = gpuBody.split('\n').slice(1).join('\n')
+      try {
+        const parsed = JSON.parse(jsonText)
+        let util = 0
+        for (const e of parsed.engines ?? []) {
+          if (typeof e.busy === 'number') util = Math.max(util, e.busy)
+        }
+        gpus.push({
+          vendor: 'intel',
+          name: 'Intel GPU',
+          utilization: Math.min(100, Math.max(0, util)),
+          mem_total_mb: 0,
+          mem_used_mb: 0,
+          temperature: 0,
+        })
+      } catch { /* ignore malformed intel_gpu_top JSON */ }
+    }
+
+    monitorPrev.set(sessionId, { cpu: curCpu, net: curNet, at: now })
+
+    return {
+      cpu_percent: cpuPercent,
+      cpu_cores: cpuCores,
+      load_1: load1,
+      load_5: load5,
+      load_15: load15,
+      mem_total_mb: Math.floor(memTotal / 1024),
+      mem_used_mb: Math.floor(memUsed / 1024),
+      swap_total_mb: Math.floor(swapTotal / 1024),
+      swap_used_mb: Math.floor(swapUsed / 1024),
+      disks,
+      nets,
+      gpus,
     }
   })
 

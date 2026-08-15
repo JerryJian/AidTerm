@@ -2,6 +2,7 @@ use std::sync::mpsc::Sender;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
+pub mod monitor;
 pub mod update;
 use tauri::{Manager, State};
 use crate::adb;
@@ -98,8 +99,10 @@ pub async fn connection_resize(
 #[tauri::command]
 pub async fn connection_kill(
     manager: State<'_, SessionManager>,
+    monitor: State<'_, monitor::MonitorState>,
     session_id: String,
 ) -> Result<(), String> {
+    monitor.clear(&session_id);
     manager.kill(&session_id)
 }
 

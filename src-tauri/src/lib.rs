@@ -64,6 +64,7 @@ pub fn run() {
         .manage(tunnel::TunnelManager::new())
         .manage(proxy::ProxyManager::new())
         .manage(cast::CastState::default())
+        .manage(commands::monitor::MonitorState::default())
         .invoke_handler(tauri::generate_handler![
             commands::connection_create,
             commands::connection_write,
@@ -105,6 +106,7 @@ pub fn run() {
             commands::set_working_directory,
             commands::get_system_info,
             commands::get_remote_system_info,
+            commands::monitor::get_remote_system_metrics,
             commands::key_list,
             commands::key_generate_rsa,
             commands::key_generate_ed25519,

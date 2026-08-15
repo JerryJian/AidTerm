@@ -140,6 +140,7 @@
 | 5.4 | 触发器 (Triggers) | 匹配输出 → 自动响应 ✅ |
 | 5.5 | 批量输入 | TabBar 批量勾选 + 批量发送 ✅ |
 | 5.6 | 远程文件编辑 | FileEditor + sftp_read/write_file ✅ |
+| 5.7 | 远程系统监控 | 无 Agent：SSH exec 采集 /proc/stat、meminfo、loadavg、df、/proc/net/dev，前端 MonitorPanel 每 2s 轮询显示 CPU/内存/磁盘/网络 ✅ |
 
 ### Phase 6: UI 完善
 | # | 任务 | 说明 |
