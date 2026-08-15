@@ -24,6 +24,9 @@ const dragging = ref(false)
 
 const activeTab = computed(() => store.activeTab)
 
+const monitorSvg =
+  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 18v3"/><path d="M4 11h3l1.5-3 3 6 2-4h6.5"/></svg>'
+
 const toolTabs = computed<{ id: ToolTab; icon: string; title: string }[]>(() => {
   const list: { id: ToolTab; icon: string; title: string }[] = []
   const tab = activeTab.value
@@ -39,7 +42,7 @@ const toolTabs = computed<{ id: ToolTab; icon: string; title: string }[]>(() => 
     list.push({ id: 'cast', icon: '\u{1F4FA}', title: t('tool_panel.cast') })
   }
   if (store.hasCapability(tab, 'exec')) {
-    list.push({ id: 'monitor', icon: '\u{1F4C8}', title: t('tool_panel.monitor') })
+    list.push({ id: 'monitor', icon: monitorSvg, title: t('tool_panel.monitor') })
   }
   return list
 })
@@ -93,7 +96,8 @@ function closeSidebar() {
             :title="tt.title"
             @click="store.setActiveToolTab(activeTab!.id, tt.id)"
           >
-            <span class="tt-icon">{{ tt.icon }}</span>
+            <span v-if="tt.icon.startsWith('<svg')" class="tt-icon" v-html="tt.icon" />
+            <span v-else class="tt-icon">{{ tt.icon }}</span>
             <span v-if="activeTool === tt.id" class="tt-title">{{ tt.title }}</span>
           </button>
         </div>
@@ -134,6 +138,7 @@ function closeSidebar() {
           v-show="activeTool === 'monitor'"
           :tab-id="activeTab.id"
           :tab="activeTab"
+          :visible="activeTool === 'monitor'"
         />
       </div>
     </div>
