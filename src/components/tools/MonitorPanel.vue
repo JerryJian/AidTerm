@@ -25,7 +25,6 @@ const netHistory = ref<Record<string, { rx: number[]; tx: number[] }>>({})
 
 let timer: ReturnType<typeof setInterval> | null = null
 let busy = false
-const windowActive = ref(true)
 
 function fmtMb(mb: number): string {
   if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB'
@@ -71,7 +70,7 @@ async function poll() {
   if (busy || !sessionId.value) return
   busy = true
   try {
-    const m = await invoke<RemoteSystemMetrics>('get_remote_system_metrics', {
+    const m = await invoke<RemoteSystemMetrics>('get_system_metrics', {
       sessionId: sessionId.value,
     })
     metrics.value = m
@@ -98,6 +97,9 @@ async function poll() {
 }
 
 const memPct = computed(() => percent(metrics.value?.mem_used_mb ?? 0, metrics.value?.mem_total_mb ?? 1))
+const sortedDisks = computed(() =>
+  [...(metrics.value?.disks ?? [])].sort((a, b) => a.mount.localeCompare(b.mount)),
+)
 
 function gaugeColor(val: number): string {
   if (val >= 85) return chartColors().danger
@@ -331,7 +333,6 @@ function netLineOption(rx: number[], tx: number[]): EChartsCoreOption {
 
 const shouldPoll = computed(() => {
   if (props.visible === false) return false
-  if (!windowActive.value) return false
   if (document.hidden) return false
   return !!sessionId.value
 })
@@ -357,16 +358,6 @@ function onVisibility() {
   }
 }
 
-function onWindowFocus() {
-  windowActive.value = true
-  onVisibility()
-}
-
-function onWindowBlur() {
-  windowActive.value = false
-  stop()
-}
-
 watch(() => sessionId.value, (id, old) => {
   if (id !== old) {
     metrics.value = null
@@ -381,16 +372,12 @@ watch(() => props.visible, onVisibility)
 
 onMounted(() => {
   document.addEventListener('visibilitychange', onVisibility)
-  window.addEventListener('focus', onWindowFocus)
-  window.addEventListener('blur', onWindowBlur)
   onVisibility()
 })
 
 onBeforeUnmount(() => {
   stop()
   document.removeEventListener('visibilitychange', onVisibility)
-  window.removeEventListener('focus', onWindowFocus)
-  window.removeEventListener('blur', onWindowBlur)
 })
 </script>
 
@@ -472,7 +459,7 @@ onBeforeUnmount(() => {
           <span>{{ t('monitor_panel.disk') }}</span>
         </div>
         <div v-if="metrics.disks.length > 0">
-          <div v-for="d in metrics.disks" :key="d.mount" class="disk-item">
+          <div v-for="d in sortedDisks" :key="d.mount" class="disk-item">
             <div class="disk-line">
               <span class="disk-mount">{{ d.mount }}</span>
               <span class="disk-val">{{ fmtMb(d.used_mb) }} / {{ fmtMb(d.total_mb) }}</span>

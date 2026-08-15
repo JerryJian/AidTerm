@@ -100,9 +100,11 @@ pub async fn connection_resize(
 pub async fn connection_kill(
     manager: State<'_, SessionManager>,
     monitor: State<'_, monitor::MonitorState>,
+    local_monitor: State<'_, monitor::LocalMonitorState>,
     session_id: String,
 ) -> Result<(), String> {
     monitor.clear(&session_id);
+    local_monitor.clear(&session_id);
     manager.kill(&session_id)
 }
 

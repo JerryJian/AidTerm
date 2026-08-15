@@ -1,10 +1,12 @@
 use std::collections::HashMap;
+use std::process::Command as StdCommand;
 use std::sync::Mutex;
 use std::time::Instant;
 
+use sysinfo::{Disks, Networks, System};
 use tauri::State;
 
-use crate::session::SessionManager;
+use crate::session::{Capability, SessionManager};
 
 const MARKERS: &str = "__AID_MONITOR__";
 
@@ -257,10 +259,27 @@ fn parse_intel_gpu(json_text: &str) -> Vec<GpuMetric> {
 }
 
 #[tauri::command]
-pub async fn get_remote_system_metrics(
+pub async fn get_system_metrics(
     manager: State<'_, SessionManager>,
-    state: State<'_, MonitorState>,
+    remote_state: State<'_, MonitorState>,
+    local_state: State<'_, LocalMonitorState>,
     session_id: String,
+) -> Result<MonitorMetrics, String> {
+    // The monitor tool is about the connection target's system. Sessions that
+    // can `exec` (SSH) report the remote machine via exec; local/wsl sessions
+    // report the local host via sysinfo.
+    let caps = manager.capabilities(&session_id);
+    if caps.contains(&Capability::Exec.as_str()) {
+        remote_system_metrics(&manager, &remote_state, &session_id).await
+    } else {
+        local_system_metrics(&local_state, &session_id)
+    }
+}
+
+async fn remote_system_metrics(
+    manager: &SessionManager,
+    state: &MonitorState,
+    session_id: &str,
 ) -> Result<MonitorMetrics, String> {
     let cmd = format!(
         "printf '{mark}\\n'; cat /proc/stat 2>/dev/null; \
@@ -281,7 +300,7 @@ pub async fn get_remote_system_metrics(
          fi",
         mark = MARKERS,
     );
-    let out = manager.exec(&session_id, &cmd).await?;
+    let out = manager.exec(session_id, &cmd).await?;
 
     let sections: Vec<&str> = out.split(MARKERS).collect();
     // sections[0] is leading empty; then [stat, meminfo, loadavg, df, netdev, gpu]
@@ -299,7 +318,7 @@ pub async fn get_remote_system_metrics(
     let now = Instant::now();
 
     let mut prev_guard = state.prev.lock().map_err(|e| e.to_string())?;
-    let prev = prev_guard.get(&session_id).cloned().unwrap_or_default();
+    let prev = prev_guard.get(session_id).cloned().unwrap_or_default();
     let dt = prev.at.map(|at| now.duration_since(at).as_secs_f64()).unwrap_or(0.0);
 
     // CPU usage from delta of two samples.
@@ -392,7 +411,7 @@ pub async fn get_remote_system_metrics(
     let gpus = parse_gpu(gpu_section);
 
     prev_guard.insert(
-        session_id.clone(),
+        session_id.to_string(),
         PrevSample {
             cpu: cur_cpu,
             net: cur_net,
@@ -410,6 +429,202 @@ pub async fn get_remote_system_metrics(
         mem_used_mb: mem_used_kb / 1024,
         swap_total_mb: swap_total_kb / 1024,
         swap_used_mb: swap_used_kb / 1024,
+        disks,
+        nets,
+        gpus,
+    })
+}
+
+/// Local (host) system metrics for `local`/`wsl` sessions, collected via
+/// `sysinfo`. Cross-platform: Windows / Linux / macOS. GPU is best-effort —
+/// probes nvidia-smi / rocm-smi / intel_gpu_top when present.
+struct LocalSample {
+    sys: System,
+    disks: Disks,
+    networks: Networks,
+    at: Option<Instant>,
+}
+
+pub struct LocalMonitorState {
+    samples: Mutex<HashMap<String, LocalSample>>,
+}
+
+impl Default for LocalMonitorState {
+    fn default() -> Self {
+        Self {
+            samples: Mutex::new(HashMap::new()),
+        }
+    }
+}
+
+impl LocalMonitorState {
+    pub fn clear(&self, session_id: &str) {
+        if let Ok(mut map) = self.samples.lock() {
+            map.remove(session_id);
+        }
+    }
+}
+
+/// Probe local GPU vendors in order, returning a section string shaped like
+/// the SSH monitor's GPU block (`__AID_GPU_*__` + payload) or empty.
+fn probe_local_gpu() -> String {
+    // NVIDIA
+    if let Ok(out) = StdCommand::new("nvidia-smi")
+        .args([
+            "--query-gpu=name,utilization.gpu,memory.total,memory.used,temperature.gpu",
+            "--format=csv,noheader,nounits",
+        ])
+        .output()
+    {
+        if out.status.success() {
+            let text = String::from_utf8_lossy(&out.stdout);
+            if !text.trim().is_empty() {
+                return format!("__AID_GPU_NVIDIA__\n{}", text);
+            }
+        }
+    }
+
+    // AMD (rocm-smi, Linux)
+    if let Ok(out) = StdCommand::new("rocm-smi")
+        .args(["--showuse", "--showmeminfo", "vram", "--showtemp", "--json"])
+        .output()
+    {
+        if out.status.success() {
+            let text = String::from_utf8_lossy(&out.stdout);
+            if !text.trim().is_empty() {
+                return format!("__AID_GPU_AMD__\n{}", text);
+            }
+        }
+    }
+
+    // Intel
+    if let Ok(out) = StdCommand::new("intel_gpu_top")
+        .args(["-J", "-s", "1000", "-l"])
+        .output()
+    {
+        if out.status.success() {
+            let text = String::from_utf8_lossy(&out.stdout);
+            if !text.trim().is_empty() {
+                return format!("__AID_GPU_INTEL__\n{}", text);
+            }
+        }
+    }
+
+    String::new()
+}
+
+fn local_loadavg() -> (f64, f64, f64) {
+    let l = System::load_average();
+    (l.one, l.five, l.fifteen)
+}
+
+fn local_mount_ok(mount: &std::path::Path) -> bool {
+    let s = mount.to_string_lossy();
+    if s.starts_with("/run")
+        || s.starts_with("/sys")
+        || s.starts_with("/dev")
+        || s.starts_with("/proc")
+        || s.contains("/snap")
+        || s.contains("squashfs")
+    {
+        return false;
+    }
+    true
+}
+
+fn local_system_metrics(
+    state: &LocalMonitorState,
+    session_id: &str,
+) -> Result<MonitorMetrics, String> {
+    // Reuse a cached System per session so CPU/network deltas are correct
+    // across successive 2s polls.
+    let mut guard = state.samples.lock().map_err(|e| e.to_string())?;
+    let now = Instant::now();
+    let sample = guard
+        .entry(session_id.to_string())
+        .or_insert_with(|| LocalSample {
+            sys: System::new(),
+            disks: Disks::new_with_refreshed_list(),
+            networks: Networks::new_with_refreshed_list(),
+            at: None,
+        });
+    let sys = &mut sample.sys;
+
+    sys.refresh_cpu_usage();
+    sys.refresh_memory();
+    sample.disks.refresh(true);
+    sample.networks.refresh(true);
+
+    let cpu_percent = sys.global_cpu_usage().clamp(0.0, 100.0) as f64;
+    let cpu_cores = sys.cpus().len().max(1) as u32;
+    let (load_1, load_5, load_15) = local_loadavg();
+
+    let mem_total_mb = sys.total_memory() / (1024 * 1024);
+    let mem_used_mb = sys.used_memory() / (1024 * 1024);
+    let swap_total_mb = sys.total_swap() / (1024 * 1024);
+    let swap_used_mb = sys.used_swap() / (1024 * 1024);
+
+    let disks = sample
+        .disks
+        .list()
+        .iter()
+        .filter(|d| local_mount_ok(d.mount_point()))
+        .map(|d| DiskMetric {
+            mount: d.mount_point().to_string_lossy().to_string(),
+            total_mb: d.total_space() / (1024 * 1024),
+            used_mb: d.total_space().saturating_sub(d.available_space()) / (1024 * 1024),
+        })
+        .collect::<Vec<_>>();
+
+    // Network rates from delta between samples (received()/transmitted() are
+    // the byte counts since the last refresh of `networks`).
+    let dt = sample
+        .at
+        .map(|at| now.duration_since(at).as_secs_f64())
+        .unwrap_or(0.0);
+    let mut nets: Vec<NetMetric> = sample
+        .networks
+        .list()
+        .iter()
+        .filter(|(name, _)| name.as_str() != "lo")
+        .map(|(name, data)| NetMetric {
+            name: name.clone(),
+            rx_bps: if dt > 0.0 {
+                data.received() as f64 / dt
+            } else {
+                0.0
+            },
+            tx_bps: if dt > 0.0 {
+                data.transmitted() as f64 / dt
+            } else {
+                0.0
+            },
+        })
+        .collect();
+    nets.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+
+    // Best-effort GPU.
+    let gpus = {
+        let section = probe_local_gpu();
+        if section.is_empty() {
+            Vec::new()
+        } else {
+            parse_gpu(&section)
+        }
+    };
+
+    sample.at = Some(now);
+
+    Ok(MonitorMetrics {
+        cpu_percent,
+        cpu_cores,
+        load_1,
+        load_5,
+        load_15,
+        mem_total_mb,
+        mem_used_mb,
+        swap_total_mb,
+        swap_used_mb,
         disks,
         nets,
         gpus,

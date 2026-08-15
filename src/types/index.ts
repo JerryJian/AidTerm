@@ -223,7 +223,7 @@ export interface FileProgress {
 }
 
 /** A connection's declared capabilities; drives which tool panels are available. */
-export type ConnectionCapability = 'file' | 'tunnel' | 'exec' | 'zmodem' | 'cast'
+export type ConnectionCapability = 'file' | 'tunnel' | 'exec' | 'zmodem' | 'cast' | 'monitor'
 
 export type ConnectionType = 'local' | 'wsl' | 'ssh' | 'telnet' | 'serial' | 'adb'
 

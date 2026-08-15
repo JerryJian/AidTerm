@@ -41,7 +41,7 @@ const toolTabs = computed<{ id: ToolTab; icon: string; title: string }[]>(() => 
   if (store.hasCapability(tab, 'cast')) {
     list.push({ id: 'cast', icon: '\u{1F4FA}', title: t('tool_panel.cast') })
   }
-  if (store.hasCapability(tab, 'exec')) {
+  if (store.hasCapability(tab, 'exec') || store.hasCapability(tab, 'monitor')) {
     list.push({ id: 'monitor', icon: monitorSvg, title: t('tool_panel.monitor') })
   }
   return list

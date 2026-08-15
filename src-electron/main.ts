@@ -1132,7 +1132,7 @@ function registerIpcHandlers(): void {
     switch (config.type) {
       case 'local': {
         const id = spawnLocalPty({ rows, cols, shell: config.shell ?? null, cwd: config.working_dir ?? null })
-        return { id, capabilities: [] }
+        return { id, capabilities: ['file', 'monitor'] }
       }
       case 'wsl': {
         const args: string[] = []
@@ -1144,7 +1144,7 @@ function registerIpcHandlers(): void {
           shell: 'wsl.exe',
           args,
         })
-        return { id, capabilities: [] }
+        return { id, capabilities: ['file', 'monitor'] }
       }
       case 'ssh': {
         const id = connectSshInternal({
@@ -1952,8 +1952,7 @@ function registerIpcHandlers(): void {
     at: number
   }>()
 
-  ipcMain.handle('get_remote_system_metrics', async (_, args: GetRemoteSystemMetricsArgs): Promise<RemoteSystemMetrics> => {
-    const { sessionId } = args
+  const collectRemoteSystemMetrics = async (sessionId: string): Promise<RemoteSystemMetrics> => {
     const execCmd = makeRemoteExec(sessionId)
 
     const MARKERS = '__AID_MONITOR__'
@@ -2149,6 +2148,137 @@ function registerIpcHandlers(): void {
       nets,
       gpus,
     }
+  }
+
+  const collectLocalSystemMetrics = async (): Promise<RemoteSystemMetrics> => {
+    const si = require('systeminformation') as typeof import('systeminformation')
+
+    const cpuLoad = await si.currentLoad().catch(() => ({ currentLoad: 0 }))
+    const cpuPercent = Math.min(100, Math.max(0, cpuLoad.currentLoad))
+    const cpuCores = os.cpus().length || 1
+    const loads = os.loadavg()
+    const mem = await si.mem().catch(() => ({ total: 0, active: 0, swaptotal: 0, swapused: 0 }))
+    const memTotalMb = Math.floor(mem.total / (1024 * 1024))
+    const memUsedMb = Math.floor(mem.active / (1024 * 1024))
+    const swapTotalMb = Math.floor(mem.swaptotal / (1024 * 1024))
+    const swapUsedMb = Math.floor(mem.swapused / (1024 * 1024))
+
+    const fsSizes = await si.fsSize().catch(() => [] as Array<{ mount: string; size: number; used: number }>)
+    const disks: RemoteSystemMetrics['disks'] = []
+    for (const d of fsSizes) {
+      const mount = String(d.mount ?? '')
+      if (mount.startsWith('/run') || mount.startsWith('/sys') || mount.startsWith('/dev') || mount.startsWith('/proc') || mount.includes('/snap')) continue
+      disks.push({
+        mount,
+        total_mb: Math.floor(d.size / (1024 * 1024)),
+        used_mb: Math.floor(d.used / (1024 * 1024)),
+      })
+    }
+
+    const netStats = await si.networkStats().catch(() => [] as Array<{ iface: string; rx_sec: number; tx_sec: number }>)
+    const nets: RemoteSystemMetrics['nets'] = []
+    for (const n of netStats) {
+      if (n.iface === 'lo') continue
+      nets.push({ name: n.iface, rx_bps: n.rx_sec || 0, tx_bps: n.tx_sec || 0 })
+    }
+    nets.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+
+    const gpus: RemoteSystemMetrics['gpus'] = []
+    const { spawnSync } = require('child_process') as typeof import('child_process')
+    const nvidia = spawnSync('nvidia-smi', ['--query-gpu=name,utilization.gpu,memory.total,memory.used,temperature.gpu', '--format=csv,noheader,nounits'], { encoding: 'utf8', timeout: 8000 })
+    if (!nvidia.error && nvidia.status === 0) {
+      for (const line of String(nvidia.stdout).split('\n')) {
+        const parts = line.split(',').map((p: string) => p.trim())
+        if (parts.length < 5) continue
+        gpus.push({
+          vendor: 'nvidia',
+          name: parts[0],
+          utilization: Math.min(100, Math.max(0, Number(parts[1]) || 0)),
+          mem_total_mb: Number(parts[2]) || 0,
+          mem_used_mb: Number(parts[3]) || 0,
+          temperature: Number(parts[4]) || 0,
+        })
+      }
+    } else if (process.platform === 'linux') {
+      const rocm = spawnSync('rocm-smi', ['--showuse', '--showmeminfo', 'vram', '--showtemp', '--json'], { encoding: 'utf8', timeout: 8000 })
+      if (!rocm.error && rocm.status === 0) {
+        try {
+          const parsed = JSON.parse(String(rocm.stdout))
+          for (const [card, val] of Object.entries(parsed)) {
+            if (!card.startsWith('card')) continue
+            const obj = (val as Record<string, unknown>) ?? {}
+            let name = card
+            let util = 0
+            let memUsedB = 0
+            let memTotalB = 0
+            let temp = 0
+            for (const [k, v] of Object.entries(obj)) {
+              const kk = k.toLowerCase()
+              const s = String(v ?? '')
+              const num = s.split(/\s+/)[0]?.replace(/%$/, '')
+              if (kk.includes('product name')) name = s.trim()
+              else if (kk.includes('gpu use')) util = Number(num) || 0
+              else if (kk.includes('memory used')) memUsedB = Number(num) || 0
+              else if (kk.includes('memory total')) memTotalB = Number(num) || 0
+              else if (kk.includes('temperature')) temp = Number(num) || 0
+            }
+            gpus.push({
+              vendor: 'amd',
+              name,
+              utilization: Math.min(100, Math.max(0, util)),
+              mem_total_mb: Math.floor(memTotalB / (1024 * 1024)),
+              mem_used_mb: Math.floor(memUsedB / (1024 * 1024)),
+              temperature: temp,
+            })
+          }
+        } catch { /* ignore malformed rocm-smi JSON */ }
+      } else {
+        const intel = spawnSync('intel_gpu_top', ['-J', '-s', '1000', '-l'], { encoding: 'utf8', timeout: 8000 })
+        if (!intel.error && intel.status === 0) {
+          try {
+            const parsed = JSON.parse(String(intel.stdout))
+            let util = 0
+            for (const e of parsed.engines ?? []) {
+              if (typeof e.busy === 'number') util = Math.max(util, e.busy)
+            }
+            gpus.push({
+              vendor: 'intel',
+              name: 'Intel GPU',
+              utilization: Math.min(100, Math.max(0, util)),
+              mem_total_mb: 0,
+              mem_used_mb: 0,
+              temperature: 0,
+            })
+          } catch { /* ignore malformed intel_gpu_top JSON */ }
+        }
+      }
+    }
+
+    return {
+      cpu_percent: cpuPercent,
+      cpu_cores: cpuCores,
+      load_1: loads[0] || 0,
+      load_5: loads[1] || 0,
+      load_15: loads[2] || 0,
+      mem_total_mb: memTotalMb,
+      mem_used_mb: memUsedMb,
+      swap_total_mb: swapTotalMb,
+      swap_used_mb: swapUsedMb,
+      disks,
+      nets,
+      gpus,
+    }
+  }
+
+  // Unified monitor entry: report the connection target's system. SSH
+  // sessions report the remote machine via exec; local/wsl sessions report
+  // the local host.
+  ipcMain.handle('get_system_metrics', async (_, args: GetRemoteSystemMetricsArgs): Promise<RemoteSystemMetrics> => {
+    const { sessionId } = args
+    if (sshSessions.has(sessionId)) {
+      return collectRemoteSystemMetrics(sessionId)
+    }
+    return collectLocalSystemMetrics()
   })
 
   ipcMain.handle('cli_args', () => {

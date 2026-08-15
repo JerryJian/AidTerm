@@ -35,8 +35,8 @@ const shellKeyMap: Record<string, string> = {
 
 /** Default capabilities per connection type (used before the backend reports them). */
 const defaultCapabilities: Record<ConnectionType, ConnectionCapability[]> = {
-  local: ['file'],
-  wsl: ['file'],
+  local: ['file', 'monitor'],
+  wsl: ['file', 'monitor'],
   ssh: ['file', 'tunnel', 'exec', 'zmodem'],
   telnet: [],
   serial: [],

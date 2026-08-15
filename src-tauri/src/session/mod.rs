@@ -19,6 +19,7 @@ pub enum Capability {
     Exec,
     Zmodem,
     Cast,
+    Monitor,
 }
 
 impl Capability {
@@ -29,11 +30,13 @@ impl Capability {
             Capability::Exec => "exec",
             Capability::Zmodem => "zmodem",
             Capability::Cast => "cast",
+            Capability::Monitor => "monitor",
         }
     }
 }
 
 pub const CAP_FILE_CAST: &[Capability] = &[Capability::File, Capability::Cast];
+pub const CAP_FILE_MONITOR: &[Capability] = &[Capability::File, Capability::Monitor];
 pub const CAP_FILE_TUNNEL_EXEC_ZMODEM: &[Capability] = &[Capability::File, Capability::Tunnel, Capability::Exec, Capability::Zmodem];
 pub const CAP_NONE: &[Capability] = &[];
 
@@ -116,7 +119,7 @@ impl SessionManager {
         let id = uuid::Uuid::new_v4().to_string();
         let session: Box<dyn Connection> = match config {
             ConnectionConfig::Local { shell, working_dir } => Box::new(
-                local::LocalSession::spawn(id.clone(), rows, cols, app_handle, shell, working_dir, Vec::new(), CAP_NONE)?,
+                local::LocalSession::spawn(id.clone(), rows, cols, app_handle, shell, working_dir, Vec::new(), CAP_FILE_MONITOR)?,
             ),
             ConnectionConfig::Wsl { distro, working_dir } => {
                 if !cfg!(target_os = "windows") {
@@ -127,7 +130,7 @@ impl SessionManager {
                     args.extend(["--cd".to_string(), working_dir]);
                 }
                 Box::new(
-                    local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some("wsl.exe".to_string()), None, args, CAP_NONE)?,
+                    local::LocalSession::spawn(id.clone(), rows, cols, app_handle, Some("wsl.exe".to_string()), None, args, CAP_FILE_MONITOR)?,
                 )
             }
             ConnectionConfig::Ssh {
@@ -315,5 +318,6 @@ mod tests {
         assert_eq!(Capability::Tunnel.as_str(), "tunnel");
         assert_eq!(Capability::Exec.as_str(), "exec");
         assert_eq!(Capability::Zmodem.as_str(), "zmodem");
+        assert_eq!(Capability::Monitor.as_str(), "monitor");
     }
 }
