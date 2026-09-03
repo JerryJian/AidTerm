@@ -394,11 +394,12 @@ async function doDownload(entry: FileEntry) {
   if (!dest) return
   const target = Array.isArray(dest) ? dest[0] : dest
   if (!target) return
+  const local = entry.is_dir ? pathJoin(target, entry.name) : target
   const id = genId()
   const task: UploadTask = { id, name: entry.name, status: 'uploading', type: 'download' }
   downloadTasks.value.push(task)
   try {
-    await store.download(props.tabId, id, remotePath, target)
+    await store.download(props.tabId, id, remotePath, local)
     task.status = 'done'
   } catch (e: any) {
     if (String(e).includes('Cancelled')) {
