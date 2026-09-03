@@ -9,6 +9,7 @@ export type { UnlistenFn }
 interface ElectronAPI {
   invoke(channel: string, args?: Record<string, unknown>): Promise<unknown>
   on<T>(channel: string, listener: (payload: T) => void): () => void
+  getPathForFile(file: File): string | null
   openDialog(opts?: DialogOptions): Promise<null | string | string[]>
   saveDialog(opts?: DialogOptions): Promise<string | null>
   clipboardWrite(text: string): Promise<void>

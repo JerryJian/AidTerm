@@ -1,6 +1,21 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  /**
+   * Resolve the real filesystem path of a File dropped onto the webview.
+   * Electron hides raw paths in the renderer; this uses webUtils.getPathForFile.
+   * Returns null when the given object is not a File with a resolvable path.
+   */
+  getPathForFile(file: unknown): string | null {
+    try {
+      if (!(file instanceof File)) return null
+      const p = webUtils.getPathForFile(file as File)
+      return typeof p === 'string' && p ? p : (file as File & { path?: string }).path ?? null
+    } catch {
+      return null
+    }
+  },
+
   /**
    * Generic IPC invoke — mirrors Tauri's invoke(cmd, args) pattern.
    * Converts { key: val } args object into positional array for Electron IPC.

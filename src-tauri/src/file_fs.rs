@@ -135,22 +135,52 @@ pub fn create_file(target: &FsTarget, remote: &str, is_dir: bool) -> Result<(), 
     }
 }
 
-fn copy(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
+fn copy_file(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
     std::fs::copy(src, dst)
         .map(|_| ())
         .map_err(|e| format!("{} -> {}: {}", src.display(), dst.display(), e))
 }
 
-/// Copy a browsed (remote) file onto a host path.
+/// Copy a browsed (remote) file or directory recursively onto a host path.
 pub fn download(target: &FsTarget, remote: &str, local: &str) -> Result<(), String> {
     let src = resolve(target, remote)?;
-    copy(&src, &PathBuf::from(local))
+    let dst = PathBuf::from(local);
+    if src.is_dir() {
+        if !dst.exists() {
+            std::fs::create_dir_all(&dst).map_err(|e| format!("mkdir {}: {}", dst.display(), e))?;
+        }
+        for entry in std::fs::read_dir(&src).map_err(|e| format!("read_dir {}: {}", src.display(), e))? {
+            let entry = entry.map_err(|e| format!("entry: {}", e))?;
+            let child_name = entry.file_name();
+            let child_remote = format!("{}/{}", remote.trim_end_matches('/'), child_name.to_string_lossy());
+            let child_local = dst.join(&child_name);
+            download(target, &child_remote, &child_local.to_string_lossy())?;
+        }
+    } else {
+        copy_file(&src, &dst)?;
+    }
+    Ok(())
 }
 
-/// Copy a host path onto the browsed (remote) location.
+/// Copy a host path or directory recursively onto the browsed (remote) location.
 pub fn upload(target: &FsTarget, local: &str, remote: &str) -> Result<(), String> {
     let dst = resolve(target, remote)?;
-    copy(&PathBuf::from(local), &dst)
+    let src = PathBuf::from(local);
+    if src.is_dir() {
+        if !dst.exists() {
+            std::fs::create_dir_all(&dst).map_err(|e| format!("mkdir {}: {}", dst.display(), e))?;
+        }
+        for entry in std::fs::read_dir(&src).map_err(|e| format!("local readdir {}: {}", src.display(), e))? {
+            let entry = entry.map_err(|e| format!("entry: {}", e))?;
+            let child_name = entry.file_name();
+            let child_local = entry.path();
+            let child_remote = format!("{}/{}", remote.trim_end_matches('/'), child_name.to_string_lossy());
+            upload(target, &child_local.to_string_lossy(), &child_remote)?;
+        }
+    } else {
+        copy_file(&src, &dst)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

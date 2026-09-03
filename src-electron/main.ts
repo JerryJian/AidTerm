@@ -1439,6 +1439,23 @@ function registerIpcHandlers(): void {
     }))
   })
 
+  // ── Recursive helpers for local/wsl directory copy ──
+  function localCopyDirSync(src: string, dst: string) {
+    fs.mkdirSync(dst, { recursive: true })
+    for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+      const s = path.join(src, entry.name)
+      const d = path.join(dst, entry.name)
+      if (entry.isDirectory()) {
+        localCopyDirSync(s, d)
+      } else if (entry.isSymbolicLink()) {
+        const target = fs.readlinkSync(s)
+        fs.symlinkSync(target, d)
+      } else {
+        fs.copyFileSync(s, d)
+      }
+    }
+  }
+
   ipcMain.handle('file_download', async (_, args: FileTransferArgs) => {
     const { kind, handle, transferId, remote, local } = args
     if (kind === 'adb') {
@@ -1451,17 +1468,51 @@ function registerIpcHandlers(): void {
       return
     }
     if (kind === 'local' || kind === 'wsl') {
-      fs.copyFileSync(resolveLocalFsPath(kind, handle, remote), local)
+      const src = resolveLocalFsPath(kind, handle, remote)
+      if (fs.existsSync(src) && fs.statSync(src).isDirectory()) {
+        localCopyDirSync(src, local)
+      } else {
+        fs.copyFileSync(src, local)
+      }
       return
     }
     const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
+    const sftp = client
 
-    const stat = await client.stat(remote)
+    async function sftpDownloadDir(remotePath: string, localPath: string) {
+      const entries = await sftp.list(remotePath)
+      for (const entry of entries) {
+        if (entry.name === '.' || entry.name === '..') continue
+        const childRemote = `${remotePath.replace(/\/$/, '')}/${entry.name}`
+        const childLocal = path.join(localPath, entry.name)
+        if (entry.type === 'd') {
+          fs.mkdirSync(childLocal, { recursive: true })
+          await sftpDownloadDir(childRemote, childLocal)
+        } else {
+          const rdr = sftp.createReadStream(childRemote)
+          const wtr = fs.createWriteStream(childLocal)
+          await new Promise<void>((resolve, reject) => {
+            rdr.pipe(wtr)
+            wtr.on('finish', () => resolve())
+            wtr.on('error', reject)
+            rdr.on('error', reject)
+          })
+        }
+      }
+    }
+
+    const stat = await sftp.stat(remote)
+    if (stat.isDirectory) {
+      fs.mkdirSync(local, { recursive: true })
+      await sftpDownloadDir(remote, local)
+      return
+    }
+
     const totalSize = stat.size || 0
     let cancelled = false
 
-    const rdr = client.createReadStream(remote)
+    const rdr = sftp.createReadStream(remote)
     const wtr = fs.createWriteStream(local)
     const h = {
       abort: () => {
@@ -1515,17 +1566,51 @@ function registerIpcHandlers(): void {
       return
     }
     if (kind === 'local' || kind === 'wsl') {
-      fs.copyFileSync(local, resolveLocalFsPath(kind, handle, remote))
+      const dst = resolveLocalFsPath(kind, handle, remote)
+      if (fs.existsSync(local) && fs.statSync(local).isDirectory()) {
+        localCopyDirSync(local, dst)
+      } else {
+        fs.copyFileSync(local, dst)
+      }
       return
     }
     const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
+    const sftp = client
 
-    const totalSize = fs.statSync(local).size
+    async function sftpUploadDir(localPath: string, remotePath: string) {
+      const items = fs.readdirSync(localPath, { withFileTypes: true })
+      for (const item of items) {
+        const childLocal = path.join(localPath, item.name)
+        const childRemote = `${remotePath.replace(/\/$/, '')}/${item.name}`
+        if (item.isDirectory()) {
+          await sftp.mkdir(childRemote).catch(() => {})
+          await sftpUploadDir(childLocal, childRemote)
+        } else {
+          const rdr = fs.createReadStream(childLocal)
+          const wtr = sftp.createWriteStream(childRemote)
+          await new Promise<void>((resolve, reject) => {
+            rdr.pipe(wtr)
+            wtr.on('finish', () => resolve())
+            wtr.on('error', reject)
+            rdr.on('error', reject)
+          })
+        }
+      }
+    }
+
+    const localStat = fs.statSync(local)
+    if (localStat.isDirectory()) {
+      await sftp.mkdir(remote).catch(() => {})
+      await sftpUploadDir(local, remote)
+      return
+    }
+
+    const totalSize = localStat.size
     let cancelled = false
 
     const rdr = fs.createReadStream(local)
-    const wtr = client.createWriteStream(remote)
+    const wtr = sftp.createWriteStream(remote)
     const h = {
       abort: () => {
         cancelled = true

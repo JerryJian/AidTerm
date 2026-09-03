@@ -331,16 +331,40 @@ impl SftpConnection {
         }
         let attrs = session.metadata(remote).await
             .map_err(|e| format!("stat failed: {}", e))?;
+        // Directory: create local dir, enumerate, recurse
+        if attrs.is_dir() {
+            tokio::fs::create_dir_all(local).await
+                .map_err(|e| format!("mkdir {}: {}", local, e))?;
+            let mut rd = session.read_dir(remote).await
+                .map_err(|e| format!("read_dir failed: {}", e))?;
+            while let Some(entry) = rd.next() {
+                if cancel.load(Ordering::Relaxed) {
+                    return Err("Cancelled".to_string());
+                }
+                let name = entry.file_name();
+                if name == "." || name == ".." { continue; }
+                let child_remote = format!("{}/{}", remote.trim_end_matches('/'), name);
+                let child_local = std::path::Path::new(local).join(&name).to_string_lossy().to_string();
+                // emit a progress snapshot so the UI shows directory traversal
+                let _ = app.emit("file-progress", FileProgress {
+                    remote: remote_ident.to_string(),
+                    local: local_ident.to_string(),
+                    r#type: "download".to_string(),
+                    bytes_transferred: 0,
+                    total_size: 0,
+                });
+                Box::pin(Self::do_download(session, &child_remote, &child_local, remote_ident, local_ident, app, cancel)).await?;
+            }
+            return Ok(());
+        }
+        // File: stream
         let total = attrs.len();
-
         let mut remote_file = session.open(remote).await
             .map_err(|e| format!("open remote failed: {}", e))?;
         let mut local_file = tokio::fs::File::create(local).await
             .map_err(|e| format!("local create: {}", e))?;
-
         let mut buf = vec![0u8; 65536];
         let mut transferred = 0u64;
-
         loop {
             if cancel.load(Ordering::Relaxed) {
                 return Err("Cancelled".to_string());
@@ -361,7 +385,6 @@ impl SftpConnection {
                 });
             }
         }
-
         local_file.flush().await.map_err(|e| format!("local flush: {}", e))?;
         Ok(())
     }
@@ -372,16 +395,39 @@ impl SftpConnection {
         }
         let local_metadata = std::fs::metadata(local)
             .map_err(|e| format!("local stat: {}", e))?;
+        // Directory: create remote dir, enumerate local, recurse
+        if local_metadata.is_dir() {
+            session.create_dir(remote).await
+                .map_err(|e| format!("mkdir {}: {}", remote, e))?;
+            let mut rd = tokio::fs::read_dir(local).await
+                .map_err(|e| format!("local readdir: {}", e))?;
+            while let Some(entry) = rd.next_entry().await
+                .map_err(|e| format!("local readdir entry: {}", e))? {
+                if cancel.load(Ordering::Relaxed) {
+                    return Err("Cancelled".to_string());
+                }
+                let name = entry.file_name().to_string_lossy().to_string();
+                let child_local = entry.path().to_string_lossy().to_string();
+                let child_remote = format!("{}/{}", remote.trim_end_matches('/'), name);
+                let _ = app.emit("file-progress", FileProgress {
+                    remote: remote_ident.to_string(),
+                    local: local_ident.to_string(),
+                    r#type: "upload".to_string(),
+                    bytes_transferred: 0,
+                    total_size: 0,
+                });
+                Box::pin(Self::do_upload(session, &child_local, &child_remote, remote_ident, local_ident, app, cancel)).await?;
+            }
+            return Ok(());
+        }
+        // File: stream
         let total = local_metadata.len();
-
         let mut local_file = tokio::fs::File::open(local).await
             .map_err(|e| format!("local open: {}", e))?;
         let mut remote_file = session.create(remote).await
             .map_err(|e| format!("create remote: {}", e))?;
-
         let mut buf = vec![0u8; 65536];
         let mut transferred = 0u64;
-
         loop {
             if cancel.load(Ordering::Relaxed) {
                 return Err("Cancelled".to_string());
@@ -402,7 +448,6 @@ impl SftpConnection {
                 });
             }
         }
-
         remote_file.flush().await.map_err(|e| format!("remote flush: {}", e))?;
         Ok(())
     }

@@ -2,9 +2,18 @@
 import { ref, computed, watch, reactive, onMounted, onUnmounted } from 'vue'
 import { useFileStore } from '../../stores/fileStore'
 import { useTerminalStore } from '../../stores/terminal'
-import { openDialog as open, saveDialog as save, listen } from '@/api'
+import { openDialog as open, saveDialog as save, listen, isElectron } from '@/api'
 import { useI18n } from 'vue-i18n'
 import type { FileEntry, TerminalTab, UploadTask, FileProgress, FileKind } from '../../types'
+
+// Tauri v2: drag-drop events are webview-level, not global event system
+let tauriGetCurrentWebview: (() => Promise<{ onDragDropEvent: (cb: (e: { payload: { type: string; paths?: string[] } }) => void) => Promise<() => void> }>) | null = null
+if (!isElectron) {
+  tauriGetCurrentWebview = async () => {
+    const { getCurrentWebview } = await import('@tauri-apps/api/webview')
+    return getCurrentWebview() as any
+  }
+}
 
 const svg = (d: string) => `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
 
@@ -118,9 +127,7 @@ watch(() => s.value.currentPath, (p) => { pathInput.value = p }, { immediate: tr
 function onPathSubmit() {
   const p = pathInput.value.trim() || '/'
   store.listDir(props.tabId, p)
-}
-
-let autoConnecting = false
+}let autoConnecting = false
 
 async function autoConnect() {
   if (autoConnecting || s.value.connected) return
@@ -206,26 +213,26 @@ const sortedEntries = computed(() => {
 })
 
 onMounted(async () => {
-  const un1 = await listen<{ type: string; paths?: string[]; position?: { x: number; y: number } }>('tauri://drag-drop', (event) => {
-    const { type, paths } = event.payload
-    if (type === 'over' || type === 'enter') {
-      dragOver.value = true
-    } else {
-      dragOver.value = false
+  // Tauri v2: use webview-level onDragDropEvent (not global event system)
+  if (!isElectron && tauriGetCurrentWebview) {
+    try {
+      const wv = await tauriGetCurrentWebview()
+      const un1 = await wv.onDragDropEvent((event: { payload: { type: string; paths?: string[] } }) => {
+        const { type, paths } = event.payload
+        if (type === 'over' || type === 'enter') {
+          dragOver.value = true
+        } else if (type === 'leave') {
+          dragOver.value = false
+        } else if (type === 'drop') {
+          dragOver.value = false
+          if (paths && paths.length > 0) startUploads(paths)
+        }
+      })
+      unlistens.push(un1)
+    } catch (e) {
+      console.warn('[FilePanel] failed to register drag-drop listener:', e)
     }
-    if (type === 'leave') {
-      dragOver.value = false
-    }
-    if (type === 'drop' && paths && paths.length > 0) {
-      for (const path of paths) {
-        const name = path.split('\\').pop()?.split('/').pop() || 'file'
-        const remotePath = pathJoin(s.value.currentPath, name)
-        store.upload(props.tabId, genId(), path, remotePath)
-      }
-      dragOver.value = false
-    }
-  })
-  unlistens.push(un1)
+  }
 
   const un2 = await listen<FileProgress>('file-progress', (event) => {
     const p = event.payload
@@ -304,39 +311,94 @@ async function doUpload() {
   const selected = await open({ multiple: true, directory: false })
   if (!selected) return
   const files = Array.isArray(selected) ? selected : [selected]
+  startUploads(files)
+}
+
+/**
+ * Resolve the real filesystem path(s) of a native drag-drop `DataTransfer`.
+ * Electron hides raw paths in the renderer (webUtils.getPathForFile); Tauri
+ * augments dropped File objects with a `path` property. Returns the paths.
+ */
+function pathsFromDataTransfer(dt: DataTransfer): string[] {
+  const files = Array.from(dt.files || [])
+  const paths: string[] = []
+  for (const file of files) {
+    let p: string | null = null
+    if (isElectron) {
+      const el = (window as unknown as { electronAPI?: { getPathForFile?: (f: File) => string | null } }).electronAPI
+      p = el?.getPathForFile ? el.getPathForFile(file) : null
+    } else {
+      p = (file as File & { path?: string }).path ?? null
+    }
+    if (p) paths.push(p)
+  }
+  // On Tauri the `path` property may be absent; fall back to the OS drag-drop
+  // event which always supplies paths.
+  return paths
+}
+
+/** Start upload tasks for a list of local filesystem paths (files or dirs). */
+function startUploads(files: string[]) {
   for (const file of files) {
     const name = file.split('\\').pop()?.split('/').pop() || 'file'
     const remotePath = pathJoin(s.value.currentPath, name)
     const id = genId()
     const task: UploadTask = { id, name, status: 'uploading', type: 'upload' }
     uploadTasks.value.push(task)
-    try {
-      await store.upload(props.tabId, id, file, remotePath)
-      task.status = 'done'
-    } catch (e: any) {
-      if (String(e).includes('Cancelled')) {
-        task.status = 'cancelled'
-      } else {
-        task.status = 'error'
-        task.error = String(e)
-      }
-    }
-    // auto-clear completed/cancelled tasks after 5s
+    store.upload(props.tabId, id, file, remotePath)
+      .then(() => { task.status = 'done' })
+      .catch((e: any) => {
+        if (String(e).includes('Cancelled')) {
+          task.status = 'cancelled'
+        } else {
+          task.status = 'error'
+          task.error = String(e)
+        }
+      })
     setTimeout(() => {
       uploadTasks.value = uploadTasks.value.filter(t => t.status === 'uploading')
     }, 5000)
   }
 }
 
+/**
+ * HTML5 drag-drop handlers (Electron; Tauri also needs `preventDefault` so the
+ * webview doesn't navigate). This complements the Tauri `tauri://drag-drop`
+ * event and is the single source for Electron, whose WebView has no equivalent
+ * native event. Dropped paths are resolved per-platform in
+ * `pathsFromDataTransfer`; for Tauri this also works when the native event
+ * path is unavailable.
+ */
+function onDragEnter(e: DragEvent) { e.preventDefault(); dragOver.value = true }
+function onDragOver(e: DragEvent) { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy' }
+function onDragLeave(e: DragEvent) {
+  e.preventDefault()
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const inside = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom
+  if (!inside) dragOver.value = false
+}
+function onDrop(e: DragEvent) {
+  e.preventDefault()
+  dragOver.value = false
+  const dt = e.dataTransfer
+  if (!dt) return
+  const paths = pathsFromDataTransfer(dt)
+  if (paths.length) startUploads(paths)
+}
+
 async function doDownload(entry: FileEntry) {
   const remotePath = pathJoin(s.value.currentPath, entry.name)
-  const dest = await save({ defaultPath: entry.name })
+  const dest = entry.is_dir
+    ? await open({ directory: true })
+    : await save({ defaultPath: entry.name })
   if (!dest) return
+  const target = Array.isArray(dest) ? dest[0] : dest
+  if (!target) return
   const id = genId()
   const task: UploadTask = { id, name: entry.name, status: 'uploading', type: 'download' }
   downloadTasks.value.push(task)
   try {
-    await store.download(props.tabId, id, remotePath, dest)
+    await store.download(props.tabId, id, remotePath, target)
     task.status = 'done'
   } catch (e: any) {
     if (String(e).includes('Cancelled')) {
@@ -485,6 +547,10 @@ function fileIcon(entry: FileEntry): string {
         v-else
         class="file-list"
         :class="{ 'drag-over': dragOver }"
+        @dragenter="onDragEnter"
+        @dragover="onDragOver"
+        @dragleave="onDragLeave"
+        @drop="onDrop"
       >
         <div class="file-header">
           <span class="col-name">{{ t('sftp.name') }}</span>
