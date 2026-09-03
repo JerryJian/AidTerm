@@ -298,7 +298,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     if (file.connId(tabId)) {
       file.disconnect(tabId).catch(() => {})
     }
-    // When the last adb tab closes, tear down the isolated 5038 server
+    // When the last adb tab closes, stop the bundled adb server
     // (unless the user disabled auto-cleanup in settings).
     const settings = useSettingsStore()
     if (adbServerStarted && settings.adbAutoKill && !hasAnyAdbTab()) {

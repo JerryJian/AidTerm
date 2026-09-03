@@ -457,7 +457,7 @@ export default {
     exit_fullscreen: '退出全屏',
     guake_mode: 'Guake 模式',
     adb_auto_kill: '最后一个 ADB 标签关闭后停止 ADB 服务',
-    adb_auto_kill_desc: '使用程序自带 adb 时运行在独立的 5038 端口服务；使用系统/外部 adb 时直接使用默认的 5037 服务。',
+    adb_auto_kill_desc: '关闭最后一个 ADB 标签时停止程序自带 adb 的服务；系统/外部 adb 不受影响。',
     shell_context_menu: '添加“在 AidTerm 中打开”右键菜单',
     shell_context_menu_desc: '添加到目录、目录空白处和桌面空白处的右键菜单。',
     path_environment: '将 aidterm 添加到环境变量 PATH',

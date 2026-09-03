@@ -82,16 +82,14 @@ function emitToRenderer(event: string, payload: Record<string, unknown>): void {
 // ══════════════════════════════════════════════════════
 //  ADB helpers
 //
-//  Port selection follows the adb source:
-//    - Bundled adb (resources/bin) may differ in version from the user's system
-//      server, so it runs on the isolated `-P 5038` server: a mismatch can only
-//      ever kill AidTerm's own server, never the user's 5037 instance.
-//    - External/system adb (AIDTERM_ADB or PATH) matches the user's environment
-//      and talks to the default `-P 5037` server, so the user sees the same
-//      devices as their other adb tools.
+//  Every resolved adb binary (bundled or external) talks to the shared default
+//  5037 server, so AidTerm sees the same devices as the user's other adb tools.
+//  "bundled" only affects whether the server is stopped when the last adb
+//  session closes.
 // ══════════════════════════════════════════════════════
-const ADB_PORT = '5038'
-const ADB_DEFAULT_PORT = '5037'
+const ADB_PORT = '5037'
+/** Backward-compatible alias: every source talks to the shared 5037 port. */
+const ADB_DEFAULT_PORT = ADB_PORT
 
 type AdbSource = 'env' | 'bundled' | 'path' | 'missing'
 
@@ -156,7 +154,7 @@ function resolveAdb(): AdbResolution {
   if (envOverride && fs.existsSync(envOverride)) return { path: envOverride, port: ADB_DEFAULT_PORT, source: 'env' }
   const exeName = process.platform === 'win32' ? 'adb.exe' : 'adb'
   // When an adb process is already running, reuse its executable (5037) rather
-  // than starting AidTerm's own isolated 5038 server; share the user's devices.
+  // than starting AidTerm's own server; share the user's devices.
   if (runningAdbPath) return { path: runningAdbPath, port: ADB_DEFAULT_PORT, source: 'path' }
   const bundled = path.join(process.resourcesPath, 'bin', exeName)
   if (fs.existsSync(bundled)) return { path: bundled, port: ADB_PORT, source: 'bundled' }
@@ -1147,7 +1145,7 @@ function registerIpcHandlers(): void {
   })
 
   // ══════════════════════════════════════════════════════
-  //  ADB (port: 5038 for bundled adb, 5037 for external/system adb)
+  //  ADB (every source talks to the shared 5037 port)
   // ══════════════════════════════════════════════════════
   function connectAdb(serial: string, rows: number, cols: number): string {
     if (!ptyModule) throw new Error('node-pty not installed')
@@ -1254,10 +1252,10 @@ function registerIpcHandlers(): void {
   ipcMain.handle('adb_kill_server', async (): Promise<void> => {
     try {
       await ensureAdbProbed()
-      const { port } = resolveAdb()
-      // Only the bundled adb's isolated 5038 server is ever stopped; an
-      // external/system adb's 5037 server belongs to the user.
-      if (port !== ADB_PORT) return
+      const { source } = resolveAdb()
+      // Only the bundled adb's server is ever stopped; an external/system adb's
+      // server is shared with (and may be run by) the user's other adb tools.
+      if (source !== 'bundled') return
       await runAdb(['kill-server'])
     } catch (e) {
       console.warn('[electron] adb kill-server failed:', e)
@@ -1332,9 +1330,9 @@ function registerIpcHandlers(): void {
     cast.closePush(args.serial)
   })
 
-  // USB devices held by the user's own 5037 server never show up on AidTerm's
-  // isolated 5038 server (bundled adb mode). Report them so the UI can explain
-  // why a device is missing.
+  // USB devices held by a separate adb server never show up on the one AidTerm
+  // uses. Since every source shares port 5037 this normally reports nothing.
+  // Report them so the UI can explain why a device is missing.
   ipcMain.handle('adb_occupied_devices', async (): Promise<string[]> => {
     try {
       const own = new Set<string>()

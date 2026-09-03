@@ -1399,13 +1399,8 @@ mod tests {
         if !std::path::Path::new(&adb).is_file() {
             panic!("adb not found at {adb} (set AIDTERM_ADB)");
         }
-        // Mirror adb_path()'s port selection: AIDTERM_ADB (external) -> 5037,
-        // bundled binary (repo bin/) -> isolated 5038.
-        let port = if std::env::var_os("AIDTERM_ADB").is_some() {
-            crate::adb::ADB_DEFAULT_PORT
-        } else {
-            crate::adb::ADB_PORT
-        };
+        // All adb sources talk to the shared default 5037 server.
+        let port = crate::adb::ADB_PORT;
         let jar = std::env::var("AIDTERM_SCRCPY")
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|_| std::path::PathBuf::from("../bin/scrcpy-server.jar"));

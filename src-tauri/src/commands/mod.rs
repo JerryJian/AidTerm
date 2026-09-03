@@ -120,8 +120,7 @@ pub fn adb_status(app: tauri::AppHandle) -> adb::AdbStatus {
     adb::status(&app)
 }
 
-/// List devices from the resolved adb server (bundled adb -> isolated 5038,
-/// external/system adb -> default 5037).
+/// List devices from the shared 5037 adb server.
 /// Uses spawn_blocking so a slow first server start never blocks the UI.
 #[tauri::command]
 pub async fn adb_list_devices(app: tauri::AppHandle) -> Result<Vec<adb::AdbDevice>, String> {
@@ -130,9 +129,9 @@ pub async fn adb_list_devices(app: tauri::AppHandle) -> Result<Vec<adb::AdbDevic
         .map_err(|e| format!("adb list devices join error: {}", e))?
 }
 
-/// Kill the bundled adb's isolated 5038 server. No-op when an external/system
-/// adb is in use, so the user's own 5037 server is never touched. Called when
-/// the last adb session closes.
+/// Kill the bundled adb's server. No-op when an external/system adb is in use,
+/// so the user's own server is never touched. Called when the last adb session
+/// closes.
 #[tauri::command]
 pub async fn adb_kill_server(app: tauri::AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || adb::kill_server(&app))
@@ -140,10 +139,10 @@ pub async fn adb_kill_server(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| format!("adb kill-server join error: {}", e))?
 }
 
-/// USB devices held by the user's own 5037 server and therefore invisible to
-/// AidTerm's isolated 5038 server when using the bundled adb. The check is
-/// strictly read-only (raw wire protocol), so the user's adb server is never
-/// killed or restarted.
+/// USB devices held by a separate adb server and therefore invisible to the
+/// one AidTerm uses. Since every source now shares port 5037 this normally
+/// reports nothing. The check is strictly read-only (raw wire protocol), so a
+/// foreign adb server is never killed or restarted.
 #[tauri::command]
 pub async fn adb_occupied_devices(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     Ok(tauri::async_runtime::spawn_blocking(move || adb::occupied_devices(&app))
