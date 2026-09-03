@@ -255,9 +255,12 @@ pub fn kill_server(app: &AppHandle) -> Result<(), String> {
 /// Ensure the server is running first so a freshly connected phone shows up.
 /// Emulators are visible automatically (the server discovers local emulator
 /// transports on its own), so no extra port scanning is needed.
+///
+/// Note: `adb devices` transparently starts the adb server daemon, so we must
+/// NOT rescan the running-adb cache here — that would mis-report the very
+/// server we just spawned as a "pre-existing adb to reuse". The running-adb
+/// detection is refreshed once at dialog open (see `status`).
 pub fn list_devices(app: &AppHandle) -> Result<Vec<AdbDevice>, String> {
-    // The device scan is the discovery point for an existing adb process.
-    refresh_running_adb(true);
     ensure_server(app)?;
     let (stdout, _, ok) = run_adb(app, &["devices", "-l"])?;
     if !ok {

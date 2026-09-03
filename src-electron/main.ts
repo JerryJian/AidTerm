@@ -1242,7 +1242,10 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('adb_list_devices', async (): Promise<AdbDevice[]> => {
     try {
-      await refreshRunningAdb()
+      // Do NOT rescan the running-adb cache here: `runAdb(['devices', ...])`
+      // transparently starts the adb server daemon, so a rescan would mis-report
+      // the server we just spawned as a "pre-existing adb to reuse". The running
+      // adb is detected once per refresh in `adb_status` (called before this).
       const out = await runAdb(['devices', '-l'])
       return parseAdbDevices(out)
     } catch (e) {
