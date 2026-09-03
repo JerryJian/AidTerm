@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useSettingsStore } from '../../stores/settingsStore'
 
 const { t } = useI18n()
+const settings = useSettingsStore()
 
 const emit = defineEmits<{
   unlocked: []
@@ -13,24 +15,19 @@ const newPassword = ref('')
 const confirmPassword = ref('')
 const isSettingPassword = ref(false)
 const error = ref('')
-const hasPassword = ref(false)
-
-const STORAGE_KEY = 'aidterm_lock_password'
 
 onMounted(() => {
-  hasPassword.value = !!localStorage.getItem(STORAGE_KEY)
-  if (!hasPassword.value) {
+  if (!settings.hasLockPassword) {
     isSettingPassword.value = true
   }
 })
 
 function doUnlock() {
-  const stored = localStorage.getItem(STORAGE_KEY)
-  if (!stored) {
+  if (!settings.hasLockPassword) {
     error.value = t('lock_screen.no_password')
     return
   }
-  if (password.value === stored) {
+  if (password.value === settings.lockPassword) {
     emit('unlocked')
   } else {
     error.value = t('lock_screen.wrong_password')
@@ -44,8 +41,7 @@ function doSetPassword() {
     return
   }
   if (!newPassword.value) return
-  localStorage.setItem(STORAGE_KEY, newPassword.value)
-  hasPassword.value = true
+  settings.setLockPassword(newPassword.value)
   isSettingPassword.value = false
   password.value = ''
   error.value = ''
@@ -68,7 +64,7 @@ function onKeydown(e: KeyboardEvent) {
       <div class="lock-icon">🔒</div>
       <h2 class="lock-title">{{ t('lock_screen.title') }}</h2>
 
-      <div v-if="isSettingPassword && !hasPassword" class="lock-form">
+      <div v-if="isSettingPassword && !settings.hasLockPassword" class="lock-form">
         <p class="lock-hint">{{ t('lock_screen.set_password') }}</p>
         <input
           v-model="newPassword"

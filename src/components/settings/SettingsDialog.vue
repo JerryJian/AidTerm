@@ -91,6 +91,12 @@ const pathEnvironmentError = ref('')
 const singleInstanceEnabled = ref(false)
 const singleInstanceLoading = ref(false)
 const singleInstanceError = ref('')
+const lockPasswordNew = ref('')
+const lockPasswordConfirm = ref('')
+const lockPasswordCurrent = ref('')
+const lockPasswordError = ref('')
+const lockPasswordSaved = ref(false)
+const showLockPasswordForm = ref(false)
 
 onMounted(async () => {
   try {
@@ -151,6 +157,51 @@ async function toggleSingleInstance(e: Event) {
   } finally {
     singleInstanceLoading.value = false
   }
+}
+
+function toggleLockScreen(e: Event) {
+  const enabled = (e.target as HTMLInputElement).checked
+  settings.lockEnabled = enabled
+  lockPasswordError.value = ''
+  lockPasswordSaved.value = false
+  if (!enabled) {
+    showLockPasswordForm.value = false
+    lockPasswordNew.value = ''
+    lockPasswordConfirm.value = ''
+    lockPasswordCurrent.value = ''
+    settings.clearLockPassword()
+  }
+}
+
+function toggleLockPasswordForm() {
+  showLockPasswordForm.value = !showLockPasswordForm.value
+  lockPasswordError.value = ''
+  lockPasswordSaved.value = false
+  lockPasswordNew.value = ''
+  lockPasswordConfirm.value = ''
+  lockPasswordCurrent.value = ''
+}
+
+function saveLockPassword() {
+  lockPasswordError.value = ''
+  lockPasswordSaved.value = false
+  if (!lockPasswordNew.value) {
+    lockPasswordError.value = t('settings.lock_screen_password')
+    return
+  }
+  if (settings.hasLockPassword && lockPasswordCurrent.value !== settings.lockPassword) {
+    lockPasswordError.value = t('settings.lock_screen_wrong_current')
+    return
+  }
+  if (lockPasswordNew.value !== lockPasswordConfirm.value) {
+    lockPasswordError.value = t('lock_screen.password_mismatch')
+    return
+  }
+  settings.setLockPassword(lockPasswordNew.value)
+  lockPasswordNew.value = ''
+  lockPasswordConfirm.value = ''
+  lockPasswordCurrent.value = ''
+  lockPasswordSaved.value = true
 }
 
 async function onLanguageChange(e: Event) {
@@ -275,6 +326,57 @@ async function toggleFullscreen() {
               />
               <span class="toggle-switch" />
             </label>
+          </div>
+          <div class="setting-row">
+            <div class="toggle-text">
+              <label>{{ t('settings.lock_screen') }}</label>
+              <span class="field-desc">{{ t('settings.lock_screen_desc') }}</span>
+            </div>
+            <label class="toggle-label switch-only">
+              <input
+                type="checkbox"
+                :checked="settings.lockEnabled"
+                @change="toggleLockScreen"
+                class="toggle-input"
+              />
+              <span class="toggle-switch" />
+            </label>
+          </div>
+          <div v-if="settings.lockEnabled" class="setting-row">
+            <button class="action-btn" @click="toggleLockPasswordForm">
+              {{ settings.hasLockPassword ? t('settings.lock_screen_change_password') : t('settings.lock_screen_set_password') }}
+            </button>
+            <span v-if="lockPasswordSaved" class="field-desc" style="color: var(--success)">{{ t('settings.lock_screen_saved') }}</span>
+            <span v-if="lockPasswordError && !showLockPasswordForm" class="field-desc setting-error">{{ lockPasswordError }}</span>
+          </div>
+          <div v-if="settings.lockEnabled && showLockPasswordForm" class="setting-row col">
+            <span v-if="!settings.hasLockPassword" class="field-desc">{{ t('settings.lock_screen_password_hint') }}</span>
+            <input
+              v-if="settings.hasLockPassword"
+              v-model="lockPasswordCurrent"
+              type="password"
+              :placeholder="t('settings.lock_screen_current_password')"
+              class="text-input"
+            />
+            <input
+              v-model="lockPasswordNew"
+              type="password"
+              :placeholder="t('settings.lock_screen_new_password')"
+              class="text-input"
+            />
+            <input
+              v-model="lockPasswordConfirm"
+              type="password"
+              :placeholder="t('settings.lock_screen_confirm_password')"
+              class="text-input"
+              @keydown.enter="saveLockPassword"
+            />
+            <div class="row-actions">
+              <button class="action-btn" @click="saveLockPassword">{{ t('common.save') }}</button>
+              <button class="action-btn" @click="toggleLockPasswordForm">{{ t('common.cancel') }}</button>
+              <span v-if="lockPasswordSaved" class="field-desc" style="color: var(--success)">{{ t('settings.lock_screen_saved') }}</span>
+              <span v-if="lockPasswordError" class="field-desc setting-error">{{ lockPasswordError }}</span>
+            </div>
           </div>
         </div>
 

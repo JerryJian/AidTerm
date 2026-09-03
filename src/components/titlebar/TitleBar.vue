@@ -4,10 +4,12 @@ import { invoke, getCurrentWindow, getAppVersion } from '@/api'
 import { useI18n } from 'vue-i18n'
 import { useUiStore } from '../../stores/uiStore'
 import { useUpdateStore } from '../../stores/updateStore'
+import { useSettingsStore } from '../../stores/settingsStore'
 
 const { t } = useI18n()
 const ui = useUiStore()
 const update = useUpdateStore()
+const settings = useSettingsStore()
 
 const version = ref('')
 
@@ -171,7 +173,7 @@ async function onInspect() {
           <path d="M17.5 2.47363L23 11.9999L17.5 21.5262H6.5L1 11.9999L6.5 2.47363H17.5ZM16.3453 4.47363H7.6547L3.3094 11.9999L7.6547 19.5262H16.3453L20.6906 11.9999L16.3453 4.47363ZM8.63398 8.16979L10.366 7.16979L15.366 15.83L13.634 16.83L8.63398 8.16979Z"/>
         </svg>
       </button>
-      <button class="tb-btn" @click="emit('lock')" :title="t('menu.lock')">
+      <button v-if="settings.lockEnabled" class="tb-btn" @click="emit('lock')" :title="t('menu.lock')">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
           <path d="M19 10H20C20.5523 10 21 10.4477 21 11V21C21 21.5523 20.5523 22 20 22H4C3.44772 22 3 21.5523 3 21V11C3 10.4477 3.44772 10 4 10H5V9C5 5.13401 8.13401 2 12 2C15.866 2 19 5.13401 19 9V10ZM5 12V20H19V12H5ZM11 14H13V18H11V14ZM17 10V9C17 6.23858 14.7614 4 12 4C9.23858 4 7 6.23858 7 9V10H17Z"/>
         </svg>
