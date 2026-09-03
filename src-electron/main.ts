@@ -110,10 +110,54 @@ function findInPath(exeName: string): string | null {
   return null
 }
 
+// Cached result of a process scan for an already-running adb process.
+// `undefined` means "not probed yet", `null` = "probed, no adb running".
+let runningAdbPath: string | null | undefined = undefined
+
+/**
+ * Enumerate running processes for an existing adb executable and cache it.
+ * Only rescans when `force` is true (i.e. when the ADB connect dialog lists
+ * devices); afterwards every adb call reuses the cached result so the session
+ * and its cast share the same adb discovered at scan time.
+ */
+async function resolveRunningAdb(force: boolean): Promise<string | null> {
+  if (!force && runningAdbPath !== undefined) return runningAdbPath
+  try {
+    const si = require('systeminformation') as typeof import('systeminformation')
+    const { list } = await si.processes()
+    const target = process.platform === 'win32' ? 'adb.exe' : 'adb'
+    const found = list.find((p) => p.name.toLowerCase() === target.toLowerCase())
+    if (found) {
+      // Prefer the concrete binary of the running process; fall back to PATH.
+      const exe = (found.path && fs.existsSync(found.path)) ? found.path : findInPath(target)
+      runningAdbPath = exe ?? findInPath(target) ?? null
+    } else {
+      runningAdbPath = null
+    }
+    if (runningAdbPath) console.log('[electron] existing adb process found, reusing:', runningAdbPath)
+  } catch {
+    runningAdbPath = null
+  }
+  return runningAdbPath
+}
+
+/** Reuse the cached running-adb result (session ops, no process rescan). */
+async function ensureAdbProbed(): Promise<void> {
+  await resolveRunningAdb(false)
+}
+
+/** Re-scan for a running adb (called when the connect dialog lists devices). */
+async function refreshRunningAdb(): Promise<void> {
+  await resolveRunningAdb(true)
+}
+
 function resolveAdb(): AdbResolution {
   const envOverride = process.env.AIDTERM_ADB
   if (envOverride && fs.existsSync(envOverride)) return { path: envOverride, port: ADB_DEFAULT_PORT, source: 'env' }
   const exeName = process.platform === 'win32' ? 'adb.exe' : 'adb'
+  // When an adb process is already running, reuse its executable (5037) rather
+  // than starting AidTerm's own isolated 5038 server; share the user's devices.
+  if (runningAdbPath) return { path: runningAdbPath, port: ADB_DEFAULT_PORT, source: 'path' }
   const bundled = path.join(process.resourcesPath, 'bin', exeName)
   if (fs.existsSync(bundled)) return { path: bundled, port: ADB_PORT, source: 'bundled' }
   const fromPath = findInPath(exeName)
@@ -122,7 +166,9 @@ function resolveAdb(): AdbResolution {
   return { path: exeName, port: ADB_DEFAULT_PORT, source: 'missing' }
 }
 
-function adbStatus(): AdbStatus {
+async function adbStatus(): Promise<AdbStatus> {
+  // The dialog open is the discovery point: refresh the running-adb cache.
+  await refreshRunningAdb()
   const { path: p, port, source } = resolveAdb()
   return {
     available: source !== 'missing',
@@ -158,8 +204,9 @@ function formatLocalMtime(ms: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function runAdb(args: string[]): Promise<string> {
+async function runAdb(args: string[]): Promise<string> {
   const { execFile } = require('child_process') as typeof import('child_process')
+  await ensureAdbProbed()
   return new Promise<string>((resolve, reject) => {
     const { path: adb, port } = resolveAdb()
     execFile(adb, ['-P', port, ...args], { timeout: 15000 }, (err: Error | null, stdout: string | Buffer) => {
@@ -1133,7 +1180,7 @@ function registerIpcHandlers(): void {
 
   // ── Unified connection factory ──
 
-  ipcMain.handle('connection_create', (_, args: ConnectionCreateArgs): ConnectionHandle => {
+  ipcMain.handle('connection_create', async (_, args: ConnectionCreateArgs): Promise<ConnectionHandle> => {
     const { config, rows, cols } = args
     switch (config.type) {
       case 'local': {
@@ -1184,16 +1231,18 @@ function registerIpcHandlers(): void {
         return { id, capabilities: [] }
       }
       case 'adb': {
+        await ensureAdbProbed()
         const id = connectAdb(config.serial, rows, cols)
         return { id, capabilities: ['file', 'cast'] }
       }
     }
   })
 
-  ipcMain.handle('adb_status', (): AdbStatus => adbStatus())
+  ipcMain.handle('adb_status', async (): Promise<AdbStatus> => adbStatus())
 
   ipcMain.handle('adb_list_devices', async (): Promise<AdbDevice[]> => {
     try {
+      await refreshRunningAdb()
       const out = await runAdb(['devices', '-l'])
       return parseAdbDevices(out)
     } catch (e) {
@@ -1204,6 +1253,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('adb_kill_server', async (): Promise<void> => {
     try {
+      await ensureAdbProbed()
       const { port } = resolveAdb()
       // Only the bundled adb's isolated 5038 server is ever stopped; an
       // external/system adb's 5037 server belongs to the user.
@@ -1221,6 +1271,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle(
     'cast_start',
     async (_, args: { serial: string; maxSize?: number }): Promise<{ port: number; width: number | null; height: number | null }> => {
+      await ensureAdbProbed()
       const { path: adb, port } = resolveAdb()
       return cast.start(adb, port, args.serial, args.maxSize ?? 0)
     }
@@ -1238,6 +1289,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('cast_input', async (_, args: { serial: string; cmd: string }): Promise<void> => {
+    await ensureAdbProbed()
     const { path: adb, port } = resolveAdb()
     await cast.input(adb, port, args.serial, args.cmd)
   })

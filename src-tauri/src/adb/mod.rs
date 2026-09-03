@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde::Serialize;
@@ -65,8 +66,9 @@ pub struct AdbStatus {
 /// Resolve the adb binary plus the server port it should talk to, in priority
 /// order:
 ///   1. `AIDTERM_ADB` env var (explicit override, dev / power users) -> default 5037
-///   2. Bundled resource `bin/adb(.exe)` shipped inside the app -> isolated 5038
-///   3. adb found on PATH (fallback) -> default 5037
+///   2. An adb process already running on the host -> reuse its executable (5037)
+///   3. Bundled resource `bin/adb(.exe)` shipped inside the app -> isolated 5038
+///   4. adb found on PATH (fallback) -> default 5037
 /// Returns `None` when no adb is available (e.g. arm64 packages ship no
 /// bundled adb and the system has none installed).
 fn resolve_full(app: &AppHandle) -> Option<(PathBuf, &'static str, AdbSource)> {
@@ -76,6 +78,16 @@ fn resolve_full(app: &AppHandle) -> Option<(PathBuf, &'static str, AdbSource)> {
             return Some((p, ADB_DEFAULT_PORT, AdbSource::Env));
         }
         log::warn!("[adb] AIDTERM_ADB set but not a file, ignoring: {}", p.display());
+    }
+
+    // When an adb process is already running, reuse its executable rather than
+    // starting AidTerm's own isolated 5038 server; this lets us share the
+    // user's already-attached devices (5037) instead of treating them as busy.
+    // The process scan result is cached after the dialog first detects it, so
+    // the whole session + its cast reuse the same adb without re-enumerating.
+    if let Some(p) = cached_running_adb() {
+        log::info!("[adb] existing adb process found, reusing: {}", p.display());
+        return Some((p, ADB_DEFAULT_PORT, AdbSource::Path));
     }
 
     let exe_name = if cfg!(target_os = "windows") { "adb.exe" } else { "adb" };
@@ -93,6 +105,66 @@ fn resolve_full(app: &AppHandle) -> Option<(PathBuf, &'static str, AdbSource)> {
     None
 }
 
+/// Cache of a detected running adb executable.
+/// Inner: `None` = not probed yet, `Some(None)` = probed, no adb running.
+static ADB_RUNNING: OnceLock<Mutex<Option<Option<PathBuf>>>> = OnceLock::new();
+
+fn adb_running_state() -> &'static Mutex<Option<Option<PathBuf>>> {
+    ADB_RUNNING.get_or_init(|| Mutex::new(None))
+}
+
+/// Return the cached running-adb executable without re-enumerating processes.
+fn cached_running_adb() -> Option<PathBuf> {
+    adb_running_state().lock().unwrap().clone().flatten()
+}
+
+/// Locate the executable of an adb process that is already running on the host
+/// and cache it. Only scans the process list when `force` is true (i.e. when
+/// the ADB connect dialog lists devices); afterwards every adb call reuses the
+/// cached result so the session and its cast share the same adb.
+fn refresh_running_adb(force: bool) -> Option<PathBuf> {
+    let state = adb_running_state();
+    let mut guard = state.lock().unwrap();
+    if !force && guard.is_some() {
+        return guard.clone().flatten();
+    }
+
+    let found = scan_adb_process();
+    *guard = Some(found.clone());
+    found
+}
+
+/// Enumerate running processes looking for `adb` / `adb.exe`. When found,
+/// `Process::exe()` yields the concrete binary the running server belongs to;
+/// if that path is unavailable/stale we fall back to matching it on PATH so we
+/// still can talk to the same 5037 server.
+fn scan_adb_process() -> Option<PathBuf> {
+    use sysinfo::ProcessesToUpdate;
+    let target = if cfg!(target_os = "windows") { "adb.exe" } else { "adb" };
+    let mut sys = sysinfo::System::new();
+    sys.refresh_processes(ProcessesToUpdate::All, true);
+
+    for proc_ in sys.processes().values() {
+        let name = proc_.name();
+        let name_matches = std::path::Path::new(name)
+            .file_name()
+            .map(|f| f.eq_ignore_ascii_case(target))
+            .unwrap_or(false);
+        if !name_matches {
+            continue;
+        }
+        if let Some(exe) = proc_.exe() {
+            if exe.is_file() {
+                return Some(exe.to_path_buf());
+            }
+        }
+        if let Some(p) = find_in_path(target) {
+            return Some(p);
+        }
+    }
+    None
+}
+
 pub fn adb_path(app: &AppHandle) -> Result<(PathBuf, &'static str), String> {
     resolve_full(app)
         .map(|(p, port, _)| (p, port))
@@ -101,6 +173,8 @@ pub fn adb_path(app: &AppHandle) -> Result<(PathBuf, &'static str), String> {
 
 /// Probe adb availability for the connect dialog (see `AdbStatus`).
 pub fn status(app: &AppHandle) -> AdbStatus {
+    // The dialog open is the discovery point: refresh the running-adb cache.
+    refresh_running_adb(true);
     match resolve_full(app) {
         Some((path, port, src)) => AdbStatus {
             available: true,
@@ -188,6 +262,8 @@ pub fn kill_server(app: &AppHandle) -> Result<(), String> {
 /// Emulators are visible automatically (the server discovers local emulator
 /// transports on its own), so no extra port scanning is needed.
 pub fn list_devices(app: &AppHandle) -> Result<Vec<AdbDevice>, String> {
+    // The device scan is the discovery point for an existing adb process.
+    refresh_running_adb(true);
     ensure_server(app)?;
     let (stdout, _, ok) = run_adb(app, &["devices", "-l"])?;
     if !ok {
