@@ -23,6 +23,26 @@ const MAX_POINTS = 30
 const cpuHistory = ref<number[]>([])
 const netHistory = ref<Record<string, { rx: number[]; tx: number[] }>>({})
 
+// Per-session caches so switching tabs keeps each session's data.
+const metricsCache = new Map<string, RemoteSystemMetrics | null>()
+const errorCache = new Map<string, string | null>()
+const cpuCache = new Map<string, number[]>()
+const netCache = new Map<string, Record<string, { rx: number[]; tx: number[] }>>()
+
+function saveCurrentToCache(id: string) {
+  metricsCache.set(id, metrics.value)
+  errorCache.set(id, error.value)
+  cpuCache.set(id, cpuHistory.value)
+  netCache.set(id, netHistory.value)
+}
+
+function restoreFromCache(id: string) {
+  metrics.value = metricsCache.get(id) ?? null
+  error.value = errorCache.get(id) ?? null
+  cpuHistory.value = cpuCache.get(id) ?? []
+  netHistory.value = netCache.get(id) ?? {}
+}
+
 let timer: ReturnType<typeof setInterval> | null = null
 let busy = false
 
@@ -89,6 +109,7 @@ async function poll() {
       next[n.name] = prev
     }
     netHistory.value = next
+    saveCurrentToCache(sessionId.value)
   } catch (e) {
     error.value = String(e)
   } finally {
@@ -360,10 +381,8 @@ function onVisibility() {
 
 watch(() => sessionId.value, (id, old) => {
   if (id !== old) {
-    metrics.value = null
-    error.value = null
-    cpuHistory.value = []
-    netHistory.value = {}
+    if (old) saveCurrentToCache(old)
+    restoreFromCache(id)
   }
   onVisibility()
 })
@@ -378,6 +397,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stop()
   document.removeEventListener('visibilitychange', onVisibility)
+  metricsCache.clear()
+  errorCache.clear()
+  cpuCache.clear()
+  netCache.clear()
 })
 </script>
 
