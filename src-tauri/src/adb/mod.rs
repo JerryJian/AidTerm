@@ -61,8 +61,8 @@ pub struct AdbStatus {
 /// order:
 ///   1. `AIDTERM_ADB` env var (explicit override, dev / power users)
 ///   2. An adb process already running on the host -> reuse its executable
-///   3. Bundled resource `bin/adb(.exe)` shipped inside the app
-///   4. adb found on PATH (fallback)
+///   3. adb found on PATH (system adb; preferred so we match the user's tools)
+///   4. Bundled resource `bin/adb(.exe)` shipped inside the app (fallback)
 /// Returns `None` when no adb is available (e.g. arm64 packages ship no
 /// bundled adb and the system has none installed).
 fn resolve_full(app: &AppHandle) -> Option<(PathBuf, &'static str, AdbSource)> {
@@ -84,15 +84,16 @@ fn resolve_full(app: &AppHandle) -> Option<(PathBuf, &'static str, AdbSource)> {
     }
 
     let exe_name = if cfg!(target_os = "windows") { "adb.exe" } else { "adb" };
+
+    if let Some(p) = find_in_path(exe_name) {
+        return Some((p, ADB_PORT, AdbSource::Path));
+    }
+
     if let Ok(resource_dir) = app.path().resource_dir() {
         let bundled = resource_dir.join("bin").join(exe_name);
         if bundled.is_file() {
             return Some((bundled, ADB_PORT, AdbSource::Bundled));
         }
-    }
-
-    if let Some(p) = find_in_path(exe_name) {
-        return Some((p, ADB_PORT, AdbSource::Path));
     }
 
     None

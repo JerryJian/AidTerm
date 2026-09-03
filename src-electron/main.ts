@@ -156,10 +156,12 @@ function resolveAdb(): AdbResolution {
   // When an adb process is already running, reuse its executable (5037) rather
   // than starting AidTerm's own server; share the user's devices.
   if (runningAdbPath) return { path: runningAdbPath, port: ADB_DEFAULT_PORT, source: 'path' }
-  const bundled = path.join(process.resourcesPath, 'bin', exeName)
-  if (fs.existsSync(bundled)) return { path: bundled, port: ADB_PORT, source: 'bundled' }
+  // Prefer the system adb on PATH so we match the user's other adb tools; fall
+  // back to the bundled binary only when no system adb is installed.
   const fromPath = findInPath(exeName)
   if (fromPath) return { path: fromPath, port: ADB_DEFAULT_PORT, source: 'path' }
+  const bundled = path.join(process.resourcesPath, 'bin', exeName)
+  if (fs.existsSync(bundled)) return { path: bundled, port: ADB_PORT, source: 'bundled' }
   // execFile will surface ENOENT when the fallback path is attempted.
   return { path: exeName, port: ADB_DEFAULT_PORT, source: 'missing' }
 }
