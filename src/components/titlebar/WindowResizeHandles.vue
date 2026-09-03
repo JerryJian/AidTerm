@@ -1,15 +1,30 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { getCurrentWindow, isElectron } from '@/api'
+import { ref, computed, onMounted } from 'vue'
+import { getCurrentWindow, invoke, isElectron } from '@/api'
 import type { ResizeDirection } from '@/api/types'
 
 const win = getCurrentWindow()
 
-// Tauri windows are frameless on every platform (tauri.conf.json decorations:false)
-// and resize via the compositor-native startResizeDragging, so handles are always
-// needed there. Electron keeps native resize everywhere (Windows/macOS native
-// frame, Linux Wayland extended resize boundaries), so it needs no handles.
-const showHandles = computed(() => !isElectron)
+// Tauri windows are frameless on every platform (tauri.conf.json decorations:false).
+// Windows/macOS still get native edge resize even without decorations, so custom
+// handles are only needed on Linux (Wayland/X11 lack reliable frameless resize).
+// Electron keeps native resize everywhere, so it needs no handles.
+const isMaximized = ref(false)
+const isLinux = ref(false)
+
+onMounted(async () => {
+  try {
+    isLinux.value = (await invoke<string>('get_platform')) === 'linux'
+  } catch { /* ignore */ }
+  try {
+    isMaximized.value = await win.isMaximized()
+    await win.onResized(async () => {
+      isMaximized.value = await win.isMaximized()
+    })
+  } catch { /* ignore */ }
+})
+
+const showHandles = computed(() => !isElectron && isLinux.value && !isMaximized.value)
 
 const zones: { direction: ResizeDirection; className: string }[] = [
   { direction: 'North', className: 'rh-north' },
