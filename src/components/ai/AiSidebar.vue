@@ -109,6 +109,21 @@ function onContextMenu(e: MouseEvent) {
   ctx.x = e.clientX
   ctx.y = e.clientY
   ctx.show = true
+  nextTick(clampCtx)
+}
+
+function clampCtx() {
+  const el = document.querySelector<HTMLElement>('.ai-ctx-menu')
+  if (!el || !ctx.show || typeof el.offsetHeight !== 'number' || el.offsetHeight === 0) return
+  const margin = 6
+  const maxY = window.innerHeight - el.offsetHeight - margin
+  const maxX = window.innerWidth - el.offsetWidth - margin
+  const y = Math.max(margin, Math.min(ctx.y, maxY))
+  const x = Math.max(margin, Math.min(ctx.x, maxX))
+  if (x !== ctx.x || y !== ctx.y) {
+    ctx.x = x
+    ctx.y = y
+  }
 }
 
 function hideCtx() {

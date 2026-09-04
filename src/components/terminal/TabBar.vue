@@ -47,6 +47,19 @@ function showTabCtx(e: MouseEvent, tabId: string) {
   ctxTabId.value = tabId
   ctxPos.value = { x: e.clientX, y: e.clientY }
   ctxVisible.value = true
+  nextTick(clampTabCtx)
+}
+
+function clampTabCtx() {
+  const el = document.querySelector<HTMLElement>('.tab-ctx-menu')
+  const pos = ctxPos.value
+  if (!el || !ctxVisible.value || typeof el.offsetHeight !== 'number' || el.offsetHeight === 0) return
+  const margin = 6
+  const maxY = window.innerHeight - el.offsetHeight - margin
+  const maxX = window.innerWidth - el.offsetWidth - margin
+  const y = Math.max(margin, Math.min(pos.y, maxY))
+  const x = Math.max(margin, Math.min(pos.x, maxX))
+  if (x !== pos.x || y !== pos.y) ctxPos.value = { x, y }
 }
 
 function closeTabCtx() {

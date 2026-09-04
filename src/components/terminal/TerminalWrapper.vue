@@ -593,6 +593,19 @@ function showContextMenu(e: MouseEvent) {
   e.preventDefault()
   ctxMenu.value = { x: e.clientX, y: e.clientY }
   ctxVisible.value = true
+  nextTick(clampCtxMenu)
+}
+
+function clampCtxMenu() {
+  const el = document.querySelector<HTMLElement>('.ctx-menu')
+  const pos = ctxMenu.value
+  if (!el || !ctxVisible.value || typeof el.offsetHeight !== 'number' || el.offsetHeight === 0) return
+  const margin = 6
+  const maxY = window.innerHeight - el.offsetHeight - margin
+  const maxX = window.innerWidth - el.offsetWidth - margin
+  const y = Math.max(margin, Math.min(pos.y, maxY))
+  const x = Math.max(margin, Math.min(pos.x, maxX))
+  if (x !== pos.x || y !== pos.y) ctxMenu.value = { x, y }
 }
 
 function closeContextMenu() {

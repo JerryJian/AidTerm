@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, reactive, nextTick, onMounted, onUnmounted } from 'vue'
 import { useFileStore } from '../../stores/fileStore'
 import { useTerminalStore } from '../../stores/terminal'
 import { openDialog as open, saveDialog as save, listen, isElectron } from '@/api'
@@ -120,6 +120,21 @@ function toggleRowMenu(entry: FileEntry, e: MouseEvent) {
   rowMenuEntry.value = entry
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
   rowMenuPos.value = { x: window.innerWidth - rect.right, y: rect.bottom }
+  nextTick(clampRowMenu)
+}
+
+function clampRowMenu() {
+  const el = document.querySelector<HTMLElement>('.row-menu')
+  const pos = rowMenuPos.value
+  if (!el || !pos || typeof el.offsetHeight !== 'number' || el.offsetHeight === 0) return
+  const margin = 6
+  const maxY = window.innerHeight - el.offsetHeight - margin
+  let y = Math.max(margin, Math.min(pos.y, maxY))
+  let x = pos.x
+  const rightEdge = window.innerWidth - pos.x
+  const leftEdge = rightEdge - el.offsetWidth
+  if (leftEdge < margin) x = window.innerWidth - el.offsetWidth - margin
+  rowMenuPos.value = { x, y }
 }
 
 watch(() => s.value.currentPath, (p) => { pathInput.value = p }, { immediate: true })
@@ -196,6 +211,19 @@ function onRowCtxMenu(e: MouseEvent, entry: FileEntry) {
   selectedFile.value = entry.name
   ctxEntry.value = entry
   ctxPos.value = { x: e.clientX, y: e.clientY }
+  nextTick(clampCtxMenu)
+}
+
+function clampCtxMenu() {
+  const el = document.querySelector<HTMLElement>('.ctx-menu')
+  const pos = ctxPos.value
+  if (!el || !pos || typeof el.offsetHeight !== 'number' || el.offsetHeight === 0) return
+  const margin = 6
+  const maxY = window.innerHeight - el.offsetHeight - margin
+  const maxX = window.innerWidth - el.offsetWidth - margin
+  const y = Math.max(margin, Math.min(pos.y, maxY))
+  const x = Math.max(margin, Math.min(pos.x, maxX))
+  if (y !== pos.y || x !== pos.x) ctxPos.value = { x, y }
 }
 
 function closeCtxMenu() {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { invoke, getCurrentWindow, getAppVersion } from '@/api'
 import { useI18n } from 'vue-i18n'
 import { useUiStore } from '../../stores/uiStore'
@@ -100,6 +100,19 @@ function onCtxMenu(e: MouseEvent) {
   e.preventDefault()
   e.stopPropagation()
   ctxMenu.value = { x: e.clientX, y: e.clientY }
+  nextTick(clampCtxMenu)
+}
+
+function clampCtxMenu() {
+  const el = document.querySelector<HTMLElement>('.ctx-menu')
+  const pos = ctxMenu.value
+  if (!el || !pos || typeof el.offsetHeight !== 'number' || el.offsetHeight === 0) return
+  const margin = 6
+  const maxY = window.innerHeight - el.offsetHeight - margin
+  const maxX = window.innerWidth - el.offsetWidth - margin
+  const y = Math.max(margin, Math.min(pos.y, maxY))
+  const x = Math.max(margin, Math.min(pos.x, maxX))
+  if (x !== pos.x || y !== pos.y) ctxMenu.value = { x, y }
 }
 
 function closeCtxMenu() {
