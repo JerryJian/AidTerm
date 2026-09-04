@@ -293,6 +293,8 @@ export default {
     upload_failed: '失败',
     cancelled: '已取消',
     confirm_delete: '确认删除 {name}？',
+    confirm_overwrite: '文件 {name} 已存在，是否覆盖？',
+    overwrite: '覆盖',
     rename_title: '重命名',
     create_title: '创建{0}',
     enter_name: '输入名称',

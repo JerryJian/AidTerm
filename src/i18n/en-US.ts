@@ -293,6 +293,8 @@ export default {
     upload_failed: 'Failed',
     cancelled: 'Cancelled',
     confirm_delete: 'Delete {name}?',
+    confirm_overwrite: 'File {name} already exists. Overwrite?',
+    overwrite: 'Overwrite',
     rename_title: 'Rename',
     create_title: 'Create {0}',
     enter_name: 'Enter name',

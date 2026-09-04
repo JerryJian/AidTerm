@@ -339,26 +339,49 @@ function pathsFromDataTransfer(dt: DataTransfer): string[] {
 
 /** Start upload tasks for a list of local filesystem paths (files or dirs). */
 function startUploads(files: string[]) {
-  for (const file of files) {
+  // Single-file upload: if the target already exists, ask to overwrite first.
+  if (files.length === 1) {
+    const file = files[0]
     const name = file.split('\\').pop()?.split('/').pop() || 'file'
     const remotePath = pathJoin(s.value.currentPath, name)
-    const id = genId()
-    const task: UploadTask = { id, name, status: 'uploading', type: 'upload' }
-    uploadTasks.value.push(task)
-    store.upload(props.tabId, id, file, remotePath)
-      .then(() => { task.status = 'done' })
-      .catch((e: any) => {
-        if (String(e).includes('Cancelled')) {
-          task.status = 'cancelled'
-        } else {
-          task.status = 'error'
-          task.error = String(e)
-        }
-      })
-    setTimeout(() => {
-      uploadTasks.value = uploadTasks.value.filter(t => t.status === 'uploading')
-    }, 5000)
+    const existing = s.value.entries.find(e => !e.is_dir && e.name === name)
+    if (existing) {
+      overwriteConfirm.value = { local: file, remote: remotePath, name }
+      return
+    }
+    uploadOne(file)
+    return
   }
+  for (const file of files) uploadOne(file)
+}
+
+function uploadOne(file: string) {
+  const name = file.split('\\').pop()?.split('/').pop() || 'file'
+  const remotePath = pathJoin(s.value.currentPath, name)
+  const id = genId()
+  const task: UploadTask = { id, name, status: 'uploading', type: 'upload' }
+  uploadTasks.value.push(task)
+  store.upload(props.tabId, id, file, remotePath)
+    .then(() => { task.status = 'done' })
+    .catch((e: any) => {
+      if (String(e).includes('Cancelled')) {
+        task.status = 'cancelled'
+      } else {
+        task.status = 'error'
+        task.error = String(e)
+      }
+    })
+  setTimeout(() => {
+    uploadTasks.value = uploadTasks.value.filter(t => t.status === 'uploading')
+  }, 5000)
+}
+
+const overwriteConfirm = ref<{ local: string; remote: string; name: string } | null>(null)
+function cancelOverwrite() { overwriteConfirm.value = null }
+function confirmOverwrite() {
+  const c = overwriteConfirm.value
+  overwriteConfirm.value = null
+  if (c) uploadOne(c.local)
 }
 
 /**
@@ -620,6 +643,22 @@ function fileIcon(entry: FileEntry): string {
             <div class="confirm-actions">
               <button class="btn btn-cancel" @click="cancelConfirmDelete">{{ t('common.cancel') }}</button>
               <button class="btn btn-danger" @click="doDelete(deleteConfirm)">{{ t('common.delete') }}</button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+
+      <!-- Overwrite confirm dialog -->
+      <Teleport to="body">
+        <div v-if="overwriteConfirm" class="confirm-overlay">
+          <div class="confirm-box" @click.stop>
+            <div class="confirm-msg">
+              <span class="confirm-icon" v-html="icons.upload" />
+              <span>{{ t('sftp.confirm_overwrite', { name: overwriteConfirm.name }) }}</span>
+            </div>
+            <div class="confirm-actions">
+              <button class="btn btn-cancel" @click="cancelOverwrite">{{ t('common.cancel') }}</button>
+              <button class="btn btn-primary" @click="confirmOverwrite">{{ t('sftp.overwrite') }}</button>
             </div>
           </div>
         </div>
