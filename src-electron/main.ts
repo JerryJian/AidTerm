@@ -2354,7 +2354,7 @@ function registerIpcHandlers(): void {
 
     const gpus: RemoteSystemMetrics['gpus'] = []
     const { spawnSync } = require('child_process') as typeof import('child_process')
-    const nvidia = spawnSync('nvidia-smi', ['--query-gpu=name,utilization.gpu,memory.total,memory.used,temperature.gpu', '--format=csv,noheader,nounits'], { encoding: 'utf8', timeout: 8000 })
+    const nvidia = spawnSync('nvidia-smi', ['--query-gpu=name,utilization.gpu,memory.total,memory.used,temperature.gpu', '--format=csv,noheader,nounits'], { encoding: 'utf8', timeout: 8000, windowsHide: true })
     if (!nvidia.error && nvidia.status === 0) {
       for (const line of String(nvidia.stdout).split('\n')) {
         const parts = line.split(',').map((p: string) => p.trim())
@@ -2369,7 +2369,7 @@ function registerIpcHandlers(): void {
         })
       }
     } else if (process.platform === 'linux') {
-      const rocm = spawnSync('rocm-smi', ['--showuse', '--showmeminfo', 'vram', '--showtemp', '--json'], { encoding: 'utf8', timeout: 8000 })
+      const rocm = spawnSync('rocm-smi', ['--showuse', '--showmeminfo', 'vram', '--showtemp', '--json'], { encoding: 'utf8', timeout: 8000, windowsHide: true })
       if (!rocm.error && rocm.status === 0) {
         try {
           const parsed = JSON.parse(String(rocm.stdout))
@@ -2402,7 +2402,7 @@ function registerIpcHandlers(): void {
           }
         } catch { /* ignore malformed rocm-smi JSON */ }
       } else {
-        const intel = spawnSync('intel_gpu_top', ['-J', '-s', '1000', '-l'], { encoding: 'utf8', timeout: 8000 })
+        const intel = spawnSync('intel_gpu_top', ['-J', '-s', '1000', '-l'], { encoding: 'utf8', timeout: 8000, windowsHide: true })
         if (!intel.error && intel.status === 0) {
           try {
             const parsed = JSON.parse(String(intel.stdout))

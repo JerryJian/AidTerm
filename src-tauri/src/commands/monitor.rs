@@ -464,11 +464,24 @@ impl LocalMonitorState {
     }
 }
 
+/// Build a `StdCommand` that won't open a console window on Windows
+/// (`CREATE_NO_WINDOW`), preventing the monitor's per-poll subprocess probes
+/// (nvidia-smi / rocm-smi / intel_gpu_top) from flashing a black console.
+fn probe_cmd(program: &str) -> StdCommand {
+    let mut cmd = StdCommand::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    cmd
+}
+
 /// Probe local GPU vendors in order, returning a section string shaped like
 /// the SSH monitor's GPU block (`__AID_GPU_*__` + payload) or empty.
 fn probe_local_gpu() -> String {
     // NVIDIA
-    if let Ok(out) = StdCommand::new("nvidia-smi")
+    if let Ok(out) = probe_cmd("nvidia-smi")
         .args([
             "--query-gpu=name,utilization.gpu,memory.total,memory.used,temperature.gpu",
             "--format=csv,noheader,nounits",
@@ -484,7 +497,7 @@ fn probe_local_gpu() -> String {
     }
 
     // AMD (rocm-smi, Linux)
-    if let Ok(out) = StdCommand::new("rocm-smi")
+    if let Ok(out) = probe_cmd("rocm-smi")
         .args(["--showuse", "--showmeminfo", "vram", "--showtemp", "--json"])
         .output()
     {
@@ -497,7 +510,7 @@ fn probe_local_gpu() -> String {
     }
 
     // Intel
-    if let Ok(out) = StdCommand::new("intel_gpu_top")
+    if let Ok(out) = probe_cmd("intel_gpu_top")
         .args(["-J", "-s", "1000", "-l"])
         .output()
     {
