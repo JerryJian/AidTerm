@@ -1696,9 +1696,8 @@ function registerIpcHandlers(): void {
     }
     const client = sftpConnections.get(handle)
     if (!client) throw new Error('SFTP connection not found')
-    const stat = await client.stat(path)
-    if (stat.isDirectory) await client.rmdir(path)
-    else await client.delete(path)
+    // ssh2-sftp-client delete() removes files and (recursively) directories.
+    await client.delete(path)
   })
 
   ipcMain.handle('file_rename', async (_, args: FileRenameArgs) => {

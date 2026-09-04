@@ -453,16 +453,24 @@ impl SftpConnection {
     }
 
     async fn do_remove(session: &SftpSession, path: &str) -> Result<(), String> {
-        // Try as file first, then as directory
         let attrs = session.metadata(path).await
             .map_err(|e| format!("stat failed: {}", e))?;
-        if attrs.is_dir() {
-            session.remove_dir(path).await
-                .map_err(|e| format!("remove_dir failed: {}", e))
-        } else {
-            session.remove_file(path).await
-                .map_err(|e| format!("remove_file failed: {}", e))
+        if !attrs.is_dir() {
+            return session.remove_file(path).await
+                .map_err(|e| format!("remove_file failed: {}", e));
         }
+        // Recursively delete a directory so non-empty directories work:
+        // SFTP remove_dir only succeeds on empty directories.
+        let mut rd = session.read_dir(path).await
+            .map_err(|e| format!("readdir failed {}: {}", path, e))?;
+        while let Some(entry) = rd.next() {
+            let name = entry.file_name();
+            if name == "." || name == ".." { continue; }
+            let child_path = format!("{}/{}", path.trim_end_matches('/'), name);
+            Box::pin(Self::do_remove(session, &child_path)).await?;
+        }
+        session.remove_dir(path).await
+            .map_err(|e| format!("remove_dir failed {}: {}", path, e))
     }
 
     async fn do_rename(session: &SftpSession, old: &str, new: &str) -> Result<(), String> {

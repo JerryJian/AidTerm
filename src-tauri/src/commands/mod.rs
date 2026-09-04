@@ -348,7 +348,7 @@ pub async fn file_cancel_transfer(
     }
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn file_remove(
     app: tauri::AppHandle,
     manager: State<'_, sftp::SftpManager>,
@@ -367,7 +367,7 @@ pub async fn file_remove(
     }
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn file_rename(
     app: tauri::AppHandle,
     manager: State<'_, sftp::SftpManager>,
@@ -404,7 +404,7 @@ pub async fn file_mkdir(
     }
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn file_create(
     app: tauri::AppHandle,
     manager: State<'_, sftp::SftpManager>,

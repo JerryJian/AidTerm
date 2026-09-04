@@ -457,7 +457,11 @@ function cancelConfirmDelete() {
 async function doDelete(entry: FileEntry) {
   deleteConfirm.value = null
   const path = pathJoin(s.value.currentPath, entry.name)
-  await store.remove(props.tabId, path, entry.is_dir)
+  try {
+    await store.remove(props.tabId, path, entry.is_dir)
+  } catch (e: any) {
+    s.value.error = String(e)
+  }
 }
 
 function startRename(entry: FileEntry) {
