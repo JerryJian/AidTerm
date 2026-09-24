@@ -91,7 +91,7 @@ function getXtermTheme() {
   const s = getComputedStyle(document.documentElement)
   const v = (name: string, fallback: string) => s.getPropertyValue(name).trim() || fallback
   return {
-    background: settings.backgroundImage ? 'rgba(0,0,0,0)' : v('--bg-base', '#1e1e1e'),
+    background: settings.backgroundImage ? 'rgba(0,0,0,0)' : v('--term-bg', '#0c0c0c'),
     foreground: v('--text-sub1', '#cccccc'),
     cursor: v('--text', '#d4d4d4'),
     selectionBackground: v('--term-selection', '#264f78'),
@@ -810,7 +810,7 @@ defineExpose({ focusSearch, doFit, getTerminalContent })
   min-height: 0;
   min-width: 0;
   position: relative;
-  background: var(--bg-base);
+  background: var(--term-bg);
 }
 
 .terminal-container.has-bg-image {
