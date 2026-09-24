@@ -269,6 +269,8 @@ impl SshConnection {
             "session_id": session_id, "status": "connected",
         }));
 
+        let handle = Arc::new(tokio::sync::Mutex::new(handle));
+
         Self::run_event_loop(
             write_rx, resize_rx, kill_rx, exec_rx,
             &mut channel, &handle, app_handle, session_id,
@@ -338,6 +340,8 @@ impl SshConnection {
             "session_id": session_id, "status": "connected",
         }));
 
+        let handle = Arc::new(tokio::sync::Mutex::new(handle));
+
         Self::run_event_loop(
             write_rx, resize_rx, kill_rx, exec_rx,
             &mut channel, &handle, app_handle, session_id,
@@ -353,26 +357,38 @@ impl SshConnection {
         mut kill_rx: UnboundedReceiver<()>,
         mut exec_rx: UnboundedReceiver<(String, ExecResponse)>,
         channel: &mut russh::Channel<russh::client::Msg>,
-        handle: &client::Handle<SshHandler>,
+        handle: &Arc<tokio::sync::Mutex<client::Handle<SshHandler>>>,
         app_handle: &AppHandle,
         session_id: &str,
     ) -> Result<(), String> {
         use russh::ChannelMsg;
+        use tokio::io::AsyncWriteExt;
 
         let mut emit_count = 0u64;
         let mut emit_bytes = 0u64;
 
+        let mut writer = channel.make_writer();
+        tokio::spawn(async move {
+            while let Some(data) = write_rx.recv().await {
+                if let Err(e) = writer.write_all(data.as_bytes()).await {
+                    log::warn!("[ssh] channel writer error: {}", e);
+                    break;
+                }
+            }
+        });
+
         loop {
             tokio::select! {
-                Some(data) = write_rx.recv() => {
-                    let _ = channel.data_bytes(data).await;
-                }
                 Some((r, c)) = resize_rx.recv() => {
                     let _ = channel.window_change(c as u32, r as u32, 0, 0).await;
                 }
                 Some((cmd, resp)) = exec_rx.recv() => {
-                    let result = Self::exec_on_handle(handle, &cmd).await;
-                    let _ = resp.send(result);
+                    let h = handle.clone();
+                    tokio::spawn(async move {
+                        let guard = h.lock().await;
+                        let result = Self::exec_on_handle(&*guard, &cmd).await;
+                        let _ = resp.send(result);
+                    });
                 }
                 _ = kill_rx.recv() => {
                     break;
