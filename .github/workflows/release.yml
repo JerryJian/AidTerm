@@ -148,10 +148,10 @@ jobs:
         include:
           - runner: ubuntu-22.04
             target: linux-x64
-            container: node:20-bullseye
+            container: node:20-bookworm
           - runner: ubuntu-22.04-arm
             target: linux-arm64
-            container: node:20-bullseye
+            container: node:20-bookworm
           - runner: macos-15
             target: macos-arm64
           - runner: windows-2022
