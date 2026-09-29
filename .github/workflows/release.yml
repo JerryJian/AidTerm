@@ -37,6 +37,7 @@ jobs:
             target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.runner }}
+    if: github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == matrix.target
     steps:
       - uses: actions/checkout@v7
 
@@ -65,7 +66,11 @@ jobs:
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update -qq
+          # Container/VM images ship pre-baked apt lists. Once a point release
+          # supersedes a package in the pool, the stale index makes apt resolve
+          # a version that now 404s, so wipe them and rebuild from scratch.
+          sudo rm -rf /var/lib/apt/lists/*
+          sudo apt-get update -o Acquire::Retries=5
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev \
             libxdo-dev \
@@ -158,6 +163,7 @@ jobs:
             target: windows-x64
 
     runs-on: ${{ matrix.runner }}
+    if: github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == matrix.target
     container: ${{ matrix.container }}
     steps:
       - uses: actions/checkout@v7
@@ -187,7 +193,8 @@ jobs:
         working-directory: src-electron
         run: |
           if command -v sudo >/dev/null 2>&1; then SUDO=sudo; else SUDO=''; fi
-          $SUDO apt-get update -qq
+          $SUDO rm -rf /var/lib/apt/lists/*
+          $SUDO apt-get update -o Acquire::Retries=5
           $SUDO apt-get install -y --no-install-recommends \
             build-essential \
             python3 \
