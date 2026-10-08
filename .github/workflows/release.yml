@@ -37,7 +37,6 @@ jobs:
             target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.runner }}
-    if: github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == matrix.target
     steps:
       - uses: actions/checkout@v7
 
@@ -163,7 +162,6 @@ jobs:
             target: windows-x64
 
     runs-on: ${{ matrix.runner }}
-    if: github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == matrix.target
     container: ${{ matrix.container }}
     steps:
       - uses: actions/checkout@v7
